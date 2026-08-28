@@ -72,6 +72,9 @@ abstract class AbstractKanban
 
         $this->initiateQuery();
 
+        // SE fork: general extension point - see modules/se_core.
+        hooks()->do_action('kanban_query_initiated', $this);
+
         if ($this->q) {
             $this->applySearchQuery($this->q);
         }
@@ -85,6 +88,9 @@ abstract class AbstractKanban
     public function countAll()
     {
         $this->initiateQuery();
+
+        // SE fork: general extension point - see modules/se_core.
+        hooks()->do_action('kanban_query_initiated', $this);
 
         if ($this->q) {
             $this->applySearchQuery($this->q);
