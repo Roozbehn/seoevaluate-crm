@@ -11,6 +11,12 @@ Requires at least: 3.4.1
 
 define('SE_APPOINTMENTS_MODULE_NAME', 'se_appointments');
 
+require_once __DIR__ . '/migrations.php';
+require_once __DIR__ . '/reminders.php';
+require_once __DIR__ . '/availability.php';
+require_once __DIR__ . '/gcal.php';
+
+hooks()->add_action('admin_init', 'se_appt_migrate', 1);
 hooks()->add_action('admin_init', 'se_appt_permissions');
 hooks()->add_action('admin_init', 'se_appt_menu');
 
@@ -22,6 +28,7 @@ register_activation_hook(SE_APPOINTMENTS_MODULE_NAME, 'se_appt_activation');
 function se_appt_activation()
 {
     require_once __DIR__ . '/install.php';
+    se_appt_migrate();
 }
 
 function se_appt_permissions()

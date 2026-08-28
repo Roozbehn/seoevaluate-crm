@@ -122,3 +122,20 @@ Branch `feature/crm-foundation` -> merged to `main`. Schema at `se_core_schema_v
 
 New files: `migrations.php`, `pipeline.php`, `se_patients.php`. Rewritten: `se_attribution.php`, `se_outbox.php`. Wired: `se_core.php`.
 Cron regression 200, login page 200, zero new PHP errors. Synthetic residue: 0.
+
+---
+
+## Phase 2 — Complete appointments  — **COMPLETE (merged)**
+
+Branch `feature/appointments-complete` -> merged to `main`. Appt schema `se_appt_schema_version=2`.
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 2.1 Appointment model | complete | +appointment_type, consultation_format (online/in_person), cancellation_reason, staff_timezone, reminder_queued; status history table; statuses scheduled/confirmed/held/completed/no_show/cancelled; Booked/Held signals with dedup — HTTP 19/0 |
+| 2.2 Availability + timezone | complete | Overlap detection (rejects double-book, ignores self/cancelled/no_show); working-hours windows (outside rejected, inside accepted); Europe/Istanbul storage + tz display conversion (Istanbul->UTC -3, no DST) — unit 13/0 + HTTP |
+| 2.3 Reminder framework | complete (queue) | `tblse_reminders` (dedup_key unique, state/attempts/scheduled_at/template_ref/language); `se_reminder_enqueue/cancel_for_appointment/schedule_for`; enqueued on create, cancelled on cancel/no_show, refreshed on reschedule. **No message sent — WhatsApp module (Phase 3) consumes the queue.** |
+| 2.4 Google Calendar adapter | functional (fixture); externally gated | Config-driven `se_gcal_sync(create/update/cancel)`; fixture adapter records the op + returns deterministic idempotent event id (stored in google_event_id); `se_gcal_register_adapter()` for the real client. **Live sync gated on Google service account.** |
+| 2.5 UI + permissions | partial | Calendar/list/detail/create-edit + lead tab functional (existing views render new data); capability gating view/create/edit/delete + brand scoping enforced (Phase 0/1 proven). **New-field form controls, brand/status/no-show filters and a dedicated patient tab: pending polish.** |
+
+New files: `migrations.php`, `reminders.php`, `availability.php`, `gcal.php`. Rewritten: `models/Se_appointments_model.php`. Wired: `se_appointments.php`.
+Cron 200, app 200, zero new PHP errors, synthetic residue 0.
