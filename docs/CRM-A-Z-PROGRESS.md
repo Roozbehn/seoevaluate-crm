@@ -77,3 +77,30 @@ Modules registered+active: `se_core` 1.0.0, `se_appointments` 1.0.0. No `uninsta
 2nd Meta app · persistent Meta/Google creds · App Review submit · first real WA message · first real
 conversion upload · connect real clinic number · provision production VPS · DNS cutover · import real
 patient data · start production traffic.
+
+---
+
+## Phase 1 audit (read-only, recorded pre-build)
+
+- **Attribution** `se_attribution.php` (155 ln): WIRED end-to-end for web-to-lead — hooks
+  `app_web_to_lead_form_head`/`web_to_lead_form_start`/`web_to_lead_form_submitted`; first-party
+  cookie `se_attr` (90d); last-touch `gclid,gbraid,wbraid,fbclid,utm_*`; first-touch
+  `landing_url,referrer,first_touch_at` (never overwritten). All 17 attribution columns exist on
+  `tblleads`. Classification: **functional, needs a live browser→form→lead fixture to prove**.
+  Gap: `fbc/fbp` derive from pixel (not in web-to-lead capture); `ctwa_clid` arrives via WhatsApp.
+- **Pipeline**: `tblleads_status` has only `Customer` (id 1). The 13-stage agency pipeline is NOT
+  configured. Concrete P1.3 build task (insert shared `tblleads_status` rows; keep Perfex-reserved
+  `Customer`). **Do on feature/crm-foundation as a reproducible patch, not ad-hoc SQL.**
+- **brand_id coverage**: present on tblleads, tblclients, tblevents, tblse_appointments,
+  tblse_conversion_outbox, tblse_staff_brands, tblweb_to_lead. Future WA/message tables must add it.
+- **Outbox hardening**: `tblse_conversion_outbox` has `dedup_key` UNIQUE + `attempts` + stale-parking
+  (>7d -> skipped) + bounded retry (<5). Still to audit: atomic claim under overlapping cron.
+- **WhatsApp** `se_whatsapp.php` (30 ln): SCAFFOLD ONLY (note fn). Externally gated (Tech Provider).
+- **Google DM** `se_google_dm.php` (35 ln): SCAFFOLD; documents correct Data Manager v1 ingest
+  contract (not deprecated Ads ConversionUpload). `se_google_dm_send_event()` returns gated error.
+- **Meta leadgen** `se_meta_leadgen.php` (99 ln): present, NOT wired (public webhook, gated).
+
+**Next-session first actions (feature/crm-foundation):** (1) live attribution fixture test;
+(2) configure 13-stage pipeline as a reproducible module patch; (3) audit outbox atomic-claim under
+concurrent cron; (4) scope patient/consent layer (consent_ads+consent_marketing columns already on
+tblleads; ledger/versioned-consent-text not yet).
