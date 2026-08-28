@@ -13,11 +13,15 @@ define('SE_CORE_MODULE_NAME', 'se_core');
 
 $CI = &get_instance();
 $CI->load->helper(SE_CORE_MODULE_NAME . '/se_core');
+require_once __DIR__ . '/migrations.php';
+require_once __DIR__ . '/pipeline.php';
+require_once __DIR__ . '/se_patients.php';
 require_once __DIR__ . '/se_attribution.php';
 
 register_language_files(SE_CORE_MODULE_NAME, [SE_CORE_MODULE_NAME]);
 register_activation_hook(SE_CORE_MODULE_NAME, 'se_core_activation_hook');
 
+hooks()->add_action('admin_init', 'se_core_migrate', 1);
 hooks()->add_action('admin_init', 'se_core_permissions');
 hooks()->add_action('admin_init', 'se_core_menu_items');
 hooks()->add_action('admin_init', 'se_core_brand_guard');
@@ -34,6 +38,7 @@ hooks()->add_action('lead_converted_to_customer', 'se_core_carry_brand_to_custom
 function se_core_activation_hook()
 {
     require_once __DIR__ . '/install.php';
+    se_core_migrate();
 }
 
 function se_core_permissions()

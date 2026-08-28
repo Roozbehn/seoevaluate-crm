@@ -104,3 +104,21 @@ patient data · start production traffic.
 (2) configure 13-stage pipeline as a reproducible module patch; (3) audit outbox atomic-claim under
 concurrent cron; (4) scope patient/consent layer (consent_ads+consent_marketing columns already on
 tblleads; ledger/versioned-consent-text not yet).
+
+---
+
+## Phase 1 — CRM foundation  — **COMPLETE (merged)**
+
+Branch `feature/crm-foundation` -> merged to `main`. Schema at `se_core_schema_version=4`
+(applied via the real admin_init runtime path; idempotent, IF NOT EXISTS DDL + name-guarded seed).
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 1.1 Attribution e2e + consent | complete (unit-fixture) | `phase1_attr_test.php` 30/0 vs deployed: first-touch immutable in primary cols; parallel last_* cols never overwrite originals; fbc/fbp (pixel cookies) + ctwa_clid raw; consent_ads/marketing + consent_text_version; consent mirrored to brand-scoped ledger; Turkish intact; 1000-char truncation; missing-consent -> 0/no-grant; NO clinical field. **Live browser->web-to-lead HTTP submission: classified functional-with-fixture (persist path proven); live-form run pending.** |
+| 1.2 Pipeline | complete | 13 stages seeded idempotently (order 10-130), `Customer` preserved at 1000; producer emits stage name verbatim; lost/junk leads emit nothing — `phase1_outbox_test.php` 13/0 |
+| 1.3 Multi-brand coverage | complete | Indexed `brand_id` on all 11 scoped entities (added missing indexes on outbox + web_to_lead in v4); scope predicate isolates leads/appointments/patients/consent (own=1, foreign=0, admin=both) — `phase1_isolation.php` 23/0. Appointment cross-brand view/edit/delete denial already HTTP-proven in Phase 0. |
+| 1.4 Outbox concurrency | complete | Atomic claim via `UPDATE ... status=processing ... ORDER BY id LIMIT` (processing lease + stale recovery + bounded retry + permanent-fail + Meta 7d / Google 6h-90d window validation + redacted errors + `se_outbox_health()`); 2-worker parallel claim proven disjoint (overlap 0, union 40) — event claimed at most once |
+| 1.5 Patient + consent | complete (schema+API) | `se_patients`/`se_consent_ledger`/`se_procedure_history`/`se_record_access_log` (all brand_id-indexed, unicode_ci); append-only consent ledger API (`se_consent_record/current/granted`, purpose whitelist); patient upsert + brand-scoped get + access log; clinical data never in payloads. **Patient UI (tabs/forms) classified partial — API + schema done, full CRUD UI pending Phase 2/later.** |
+
+New files: `migrations.php`, `pipeline.php`, `se_patients.php`. Rewritten: `se_attribution.php`, `se_outbox.php`. Wired: `se_core.php`.
+Cron regression 200, login page 200, zero new PHP errors. Synthetic residue: 0.
