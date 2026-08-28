@@ -1,0 +1,17 @@
+# --- secrets: never commit ---
+application/config/database.php
+application/config/app-config.php
+application/config/*.bak-*
+application/services/*.bak-*
+
+# --- runtime / user data ---
+uploads/
+media/
+temp/
+application/logs/
+application/cache/
+.htpasswds/
+
+# --- os noise ---
+.DS_Store
+Thumbs.db
