@@ -143,3 +143,14 @@ if (!$CI->db->field_exists('meta_lead_id_idx', $leads)) {
         $CI->db->query('ALTER TABLE `' . $leads . '` ADD INDEX `meta_lead_id` (`meta_lead_id`)');
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* Web-to-lead forms belong to a brand                                 */
+/*                                                                     */
+/* The visitor never chooses the brand - the form does. One form per   */
+/* clinic keeps attribution unambiguous.                               */
+/* ------------------------------------------------------------------ */
+
+if (!$CI->db->field_exists('brand_id', db_prefix() . 'web_to_lead')) {
+    $CI->db->query('ALTER TABLE `' . db_prefix() . "web_to_lead` ADD COLUMN `brand_id` int(11) NOT NULL DEFAULT '0'");
+}

@@ -13,6 +13,7 @@ define('SE_CORE_MODULE_NAME', 'se_core');
 
 $CI = &get_instance();
 $CI->load->helper(SE_CORE_MODULE_NAME . '/se_core');
+require_once __DIR__ . '/se_attribution.php';
 
 register_language_files(SE_CORE_MODULE_NAME, [SE_CORE_MODULE_NAME]);
 register_activation_hook(SE_CORE_MODULE_NAME, 'se_core_activation_hook');
