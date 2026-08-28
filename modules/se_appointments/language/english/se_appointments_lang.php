@@ -21,3 +21,4 @@ $lang['se_appt_status_held']      = 'Held';
 $lang['se_appt_status_completed'] = 'Completed';
 $lang['se_appt_status_no_show']   = 'No-show';
 $lang['se_appt_status_cancelled'] = 'Cancelled';
+$lang['se_appt_invalid_window'] = 'Appointment not saved: the end time must be after the start time.';

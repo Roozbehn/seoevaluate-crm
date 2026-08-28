@@ -37,8 +37,11 @@ function se_staff_brand_ids()
 
     $CI = &get_instance();
 
-    $CI->db->select('brand_id')->where('staff_id', get_staff_user_id());
-    $rows = $CI->db->get(db_prefix() . 'se_staff_brands')->result_array();
+    // Standalone query: a caller may invoke this mid-build (e.g. a brand-scoped
+    // model that has already set select()/join() on the shared query builder).
+    // Using the query builder here would inherit that partial state and corrupt
+    // both queries, so run raw SQL that leaves the shared builder untouched.
+    $rows = $CI->db->query('SELECT brand_id FROM ' . db_prefix() . 'se_staff_brands WHERE staff_id = ' . (int) get_staff_user_id())->result_array();
 
     $ids = array_map(function ($row) {
         return (int) $row['brand_id'];

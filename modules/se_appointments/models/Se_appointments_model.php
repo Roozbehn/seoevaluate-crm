@@ -43,6 +43,11 @@ class Se_appointments_model extends App_Model
     public function add($data)
     {
         $data = $this->prepare($data);
+
+        if ($this->invalid_window($data)) {
+            return false;
+        }
+
         $data['date_created'] = date('Y-m-d H:i:s');
 
         $this->db->insert(db_prefix() . 'se_appointments', $data);
@@ -60,6 +65,11 @@ class Se_appointments_model extends App_Model
     {
         $before = $this->get($id);
         $data   = $this->prepare($data);
+
+        if ($this->invalid_window($data)) {
+            return false;
+        }
+
         $data['last_updated'] = date('Y-m-d H:i:s');
 
         $this->db->where('id', $id)->update(db_prefix() . 'se_appointments', $data);
@@ -123,6 +133,24 @@ class Se_appointments_model extends App_Model
         foreach (se_outbox_destinations_for_brand((int) $appt->brand_id) as $dest) {
             se_outbox_queue((int) $appt->brand_id, (int) $appt->rel_id, $dest, $event);
         }
+    }
+
+    /**
+     * Rejects an impossible time window: an end at or before the start, or an
+     * unparseable start. Only enforced when the fields are supplied, so a
+     * start-only appointment stays valid. Returns true when the window is bad.
+     */
+    protected function invalid_window($clean)
+    {
+        if (isset($clean['start_at']) && $clean['start_at'] !== '' && strtotime($clean['start_at']) === false) {
+            return true;
+        }
+
+        if (empty($clean['start_at']) || empty($clean['end_at'])) {
+            return false;
+        }
+
+        return strtotime($clean['end_at']) <= strtotime($clean['start_at']);
     }
 
     protected function prepare($data)

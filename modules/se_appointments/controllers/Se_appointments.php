@@ -77,6 +77,8 @@ class Se_appointments extends AdminController
             $new = $this->se_appointments_model->add($data);
             if ($new) {
                 set_alert('success', _l('se_appt_added'));
+            } else {
+                set_alert('warning', _l('se_appt_invalid_window'));
             }
         } else {
             if (staff_cant('edit', 'se_appointments')) {
@@ -88,6 +90,8 @@ class Se_appointments extends AdminController
             }
             if ($this->se_appointments_model->update($id, $data)) {
                 set_alert('success', _l('se_appt_updated'));
+            } else {
+                set_alert('warning', _l('se_appt_invalid_window'));
             }
         }
 
