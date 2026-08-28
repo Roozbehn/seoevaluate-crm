@@ -30,7 +30,7 @@ Status: `pending` · `active` · `complete` · `externally gated`
 | 0.4 Appointment verification | complete | Real authenticated HTTP (forged synthetic sessions, CSRF, origin bypass): CSRF 403 w/o token & 303 accept; scheduled→held→no_show via REAL form + DB re-query; exactly 1 "Consultation Held" outbox row; duplicate save no dup; invalid window (end≤start) rejected; valid window accepted; brand isolation both ways (feed JSON); cross-brand edit + delete denied (row unchanged) — 17 checks | — |
 | 0.5 DB charset | complete | Already `utf8mb4/utf8mb4_unicode_ci` (NO ALTER re-run). Round-trip PASS: İstanbul/görüşme/kaş/sağlık/ışıltı byte-exact; probe table inherits utf8mb4_unicode_ci. Note: `tblse_appointments`+`tblse_brands` are `utf8mb4_general_ci` (still utf8mb4, Turkish-safe) — see charset migration note | — |
 | 0.6 Controlled cron cycle | complete | `crm-cron.sh` → `/cron/index/<key>` HTTP 200; synthetic pending row stayed pending, attempts 0→1, last_error="no Meta system-user token" (gating, not HTTP), sent_at NULL, no new PHP error → after_cron_run→se_outbox_drain fires, no external transmit | — |
-| 0.7 Cleanup + commit | complete | All synthetic torn down (0 rows); git tree = 5 intended files + 2 docs; php -l clean; committed + pushed | commit hash: `64a467bde5b5786d82e9efa365f25eb60dca0b1e` |
+| 0.7 Cleanup + commit | complete | All synthetic torn down (0 rows); git tree = 5 intended files + 2 docs; php -l clean; committed + pushed | commit hash: `cd4a29c0c79a361895642d38e9b41bd10cb4cce8` |
 
 **Phase 0 code delta (committed):**
 - `modules/se_core/se_capi.php` — pure `se_capi_build_event()`, action_source always `system_generated` (deployed pre-session; verified).
