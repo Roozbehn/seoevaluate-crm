@@ -1,0 +1,78 @@
+<?php
+
+defined('BASEPATH') or exit('No direct script access allowed');
+
+/*
+Module Name: SE WhatsApp
+Description: Multi-brand WhatsApp Cloud API inbox for the SEO Evaluate CRM. Signed webhook receiver, tenant routing, conversations/messages, templates, metering. Live Meta connection is externally gated.
+Version: 1.0.0
+Requires at least: 3.4.1
+*/
+
+define('SE_WHATSAPP_MODULE_NAME', 'se_whatsapp');
+
+require_once __DIR__ . '/helpers.php';
+
+register_activation_hook(SE_WHATSAPP_MODULE_NAME, 'se_whatsapp_activation');
+
+hooks()->add_action('admin_init', 'se_whatsapp_permissions');
+hooks()->add_action('admin_init', 'se_whatsapp_menu');
+
+// Async: drain webhook events + consume due reminders after core cron tasks.
+hooks()->add_action('after_cron_run', 'se_wa_process_pending');
+hooks()->add_action('after_cron_run', 'se_wa_consume_due_reminders');
+
+// Conversation tab on the lead profile.
+hooks()->add_action('after_lead_tabs_content', 'se_whatsapp_lead_tab');
+
+function se_whatsapp_activation()
+{
+    require_once __DIR__ . '/install.php';
+}
+
+function se_whatsapp_permissions()
+{
+    $caps = [
+        'view'     => _l('permission_view') . '(' . _l('permission_global') . ')',
+        'create'   => _l('permission_create'),
+        'edit'     => _l('permission_edit'),
+        'delete'   => _l('permission_delete'),
+    ];
+    register_staff_capabilities('se_whatsapp', ['capabilities' => $caps], _l('se_whatsapp'));
+    // Configuration (numbers/tokens/templates) is a separate, stricter capability.
+    register_staff_capabilities('se_whatsapp_config', ['capabilities' => ['manage' => _l('permission_edit')]], _l('se_whatsapp_config'));
+}
+
+function se_whatsapp_menu()
+{
+    $CI = &get_instance();
+    if (staff_can('view', 'se_whatsapp')) {
+        $CI->app_menu->add_sidebar_menu_item('se-whatsapp', [
+            'name'     => _l('se_whatsapp'),
+            'href'     => admin_url('se_whatsapp/inbox'),
+            'icon'     => 'fa fa-whatsapp',
+            'position' => 27,
+        ]);
+    }
+}
+
+/** Read-only conversation summary on the lead profile. */
+function se_whatsapp_lead_tab($lead)
+{
+    $lead_id = is_array($lead) ? (int) ($lead['id'] ?? 0) : (int) ($lead->id ?? 0);
+    if (!$lead_id) {
+        return;
+    }
+    $CI = &get_instance();
+    $CI->db->where('lead_id', $lead_id)->order_by('last_inbound_at', 'DESC');
+    $convos = $CI->db->get(db_prefix() . 'se_wa_conversations')->result_array();
+    if (empty($convos)) {
+        return;
+    }
+    echo '<div class="panel_s"><div class="panel-body"><h5>' . _l('se_whatsapp') . '</h5><ul class="list-unstyled">';
+    foreach ($convos as $c) {
+        echo '<li>' . html_escape($c['wa_user_id']) . ' &mdash; '
+           . html_escape($c['state']) . ' (' . (int) $c['unread_count'] . ' unread)</li>';
+    }
+    echo '</ul></div></div>';
+}

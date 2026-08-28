@@ -139,3 +139,25 @@ Branch `feature/appointments-complete` -> merged to `main`. Appt schema `se_appt
 
 New files: `migrations.php`, `reminders.php`, `availability.php`, `gcal.php`. Rewritten: `models/Se_appointments_model.php`. Wired: `se_appointments.php`.
 Cron 200, app 200, zero new PHP errors, synthetic residue 0.
+
+---
+
+## Phase 3 — WhatsApp inbox  — **FUNCTIONAL (fixtures); live Meta externally gated (merged)**
+
+Branch `feature/whatsapp-inbox` -> merged to `main`. New dedicated module `modules/se_whatsapp/`
+(6 brand-scoped tables). The old 30-line `se_core/se_whatsapp.php` scaffold is superseded dead code
+(not wired) — left in place; may be removed later.
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 3.1 Data model | complete | 6 idempotent brand-scoped tables: numbers (unique phone_number_id), conversations (unique number+user), messages (unique wamid), templates (unique brand+name+lang), webhook_events (unique event_hash), metering (unique dedup_ref). No token stored — number references an option key. |
+| 3.2 Webhook | functional (fixtures); live route gated | GET verify live-tested (challenge echoed / 403 wrong token). POST: X-Hub-Signature-256 over RAW body verified (unit 6/0), durable dedup store, fast 200 ack, async processing via cron. Public POST route intentionally CSRF-disabled until go-live (documented deploy step + Meta registration = gate). |
+| 3.3/3.4 Processing + inbox | functional | Cron-driven pipeline 11/0: tenant routing, wamid dedup (duplicate delivery -> one message), ctwa capture on first inbound, out-of-order status (read kept, older sent ignored), unknown-number parked failed. Inbox UI (list/conversation/filters/lead tab), brand-scoped + escaped; admin route 200; WA brand isolation proven. Media: metadata captured; controlled download deferred (needs live URLs+token) - gated. |
+| 3.5 Reply window / templates | functional | 24h window from last inbound; window-open/closed + template-required states surfaced in UI; templates table. Reminder-queue consumer wired to cron, holds (transmits nothing) until a brand can send - the Phase 2 interface seam. |
+| 3.6 Metering | complete | Per-brand dedup metering (inbound service + status pricing category/billable); rates configurable via option (not hardcoded). |
+| 3.7 Permissions | complete | Separate `se_whatsapp` (view/create/edit/delete) + `se_whatsapp_config` (manage) capabilities; brand scoping via Phase-1-verified se_staff_brand_ids; tokens never shown to staff / never logged. |
+| 3.8 Testing | done (fixtures) | Unit 13/0 (signature/routing/window/rate); cron integration 11/0; GET verify live; brand isolation ok. Live message send: externally gated. |
+| 3.9 App Review pack | prepared (not submitted) | `docs/WHATSAPP-APP-REVIEW-READINESS.md` |
+
+**Externally gated (owner action):** persistent Meta token, real WABA/number, public webhook subscribe
+(+ csrf_exclude_uris deploy step), first real message, App Review submission.
