@@ -5,7 +5,7 @@
 
 **Environment:** Perfex 3.4.1 / CI3 / PHP 8.1.34 · docroot `/home/hyundaic/crm.roozbeh.com.tr`
 · SSH alias `seoevaluate-crm` (user `hyundaic`) · repo `git@github.com:Roozbehn/seoevaluate-crm.git`
-· branch `main` · DB `hyundaic_crmsee` (default `utf8mb4 / utf8mb4_unicode_ci`).
+· branch `main` · DB `APP_DB_NAME` (default `utf8mb4 / utf8mb4_unicode_ci`).
 
 **Real data to preserve:** brand `Azin` (id 1); real staff id 1 (admin). All `ZZSEED*` / `zzseed*@example.invalid` are synthetic.
 

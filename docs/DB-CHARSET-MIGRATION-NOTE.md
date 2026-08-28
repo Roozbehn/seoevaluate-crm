@@ -1,6 +1,6 @@
 # Database Character-Set Migration Note
 
-**Scope:** the CRM database only (`hyundaic_crmsee` on staging). Do not alter other databases.
+**Scope:** the CRM database only (`APP_DB_NAME` on staging). Do not alter other databases.
 
 ## Current staging state (verified 2026-08-29)
 
