@@ -1,0 +1,132 @@
+<?php
+
+defined('BASEPATH') or exit('No direct script access allowed');
+
+/**
+ * Meta Conversions API sender.
+ *
+ * Called by the outbox drainer for rows whose destination is 'meta_capi'.
+ * Builds and posts a CRM stage event to the brand's dataset.
+ *
+ * Design decisions that come straight from Meta's payload spec, and are easy to
+ * get silently wrong:
+ *   - action_source is "system_generated" for CRM stage events. There is no
+ *     "offline" value; using it fails quietly.
+ *   - For a lead that came from Lead Ads, the primary key is the Meta lead_id,
+ *     NOT hashed email/phone. Hashed identifiers are added as redundancy.
+ *   - custom_data.event_source must be "crm"; lead_event_source names the tool.
+ *   - event_name is the pipeline stage verbatim; Meta learns per name, so it
+ *     must be stable and treatment-agnostic.
+ *
+ * This function is GATED: it only sends when the brand has a dataset id and a
+ * system-user token. Without a token (the state until Meta App Review completes)
+ * it returns a clear, non-fatal reason so the row is held, not lost.
+ */
+function se_capi_send_event($row)
+{
+    $CI = &get_instance();
+
+    $brand_id = (int) $row['brand_id'];
+    $lead_id  = (int) $row['lead_id'];
+
+    $CI->db->where('id', $brand_id);
+    $brand = $CI->db->get(db_prefix() . 'se_brands')->row();
+
+    if (!$brand || empty($brand->meta_dataset_id)) {
+        return ['ok' => false, 'error' => 'brand has no meta_dataset_id'];
+    }
+
+    // The system-user token is a secret; it is stored in options, never in the
+    // brands table that renders in the UI, and never in git.
+    $token = get_option('se_meta_capi_token_' . $brand_id);
+    if (empty($token)) {
+        $token = get_option('se_meta_capi_token'); // agency-wide fallback
+    }
+
+    if (empty($token)) {
+        return ['ok' => false, 'error' => 'no Meta system-user token configured (App Review pending)'];
+    }
+
+    $CI->db->where('id', $lead_id);
+    $lead = $CI->db->get(db_prefix() . 'leads')->row();
+
+    if (!$lead) {
+        return ['ok' => false, 'error' => 'lead no longer exists'];
+    }
+
+    $CI->load->library('se_core/se_hash');
+
+    $user_data = [];
+
+    // Lead-Ads leads: lead_id is the deterministic key.
+    if (!empty($lead->meta_lead_id)) {
+        $user_data['lead_id'] = (string) $lead->meta_lead_id;
+    }
+
+    // Redundant / fallback identifiers, always hashed.
+    if (!empty($lead->email) && ($em = Se_hash::email($lead->email))) {
+        $user_data['em'] = [Se_hash::sha256($em)];
+    }
+    if (!empty($lead->phonenumber) && ($ph = Se_hash::phone($lead->phonenumber))) {
+        $user_data['ph'] = [Se_hash::sha256($ph)];
+    }
+    // Click-to-WhatsApp click id is sent UNHASHED per Meta's spec.
+    if (!empty($lead->ctwa_clid)) {
+        $user_data['ctwa_clid'] = (string) $lead->ctwa_clid;
+    }
+    if (!empty($lead->fbc)) {
+        $user_data['fbc'] = (string) $lead->fbc;
+    }
+    if (!empty($lead->fbp)) {
+        $user_data['fbp'] = (string) $lead->fbp;
+    }
+
+    if (empty($user_data)) {
+        return ['ok' => false, 'error' => 'no usable identifiers on lead'];
+    }
+
+    $action_source = !empty($lead->ctwa_clid) ? 'business_messaging' : 'system_generated';
+
+    $event = [
+        'event_name'    => $row['event_name'],
+        'event_time'    => strtotime($row['event_time']),
+        'action_source' => $action_source,
+        'user_data'     => $user_data,
+        'custom_data'   => [
+            'event_source'      => 'crm',
+            'lead_event_source' => 'SEO Evaluate CRM',
+        ],
+        'event_id'      => 'se-' . $lead_id . '-' . $row['id'],
+    ];
+
+    $payload = ['data' => [$event]];
+
+    $version = get_option('se_meta_graph_version') ?: 'v26.0';
+    $url = 'https://graph.facebook.com/' . $version . '/'
+         . rawurlencode($brand->meta_dataset_id) . '/events'
+         . '?access_token=' . rawurlencode($token);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => json_encode($payload),
+        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 30,
+    ]);
+
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $cerr = curl_error($ch);
+    curl_close($ch);
+
+    if ($cerr) {
+        return ['ok' => false, 'error' => 'curl: ' . $cerr];
+    }
+
+    if ($code >= 200 && $code < 300) {
+        return ['ok' => true, 'error' => ''];
+    }
+
+    return ['ok' => false, 'error' => 'HTTP ' . $code . ': ' . substr((string) $body, 0, 500)];
+}

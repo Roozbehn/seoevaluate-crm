@@ -208,3 +208,16 @@ function se_core_deny()
 
     access_denied(_l('se_brands'));
 }
+
+/*
+ * SE modules - batch 2 (conversion pipeline).
+ * Credential-gated; no live public routes are enabled here.
+ * se_meta_leadgen.php (public webhook, gated on Meta App Review) and
+ * se_whatsapp.php (inert scaffold) are intentionally NOT wired.
+ */
+foreach (['se_outbox.php', 'se_capi.php', 'se_google_dm.php'] as $__se_b2) {
+    $__se_b2_path = __DIR__ . '/' . $__se_b2;
+    if (is_file($__se_b2_path)) {
+        require_once $__se_b2_path;
+    }
+}
