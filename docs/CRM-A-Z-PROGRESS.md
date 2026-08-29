@@ -1,7 +1,20 @@
 # SEO Evaluate CRM — A-to-Z Progress Tracker
 
 > Persistent state so any future Claude Code session can resume without rediscovery.
-> Update after every phase. Staging only. Synthetic data only. Stop at external-action gates.
+> Update after every phase. Synthetic data only. Stop at external-action gates.
+>
+> **Environment decision (authoritative).** The **current cPanel hosting with PHP 8.1.34** is the
+> **approved environment** for 2–3 internal users and the intended home for that limited internal use.
+> The installation is in **pre-live internal use** today and becomes **limited internal production use**
+> once the privacy/KVKK gate and the manual UI QA clear. Earlier "staging only" wording means *pre-live*,
+> not *temporary*. **VPS migration, PHP 8.3/8.4 adoption and DNS migration are optional future work, not
+> go-live requirements**, and have been removed from the owner checklist. **PHP 8.1.34 is the production
+> runtime; there is no PHP 8.3 production target.**
+>
+> **Module version ≠ schema version.** `se_core` module **1.0.0** / schema **v7**; `se_appointments`
+> module **1.0.0** / schema **v2**; `se_whatsapp` module **1.0.0**.
+>
+> **Reviewed final commit:** `c60d39d4fa7c5e16344c2f833bca5a8f7b77c592`.
 
 **Environment:** Perfex 3.4.1 / CI3 / PHP 8.1.34 · docroot `/home/hyundaic/crm.roozbeh.com.tr`
 · SSH alias `seoevaluate-crm` (user `hyundaic`) · repo `git@github.com:Roozbehn/seoevaluate-crm.git`
@@ -70,7 +83,7 @@ Modules registered+active: `se_core` 1.0.0, `se_appointments` 1.0.0. No `uninsta
 | P4 Meta Lead Ads + CAPI | feature/meta-leads | pending / partial | `se_meta_leadgen.php` present, not wired → leadgen webhook (verify+sig+bigint-safe+dedup+routing+appsecret_proof), outbound CRM events completeness, per-brand health iface. GATE: 2nd Meta app, App Review |
 | P5 Google conversions | feature/google-conversions | pending / scaffold | `se_google_dm.php` 35-ln scaffold → Data Manager API client (NOT deprecated), per-brand mapping, click ids, outbox integration; WA landing-token attribution; fixtures. GATE: cloud creds, live uploads |
 | P6 Reporting + health | feature/reporting-hardening | pending | Brand-scoped dashboards + bounded async imports (GA4/GSC/Ads spend/funnel/no-show/WA); integration-health page |
-| P7 Operational readiness | — | pending | Author PRODUCTION-MIGRATION / BACKUP-RESTORE / INTEGRATION-SETUP runbooks; VPS/PHP 8.3 plan (prepare, do not execute) |
+| P7 Operational readiness | — | pending | Author PRODUCTION-MIGRATION / BACKUP-RESTORE / INTEGRATION-SETUP runbooks. *(VPS/PHP 8.3 planning has since been reclassified as optional future work, not a go-live requirement.)* |
 | P8 Final QA + report | — | pending | Full matrix + `docs/CRM-A-Z-COMPLETION-REPORT.md` |
 
 ## External-action gates (STOP + ask)
@@ -164,7 +177,7 @@ Branch `feature/whatsapp-inbox` -> merged to `main`. New dedicated module `modul
 
 ---
 
-## Perfex plugin audit — inventory done; **Dark Theme installed (staging)**
+## Perfex plugin audit — inventory done; **Dark Theme installed on the cPanel installation**
 
 6 commercial CodeCanyon plugins inventoried (`docs/PERFEX-PLUGIN-AUDIT.md`). Owner approved **Dark Theme** only; installed v1.2.3 (clean review, non-destructive, idempotent, Phase 1-3 intact) — `docs/PERFEX-PLUGIN-IMPLEMENTATION-REPORT.md`. Vendor source deployed but gitignored (repo-storage decision pending per owner). WhatsBot/PRChat rejected (duplicate se_whatsapp). Accounting/Service-Management/Flutex: awaiting owner license confirmation.
 
@@ -231,11 +244,11 @@ mutation, PHP switch, DNS/TLS/host change.
 
 | Task | Status | Evidence |
 |------|--------|----------|
-| 7.1 Environment & PHP 8.3 compat | done (static); runtime pending | Env inventory captured. **PHP 8.3.33 + 8.4 static lint of all 64 module files: PASS**. Runtime-under-8.3 verification outstanding (no handler switch performed). |
+| 7.1 Environment & PHP 8.3 compat | **static lint only; NOT a production target** | Env inventory captured. **PHP 8.3.33 + 8.4 static lint of all 64 module files: PASS** — a forward-compatibility data point only. **PHP 8.1.34 is the production runtime**; the 8.3 application runtime has never been verified and no handler switch was performed. Any future upgrade is optional work starting from an isolated compatibility test. |
 | 7.2 Deployment & rollback | runbook | `docs/PRODUCTION-READINESS-RUNBOOK.md` (preflight, migration order, module activation order, cache/restart, health verify, code/DB/external rollback). |
-| 7.3 Backup & restore | validated non-destructively; full drill pending | Fresh dump 138 tables == live 138; completion marker present; backups `700` off-docroot. Full restore drill pending an isolated DB (not created on shared account). rclone absent -> off-server copy not automated. `docs/BACKUP-RESTORE-RUNBOOK.md`. |
-| 7.4 DNS/TLS/cutover | plan only | `docs/DNS-TLS-CUTOVER-ROLLBACK.md` (TTL, cert, HSTS-after-verify, webhook TLS, rollback set). Nothing changed. |
-| 7.5 Monitoring & alerting | runbook | `docs/MONITORING-ALERTING-RUNBOOK.md` (13 signals + thresholds; uses existing health helpers; read-only). **Disk at 95% flagged.** |
+| 7.3 Backup & restore | **dump integrity evidence only — restore NOT proven** | Proves exactly three things: dump **completion marker** present, **expected table count** (138 == 138 live base tables), **basic parse/integrity**. Proves **neither a successful restore nor complete application recovery**. Backups `700` off-docroot. Before real patient data: encrypted off-server copies (`rclone`/`age` absent, `gpg` present), DB + `uploads/` + config coverage, an **isolated restore test**, documented retention, backup-age monitoring. `docs/BACKUP-RESTORE-RUNBOOK.md`. |
+| 7.4 DNS/TLS/cutover | **optional future work; plan retained, not required** | `docs/DNS-TLS-CUTOVER-ROLLBACK.md` (TTL, cert, HSTS-after-verify, webhook TLS, rollback set). Nothing changed; removed from the owner go-live checklist. |
+| 7.5 Monitoring & alerting | runbook | `docs/MONITORING-ALERTING-RUNBOOK.md` (uses existing health helpers; read-only). **Corrected:** alert on the **account quota** (16,362 / 51,200 MB, ~32%; 295,019 / 500,000 inodes), *not* on the shared provider array's 95% — that is a monitored hosting-provider condition, not an account-capacity blocker. |
 
 ---
 
@@ -244,20 +257,30 @@ mutation, PHP switch, DNS/TLS/host change.
 Branch `feature/final-qa` -> merged to `main`. No session forging in Phase 8 (per ground rules); regression
 via network-free unit suites + DB-level checks + security scans; authenticated-UI items -> manual owner checklist.
 
+**Session provenance:** earlier phases (0, 2–6) drove authenticated HTTP using **temporary synthetic
+database sessions** (rows inserted into `tblsessions` for synthetic staff, then deleted — teardown verified
+at 0). **Phases 8 and 9 fabricated no sessions at all.** Consequently no authenticated *browser* UI check
+has ever been performed by a human, which is why the UI items remain pending.
+
 Re-run: PHP 8.1/8.3/8.4 lint PASS; migration idempotency PASS (no drift); phase4/5/6 unit 21/33/7 = 61/0;
 brand isolation PASS; security scans PASS (0 secrets in tracked files, 0 synthetic residue, webhook POST still
-CSRF-gated, app-config 600, dark theme untracked, no unlicensed plugin); cron 200, app 200; error log 0 (php83-CLI
-lint artifacts cleared — app produces no errors). Reports: `docs/CRM-A-Z-FINAL-REPORT.md`, `docs/FINAL-QA-MATRIX.md`,
+CSRF-gated, app-config 600, dark theme untracked, no unlicensed plugin); cron 200, app 200. **Error logs:**
+the only content ever produced was PHP 8.3 **CLI lint** warnings, which were **rotated** (not truncated as
+application evidence); the **application subsequently generated no new error log**. Reports: `docs/CRM-A-Z-FINAL-REPORT.md`, `docs/FINAL-QA-MATRIX.md`,
 `docs/OWNER-GO-LIVE-CHECKLIST.md`. All external ad-platform delivery classified Externally gated; nothing submitted.
 
 ---
 
 ## Phase 9 — Gap closure (cPanel decision + Patient UI)  — **COMPLETE (merged)**
 
-Branch `feature/patient-ui` -> merged to `main`. Infrastructure reconciled: **cPanel + PHP 8.1.34 approved
-for 2–3 internal users; VPS/PHP-upgrade moved to Optional future roadmap.** Disk 95% = shared array (this
-account 16 GB, CRM 222 MB, backups 3.3 MB — safe). PHP 8.3/8.4 syntax lint PASS; 8.3 runtime not verified
-(nd_mysqli CLI warning — non-blocker). Error logs rotated (not truncated) + gitignored; app produces 0 errors.
+Branch `feature/patient-ui` -> merged to `main` as **`c60d39d4fa7c5e16344c2f833bca5a8f7b77c592`**.
+Infrastructure reconciled: **cPanel + PHP 8.1.34 is the approved environment and production runtime for 2–3
+internal users; VPS migration, PHP 8.3/8.4 adoption and DNS migration are optional future work, not go-live
+requirements.** Disk: account **16,362 / 51,200 MB (~32%)** and **295,019 / 500,000 inodes (~59%)**; the
+shared provider array `/dev/md3` at **95%** is a monitored hosting-provider condition, not an account
+blocker. PHP 8.3/8.4 **static syntax lint** PASS (forward-compatibility data point only); 8.3 runtime never
+verified (nd_mysqli CLI warning is a CLI extension-config artifact). Error logs: PHP 8.3 CLI lint warnings
+rotated (never truncated as app evidence) + gitignored; the application generated no new error log.
 
 **Patient CRUD UI** (`/admin/se_core/se_patients`): reuses `tblse_patients`/`se_consent_ledger`/
 `se_record_access_log` (no duplicate model, **no migration** — `retention_state` supports archive). Brand-scoped
@@ -265,4 +288,30 @@ list+search+pagination, create/view/edit, **archive/soft-delete** (keeps consent
 Perfex capabilities (view/create/edit/delete), CSRF, lead/client/appointment links, consent + audit history,
 server-side validation, Turkish/Unicode, minimal personal data. **Conversion-data prohibition proven** (patient/
 clinical data cannot enter CAPI/Google payloads — builders are lead-only). Tests: unit **19/0** + DB **7/0** = **26/0**.
-Authenticated visual CRUD = owner manual checklist (`docs/MANUAL-UI-CHECKLIST.md`).
+**Classification: *Functional with fixtures — automated model/DB tests passed; authenticated UI and
+permission QA pending*.** Authenticated visual CRUD **and authorization QA** (capability denial, cross-brand
+id denial) remain on the owner manual checklist (`docs/MANUAL-UI-CHECKLIST.md`). It is **not** end-to-end
+verified. Dark Theme is likewise ***Installed and functionally activated — visual/responsive QA pending***.
+
+---
+
+## Phase 10 — Documentation correction + independent-review packaging — **COMPLETE**
+
+Documentation-only phase at `c60d39d4fa7c5e16344c2f833bca5a8f7b77c592`. **No live-integration code was
+modified and no external integration was activated.**
+
+| Task | Status | Outcome |
+|------|--------|---------|
+| 10.1 Resolve documentation contradictions | complete | Unified environment banner across 6 runbooks/reports; cPanel + PHP 8.1.34 recorded as the approved environment **and production runtime**; VPS / PHP 8.3 / DNS removed from the immediate owner checklist and moved to *Optional future work*; module versions separated from schema versions; shared-array 95% separated from account quota; installation terminology unified on *pre-live internal use → limited internal production use*. |
+| 10.2 Webhook latency | complete (documented, **cron unchanged**) | Cron is `3-59/15` (every 15 min); the Perfex 300 s throttle is a floor between executions and never blocks a run. **Effective worst case ≈ 15 min, not 5.** Recorded as a blocker before live WhatsApp/Lead Ads, with two cPanel-compatible options (5-min cron + matching throttle; **preferred:** separate 1-min lightweight webhook processor). Receiver already verifies → enqueues → 200 with no inline Meta/Google work. |
+| 10.3 Credential audit (no values read or printed) | complete | **All** ad-platform secrets are designed as **plaintext `tbloptions`** rows; **zero encryption** anywhere in the custom modules. **No credential option is currently populated** (only 7 `se_*` rows exist: 2 schema versions, 1 reconcile timestamp, 4 duplicate `se_wa_rates_json`). Config files verified **mode 600 owner-only**. Health endpoints and logs expose **booleans only** — no secret leaks. **Live integration BLOCKED**; nothing migrated or deleted. |
+| 10.4 Google Data Manager authentication | complete (finding) | `se_gdm_access_token()` returns a **static bearer token** from `se_google_sa_token_<brand>` and sends it as `Authorization: Bearer`. No service-account JWT, no ADC, no refresh — Google tokens expire ~hourly. **Must be rebuilt on service-account credentials or ADC**; store only the renewal reference. **BLOCKED.** |
+| 10.5 Attribution snapshot verification | complete (defect) | First-touch immutable ✅; last-touch parallel columns ✅; `event_id`/`transactionId` stable across retries ✅; `event_time`/`event_name` snapshotted ✅; last-touch bleed not currently occurring ✅. **DEFECT:** both senders re-read `tblleads` at drain time, so consent state, `consent_text_version` and identifiers are rebuilt from the lead's **current** row. The outbox `payload` snapshot column is always written `[]` and never read (0 of 0 rows populated). Additive idempotent schema-v8 snapshot migration **proposed, not applied**. |
+| 10.6 Rotated-log exposure | complete (**fixed — authorized relocation**) | `error_log.claude-php83lint-20260829_093518` was **inside the document root**, mode `644`, and served **HTTP 200** with its full 2,200-byte body. **Moved** (not deleted) to `~/_evidence/logs/`, mode `600`, dir `700`; sha256 identical before/after; old URL now **404**. A second `error_log` generated during this audit was relocated the same way. Document root now holds no `error_log*`. Owner action outstanding: set PHP's `error_log` path outside the docroot. |
+| 10.7 Backup claims corrected | complete | Reclassified as **dump integrity evidence only** — completion marker, expected table count (138 == 138), basic parse. Explicitly **not** proof of restore or application recovery. Five prerequisites recorded before real patient data. **No new dump and no isolated database created.** |
+| 10.8 Privacy/KVKK launch gate | complete (gate opened) | 10-item owner/legal gate added (controller, clarification notice, lawful grounds, consent wording/versions, minimize nationality/passport, retention & deletion, staff roles/need-to-know, correction/export/deletion procedures, breach response, international transfer to Meta/Google/backup storage). **No legal compliance is claimed; requires qualified Turkish privacy counsel.** |
+| 10.9 Source-review package | complete | `CRM-CODE-REVIEW-PACKAGE.zip` built from **tracked Git files at the reviewed commit** (`git archive`), containing `modules/se_core`, `modules/se_appointments`, `modules/se_whatsapp`, `.gitignore` and `CODE-REVIEW-MANIFEST.md`. Excludes `app-config.php`, all credentials/env files, unmodified Perfex core, `modules/perfex_dark_theme/`, uploads, databases/dumps, backups, logs, caches, sessions, test data, third-party commercial archives and Git metadata. Secret-pattern scan run over the final archive. |
+
+**Not done by design in Phase 10:** cron unchanged; no option migrated or deleted; no credential added; no
+live-integration code modified; no external integration activated; no new dump or isolated DB; no claim of
+independent code approval.

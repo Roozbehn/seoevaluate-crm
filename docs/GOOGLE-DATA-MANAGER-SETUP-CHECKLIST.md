@@ -10,8 +10,27 @@ approval at the gate.**
    (digits) → `tblse_brands.google_ads_customer_id`.
 2. **Google Cloud project** for the Data Manager API; enable the **Data Manager API**.
 3. **Service account** in that project; grant it Data Manager access to the operating account(s).
-   Store its OAuth access-token retrieval **without committing keys** — the token is read from option
-   `se_google_sa_token_<brand_id>` (or `se_google_sa_token`); the key file lives outside the repo/docroot.
+
+> ### ⚠️ BLOCKER — the current authentication design must be replaced before going live
+>
+> Today `se_gdm_access_token()` reads a **static bearer token** from option
+> `se_google_sa_token_<brand_id>` (fallback `se_google_sa_token`) and `se_gdm_ingest()` sends it directly
+> as `Authorization: Bearer <token>`. There is **no service-account key, no signed JWT assertion, no OAuth
+> token exchange and no refresh path**. Google service-account access tokens expire in about **one hour**,
+> so this design breaks roughly hourly and requires a human to paste a new token. **Do not build live
+> authentication around it.**
+>
+> **Required instead:** obtain **renewable short-lived access tokens** from **service-account credentials**
+> (JSON key → signed JWT → token exchange) or from **Application Default Credentials**, cached until shortly
+> before expiry. Store only the **secure credential reference / configuration needed for renewal** — a
+> filesystem path to a `600` key file **outside the document root and outside Git**, or an ADC
+> configuration — **never a bare access token**, and never a plaintext secret in `tbloptions`.
+>
+> - <https://developers.google.com/data-manager/api/devguides/quickstart/set-up-access>
+> - <https://developers.google.com/identity/protocols/oauth2/service-account>
+>
+> **No credential was added during the documentation-correction phase, and no existing option was migrated
+> or deleted. A separate remediation proposal is required before any live Google conversion is sent.**
 4. **Data Manager permissions**: the service account must be linked to each operating account with
    permission to ingest events (scope `https://www.googleapis.com/auth/datamanager`).
 5. **Conversion actions**: create one per stage you upload (e.g. "Lead", "Consultation Held"); record the
