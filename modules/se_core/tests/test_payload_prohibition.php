@@ -103,7 +103,7 @@ se_test_assert_clean($event, 'CAPI event contains no prohibited field');
 
 se_eq(['event_name', 'event_time', 'action_source', 'user_data', 'custom_data', 'event_id'],
     array_keys($event), 'CAPI event has exactly the expected top-level keys');
-se_eq(['event_source' => 'crm', 'lead_event_source' => 'SEO Evaluate CRM'],
+se_eq(['event_source' => 'crm', 'lead_event_source' => SE_CLINIC_NAME],
     $event['custom_data'], 'custom_data carries only the two documented values');
 
 $allowedUserData = ['lead_id', 'em', 'ph', 'ctwa_clid', 'fbc', 'fbp'];

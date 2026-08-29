@@ -283,3 +283,21 @@ $lang['se_google_token_not_minted'] = 'None minted in this request';
 $lang['se_google_submitted_vs_confirmed'] = 'Submitted vs confirmed';
 $lang['se_google_submitted_label'] = 'submitted';
 $lang['se_google_confirmed_label'] = 'confirmed';
+
+/* --- Reports screen labels ------------------------------------------------ */
+$lang['se_rep_converted']          = 'Converted';
+$lang['se_rep_consultations_held'] = 'Consultations held';
+$lang['se_rep_no_show_rate']       = 'No-show rate';
+$lang['se_rep_by_stage']           = 'Leads by stage';
+$lang['se_rep_by_source']          = 'By source';
+$lang['se_rep_source']             = 'Source';
+$lang['se_rep_rate']               = 'Rate';
+$lang['se_rep_whatsapp_in']        = 'In';
+$lang['se_rep_whatsapp_out']       = 'Out';
+$lang['se_rep_est_cost']           = 'Est. cost';
+$lang['se_rep_spend_vs_outcome']   = 'Spend vs outcome';
+$lang['se_rep_spend']              = 'Spend';
+$lang['se_rep_cost_per_lead']      = 'Cost / lead';
+$lang['se_rep_cost_per_treatment'] = 'Cost / treatment';
+$lang['se_rep_no_imported_spend']  = 'no imported spend';
+$lang['se_rep_failed_to_load']     = 'Failed to load';

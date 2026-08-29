@@ -11,8 +11,10 @@
         <label><?php echo _l('se_patient_brand'); ?></label>
         <select name="brand_id" class="form-control selectpicker" required>
           <option value=""></option>
+          <?php /* One reachable brand (clinic mode): preselect it so the form
+                   does not ask a question with a single answer. */ ?>
           <?php foreach ($brands as $b) { ?>
-            <option value="<?php echo (int) $b['id']; ?>"><?php echo html_escape($b['name']); ?></option>
+            <option value="<?php echo (int) $b['id']; ?>"<?php echo count($brands) === 1 ? ' selected' : ''; ?>><?php echo html_escape($b['name']); ?></option>
           <?php } ?>
         </select>
       </div>
@@ -26,7 +28,7 @@
         </select>
       </div>
       <div class="form-group">
-        <label>Customer</label>
+        <label><?php echo _l('client'); ?></label>
         <select name="client_id" class="form-control selectpicker" data-live-search="true">
           <option value="0">&mdash;</option>
           <?php foreach ($clients as $c) { ?>

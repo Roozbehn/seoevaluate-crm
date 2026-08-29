@@ -174,7 +174,6 @@ function update_option($name, $value) { $GLOBALS['se_test']['options'][$name] = 
 function add_option($n, $v) { return update_option($n, $v); }
 function _l($k, $x = '') { return $k; }
 function log_activity($m) { $GLOBALS['se_test']['activity'][] = $m; }
-function is_ajax_request() { return false; }
 function slug_it($s) { return strtolower(preg_replace('/[^A-Za-z0-9]+/', '-', $s)); }
 function to_sql_date($d, $t = false) { return $d; }
 function _dt($d) { return $d; }

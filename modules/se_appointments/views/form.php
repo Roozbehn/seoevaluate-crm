@@ -39,8 +39,9 @@
         <?php } else { ?>
           <select class="form-control" id="brand_id" name="brand_id" required>
             <option value=""></option>
+            <?php /* One reachable brand (clinic mode): preselect it. */ ?>
             <?php foreach ($brands as $b) { ?>
-              <option value="<?php echo (int) $b['id']; ?>"><?php echo html_escape($b['name']); ?></option>
+              <option value="<?php echo (int) $b['id']; ?>"<?php echo count($brands) === 1 ? ' selected' : ''; ?>><?php echo html_escape($b['name']); ?></option>
             <?php } ?>
           </select>
         <?php } ?>

@@ -196,7 +196,8 @@ function se_capi_build_event($row, $lead = null)
         'user_data'     => $user_data,
         'custom_data'   => [
             'event_source'      => 'crm',
-            'lead_event_source' => 'SEO Evaluate CRM',
+            // Names the CRM to Meta. The clinic name since clinic mode (se_clinic.php).
+            'lead_event_source' => defined('SE_CLINIC_NAME') ? SE_CLINIC_NAME : 'SEO Evaluate CRM',
         ],
         'event_id'      => 'se-' . (int) $row['lead_id'] . '-' . $row['id'],
     ];

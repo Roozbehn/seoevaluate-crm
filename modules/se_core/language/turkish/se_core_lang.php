@@ -278,3 +278,21 @@ $lang['se_google_token_not_minted'] = 'Bu istekte üretilmedi';
 $lang['se_google_submitted_vs_confirmed'] = 'Gönderilen / onaylanan';
 $lang['se_google_submitted_label'] = 'gönderildi';
 $lang['se_google_confirmed_label'] = 'onaylandı';
+
+# --- Reports screen labels ---
+$lang['se_rep_converted']          = 'Dönüşen';
+$lang['se_rep_consultations_held'] = 'Yapılan konsültasyonlar';
+$lang['se_rep_no_show_rate']       = 'Gelmeme oranı';
+$lang['se_rep_by_stage']           = 'Aşamaya göre fırsatlar';
+$lang['se_rep_by_source']          = 'Kaynağa göre';
+$lang['se_rep_source']             = 'Kaynak';
+$lang['se_rep_rate']               = 'Oran';
+$lang['se_rep_whatsapp_in']        = 'Gelen';
+$lang['se_rep_whatsapp_out']       = 'Giden';
+$lang['se_rep_est_cost']           = 'Tahmini maliyet';
+$lang['se_rep_spend_vs_outcome']   = 'Harcama ve sonuç';
+$lang['se_rep_spend']              = 'Harcama';
+$lang['se_rep_cost_per_lead']      = 'Fırsat başına maliyet';
+$lang['se_rep_cost_per_treatment'] = 'Tedavi başına maliyet';
+$lang['se_rep_no_imported_spend']  = 'içe aktarılmış harcama yok';
+$lang['se_rep_failed_to_load']     = 'Yüklenemedi';
