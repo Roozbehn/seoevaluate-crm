@@ -156,8 +156,8 @@ foreach ($stmts as $sql) {
     }
 }
 
-se_eq(0, $unguarded, 'every one of the ' . count($stmts) . ' v8 statements is guarded');
-se_eq(0, $destructive, 'no v8 statement is destructive');
+se_eq(0, $unguarded, 'every one of the ' . count($stmts) . ' migration statements is guarded');
+se_eq(0, $destructive, 'no migration statement is destructive');
 
 se_group('Clock consistency: PHP and MariaDB must agree');
 
@@ -167,8 +167,14 @@ $skew   = abs($dbNow - $phpNow);
 
 // The bug this guards: rows are written with SQL NOW() but were compared
 // against PHP date(). On this host that is a real 2-hour offset.
-se_ok($skew > 60, 'PHP and MariaDB clocks genuinely differ here (' . round($skew / 3600, 1)
-    . 'h) — so any PHP-vs-NOW() comparison WOULD be wrong');
+// Informational, NOT an assertion about the host: report the measured skew.
+// The bug this guards is that queue rows written with SQL NOW() were compared
+// against PHP date(); on this host that was a real ~2h offset. What MUST hold
+// regardless of how the host clocks are set is that se_db_now() tracks the
+// DATABASE clock (asserted immediately below). A synchronized host (skew 0) is
+// correct and must never fail this suite.
+se_ok(true, 'measured PHP-vs-MariaDB clock skew here is ' . round($skew / 3600, 2)
+    . 'h (informational; se_db_now() correctness is asserted next)');
 
 $helperNow = strtotime(se_db_now());
 se_ok(abs($helperNow - $dbNow) <= 2, 'se_db_now() tracks the DATABASE clock, not PHP');
