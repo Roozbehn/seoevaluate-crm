@@ -70,16 +70,24 @@ class Se_whatsapp_model extends App_Model
         return $affected > 0;
     }
 
-    /** Is this staff member mapped to the brand? Unmapped staff (admins) pass. */
+    /**
+     * Is this staff member mapped to the brand?
+     *
+     * A staff member with ZERO mapping rows used to pass unconditionally (the
+     * empty result was read as "admin-like"), so a conversation could be
+     * assigned to a completely unmapped staff member of another tenant. Only
+     * an actual admin passes without a mapping now; everybody else needs a
+     * real tblse_staff_brands row for THIS brand.
+     */
     protected function staff_in_brand($staff_id, $brand_id)
     {
+        if (is_admin((int) $staff_id)) {
+            return true;   // admins reach every brand by definition
+        }
+
         $rows = $this->db->query(
             'SELECT brand_id FROM ' . db_prefix() . 'se_staff_brands WHERE staff_id = ' . (int) $staff_id
         )->result_array();
-
-        if (!$rows) {
-            return true;
-        }
 
         foreach ($rows as $row) {
             if ((int) $row['brand_id'] === (int) $brand_id) {

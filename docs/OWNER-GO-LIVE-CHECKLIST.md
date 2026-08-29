@@ -171,3 +171,22 @@ unreliable behaviour.
 - Turkey vs EU data hosting; KVKK/GDPR transfer mechanism; consent wording + versions; data-retention periods.
 - CodeCanyon license confirmation for Accounting / Service Management / Flutex (currently *awaiting confirmation*;
   WhatsBot/PRChat rejected as duplicative). Decide whether to commit the Dark Theme vendor source (currently gitignored).
+
+---
+
+## Phase-14 update — what changed for activation
+
+- **Webhooks now activate with no further code change.** The exact-route CSRF
+  exclusions are deployed (`se_core/leadgen`, `se_whatsapp/webhook`), the receivers
+  are hardened and HTTP-verified (`docs/HTTP-RESULT-MATRIX.md`), and signature
+  secrets read the file provider. To go live you (a) create the secret store
+  directory (700) and drop the 600 secret files, and (b) subscribe the webhook at
+  Meta. No security patch is required — that gate is closed.
+- **Google authentication is implemented** with the official `google/auth` library
+  (`docs/GOOGLE-DEPENDENCY-DECISION.md`). To activate, drop a service-account **key
+  file** at `SE_SECRET_DIR/google_sa_<brand>` (600) and create the Cloud project /
+  conversion actions. No code change.
+- **Still owner-gated, in order:** (1) create the secret store + files;
+  (2) privacy/KVKK sign-off before any real patient data; (3) the restricted-role
+  rendered-UI pass (`MANUAL-UI-CHECKLIST.md` → Authorization QA); (4) a restore
+  drill; (5) per-integration credentials + webhook subscription + App Review.

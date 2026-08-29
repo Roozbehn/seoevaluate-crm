@@ -7,9 +7,9 @@ reported as absent in the UI — never a silent gap.
 
 | Item | State |
 |------|-------|
-| Signed webhook receiver (HMAC over raw body) | backend, HTTP-tested |
-| Raw-body size bound (64 KB) + 413 | backend, HTTP-tested |
-| 200 means durably accepted (500 on storage failure) | backend |
+| Signed webhook receiver (HMAC over raw body) | backend, **HTTP-tested (marker-verified controller execution)** |
+| Raw-body size bound (64 KB) + 413 | backend, **HTTP-tested** |
+| 200 means durably accepted (500 on storage failure) | backend, **HTTP-tested (reversible RENAME → 500)** |
 | page_id **+** form_id routing, ambiguity refused | backend, fake-DB |
 | Field-map allowlist (contact columns only) | backend, fake-DB |
 | Cross-brand `meta_lead_id` parked, never re-tenanted | backend, fake-DB |
@@ -19,11 +19,16 @@ reported as absent in the UI — never a silent gap.
 | `held` events auto-resume once configured | backend |
 | Configured default lead status/source (never 0) | backend + UI |
 | Token in Authorization header, never the URL | backend |
+| Method gate: GET verify / POST receive / else **405** | backend, **HTTP-tested** |
+| Malformed JSON → **400** (before store) | backend, **HTTP-tested** |
+| Every response carries `X-SE-Webhook` marker | backend, **HTTP-tested** |
+| Signature secret + verify token read from the **file provider** (fail-closed) | backend, fake-DB |
 | `appsecret_proof` on Graph calls | backend |
 | Sanitized provider errors | backend |
 | Queue counters, mapping view, requeue, setup checklist | UI, browser |
 | Bounded reconciliation | **not built** — UI reports "Not implemented" |
-| Live connection | **gated** — App Review + CSRF exclusion + token |
+| CSRF exclusion for the exact webhook URI | **deployed** — `modules/se_core/config/csrf_exclude_uris.php` = `['se_core/leadgen']`; no further security patch needed to activate |
+| Live connection | **gated** — App Review + Page/dataset token (drop a secret file) |
 
 ## Conversion Outbox
 
@@ -48,9 +53,12 @@ reported as absent in the UI — never a silent gap.
 
 | Item | State |
 |------|-------|
-| Signature verification over the exact raw body | backend, HTTP-tested |
-| Body bound (128 KB) + 413 | backend, HTTP-tested |
-| 200 means durably accepted | backend |
+| Signature verification over the exact raw body | backend, **HTTP-tested (marker-verified)** |
+| Body bound (128 KB) + 413 | backend, **HTTP-tested** |
+| 200 means durably accepted | backend, **HTTP-tested** |
+| Method 405 / malformed JSON 400 / marker header | backend, **HTTP-tested** |
+| CSRF exclusion `['se_whatsapp/webhook']` | **deployed** |
+| Status callback transition; cross-brand callback → no write | backend, **HTTP-tested** |
 | Unique `event_hash` race handled | backend, **real-DB** |
 | phone_number_id → brand routing | backend, fake-DB |
 | Conversation brand-mismatch refused | backend, fake-DB |
@@ -74,8 +82,8 @@ reported as absent in the UI — never a silent gap.
 | Credential read from 0600 file outside the docroot | backend, fake-DB |
 | Service-account document validation | backend, fake-DB |
 | Short-lived token cache + refresh-before-expiry | backend, fake-DB |
-| Renewable-token **abstraction** and signer seam | backend, fake-DB |
-| JWT signing / OAuth exchange | **not built** — needs `google/auth`; no bespoke crypto |
+| Renewable-token provider via **official `google/auth` v1.53.0** | backend, fake-DB (synthetic keypair, injected handler) |
+| JWT (RS256) signing / OAuth token exchange | **implemented via `google/auth`** — the library's, no bespoke crypto |
 | Ingest transport (fixtureable) | backend, fake-DB |
 | `requestStatus` polling (fixtureable) | backend, fake-DB |
 | submitted → confirmed / partial / failed lifecycle | backend, fake-DB |
@@ -86,7 +94,7 @@ reported as absent in the UI — never a silent gap.
 | Landing token cannot overwrite first-touch | backend, fake-DB |
 | No clinical/patient field in any payload | backend, fake-DB |
 | Status UI, mapping editor, owner checklist | UI, browser |
-| Live delivery | **gated** — Cloud project, service account, `google/auth` |
+| Live delivery | **gated** — Cloud project + a service-account **key file** (600, outside docroot); `google/auth` is installed, so activation is dropping the file, not a code change |
 
 ## Secrets
 

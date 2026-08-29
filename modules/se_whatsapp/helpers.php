@@ -31,9 +31,25 @@ define('SE_WA_BACKOFF_CAP', 21600);
 
 /* --------------------------- signature + storage ------------------------- */
 
+/* ONE secret source: the FILE secret provider (se_secret_read).
+ *
+ * Enforcement used to read tbloptions (se_wa_app_secret, se_wa_verify_token)
+ * while the readiness screen reported the file provider, so the UI could say
+ * "installed" while the webhook rejected everything — or the reverse. These
+ * accessors are now the ONLY way this module reads a webhook secret. The
+ * legacy option values are PRESERVED but never read again; activation is
+ * dropping a secret FILE (providers wa_app / wa_verify), no code change.
+ * Absent file => '' => every check fails CLOSED. */
+
 function se_wa_app_secret()
 {
-    return (string) get_option('se_wa_app_secret'); // never logged
+    return se_secret_read('wa_app'); // file provider; never logged
+}
+
+/** WhatsApp webhook verify token. File provider only; '' fails verification closed. */
+function se_wa_verify_token()
+{
+    return se_secret_read('wa_verify');
 }
 
 /**
@@ -48,6 +64,64 @@ function se_wa_verify_signature($raw_body, $header, $app_secret = null)
     $expected = 'sha256=' . hash_hmac('sha256', $raw_body, $secret);
 
     return hash_equals($expected, $header);
+}
+
+/** GET verification decision: subscribe mode + non-empty configured token + constant-time match. */
+function se_wa_verify_outcome($mode, $token)
+{
+    $expected = se_wa_verify_token();
+
+    return $mode === 'subscribe' && $expected !== '' && hash_equals($expected, (string) $token);
+}
+
+/**
+ * The POST pipeline over an already-read raw body, in the REQUIRED order:
+ *
+ *   1. 413  body-size limit — declared Content-Length AND actual bytes,
+ *           before any decode and before the HMAC is computed;
+ *   2. 401  X-Hub-Signature-256 over the EXACT raw bytes (missing/invalid);
+ *   3. 400  JSON well-formedness — a body json_decode() cannot parse to an
+ *           array/object is refused WITHOUT touching storage. Well-formed
+ *           payloads are still stored raw and fully parsed async by cron
+ *           (durability first); this gate only rejects the un-parseable;
+ *   4. 200  only after the durable, deduplicated store (duplicate = held
+ *           already = accepted); anything else is an honest 500 so Meta
+ *           redelivers.
+ *
+ * @return array{status:int,ok:bool,reason:string}
+ */
+function se_wa_receive_outcome($declared_length, $raw, $signature_header)
+{
+    if ((int) $declared_length > SE_WA_MAX_BODY_BYTES
+        || ($raw !== false && strlen((string) $raw) > SE_WA_MAX_BODY_BYTES)) {
+        return ['status' => 413, 'ok' => false, 'reason' => 'payload_too_large'];
+    }
+
+    $raw = (string) $raw;
+
+    if (!se_wa_verify_signature($raw, $signature_header)) {
+        return ['status' => 401, 'ok' => false, 'reason' => 'bad_signature'];
+    }
+
+    $decoded = json_decode($raw);
+
+    if (json_last_error() !== JSON_ERROR_NONE || (!is_array($decoded) && !is_object($decoded))) {
+        return ['status' => 400, 'ok' => false, 'reason' => 'malformed_json'];
+    }
+
+    /* 200 means DURABLY ACCEPTED. A failed insert must return 500 so Meta
+     * redelivers; a duplicate is genuinely accepted (we already hold it). */
+    $stored = se_wa_store_event($raw, true);
+
+    if (!empty($stored['stored']) || !empty($stored['duplicate'])) {
+        return [
+            'status' => 200,
+            'ok'     => true,
+            'reason' => empty($stored['duplicate']) ? 'accepted' : 'duplicate',
+        ];
+    }
+
+    return ['status' => 500, 'ok' => false, 'reason' => 'not_stored'];
 }
 
 /** Pull the routing ids out of a decoded webhook payload (first entry/change). */

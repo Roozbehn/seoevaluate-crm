@@ -43,13 +43,14 @@ $GLOBALS['se_test'] = [
 
 function se_test_reset()
 {
-    $GLOBALS['se_test']['denied']   = null;
-    $GLOBALS['se_test']['activity'] = [];
-    $GLOBALS['se_test']['post']     = [];
-    $GLOBALS['se_test']['get']      = [];
-    $GLOBALS['se_test']['uri']      = [];
-    $GLOBALS['se_test']['method']   = 'get';
-    $GLOBALS['se_test']['is_ajax']  = false;
+    $GLOBALS['se_test']['denied']    = null;
+    $GLOBALS['se_test']['activity']  = [];
+    $GLOBALS['se_test']['post']      = [];
+    $GLOBALS['se_test']['get']       = [];
+    $GLOBALS['se_test']['uri']       = [];
+    $GLOBALS['se_test']['method']    = 'get';
+    $GLOBALS['se_test']['is_ajax']   = false;
+    $GLOBALS['se_test']['admin_ids'] = [];
     se_authz_reset_cache();
 }
 
@@ -142,7 +143,26 @@ function db_prefix() { return 'tbl'; }
 function get_staff_user_id() { return $GLOBALS['se_test']['staff_id']; }
 function is_staff_logged_in() { return $GLOBALS['se_test']['staff_id'] > 0; }
 
-function is_admin($staff_id = '') { return $GLOBALS['se_test']['is_admin']; }
+/**
+ * Perfex semantics: no argument (or the acting staff id) answers for the
+ * CURRENT actor; an explicit OTHER staff id answers for that staff member,
+ * looked up in the test's admin registry (se_test_set_admin_ids).
+ */
+function is_admin($staff_id = '')
+{
+    if ($staff_id !== '' && $staff_id !== null
+        && (int) $staff_id !== (int) $GLOBALS['se_test']['staff_id']) {
+        return in_array((int) $staff_id, $GLOBALS['se_test']['admin_ids'] ?? [], true);
+    }
+
+    return $GLOBALS['se_test']['is_admin'];
+}
+
+/** Declare which OTHER staff ids count as Perfex admins for is_admin($id). */
+function se_test_set_admin_ids(array $ids)
+{
+    $GLOBALS['se_test']['admin_ids'] = array_map('intval', $ids);
+}
 
 function staff_can($capability, $feature = null, $staff_id = '')
 {
@@ -217,6 +237,20 @@ function register_staff_capabilities($feature, $config, $name = null)
 function register_language_files($m, $f) {}
 function register_activation_hook($m, $f) {}
 function admin_url($p = '') { return '/admin/' . $p; }
+function site_url($p = '') { return '/' . $p; }
+function _dt($d) { return (string) $d; }
+function html_escape($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
+
+/** Perfex App_Model stand-in so the real model classes can load. */
+class App_Model
+{
+    public $db;
+
+    public function __construct()
+    {
+        $this->db = $GLOBALS['se_test_ci']->db;
+    }
+}
 
 /* ---------------------------------------------------------------------------
  * Assertions.
@@ -302,6 +336,11 @@ require_once $SE_MODULES . '/se_appointments/gcal.php';
 require_once $SE_MODULES . '/se_core/se_secret_provider.php';
 require_once $SE_MODULES . '/se_whatsapp/helpers.php';
 require_once $SE_MODULES . '/se_whatsapp/outbound.php';
+require_once $SE_MODULES . '/se_core/se_integration_ui.php';
+require_once $SE_MODULES . '/se_core/se_reporting.php';
+require_once $SE_MODULES . '/se_core/se_navigation.php';
+require_once $SE_MODULES . '/se_appointments/se_appointments.php';
+require_once $SE_MODULES . '/se_whatsapp/models/Se_whatsapp_model.php';
 
 /* ---------------------------------------------------------------------------
  * ONE shared temporary secret store for the whole run.

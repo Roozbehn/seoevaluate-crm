@@ -78,8 +78,20 @@ function se_appt_lead_tab_content($lead)
         return;
     }
 
+    // Brand-scoped, mirroring the WhatsApp lead-tab twin: the lead profile
+    // must not surface another tenant's appointment rows just because a
+    // rel_id happens to match. Resolve the predicate BEFORE building the
+    // query (it may run its own staff-brand lookup).
+    $pred = function_exists('se_brand_predicate') ? se_brand_predicate() : '';
+
     $CI = &get_instance();
-    $CI->db->where('rel_type', 'lead')->where('rel_id', $lead_id)->order_by('start_at', 'DESC');
+    $CI->db->where('rel_type', 'lead')->where('rel_id', $lead_id);
+
+    if ($pred !== '') {
+        $CI->db->where($pred, null, false);
+    }
+
+    $CI->db->order_by('start_at', 'DESC');
     $appointments = $CI->db->get(db_prefix() . 'se_appointments')->result_array();
 
     if (empty($appointments)) {

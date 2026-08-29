@@ -236,3 +236,32 @@ se_eq(1, se_wa_route_to_brand('PN1'), 'a known number routes to its brand');
 se_eq(2, se_wa_route_to_brand('PN2'), 'a second number routes to its own brand');
 se_eq(null, se_wa_route_to_brand('PN-UNKNOWN'), 'an unknown number does not route');
 se_eq(null, se_wa_route_to_brand(''), 'a blank number does not route');
+
+/* ======================================================================== */
+se_group('Assign: an unmapped staff member is never treated admin-like');
+
+se_test_seed_wa();
+se_test_reset();
+se_test_act_as(10, []);   // brand-1 staff working conversation 901 (brand 1)
+
+$model = new Se_whatsapp_model();
+
+se_eq(true, $model->assign(901, 10), 'a staff member mapped to the conversation brand can be assigned');
+se_eq(false, $model->assign(901, 20), "another tenant's staff member is refused");
+se_eq(false, $model->assign(901, 999),
+    'a staff member with ZERO brand rows is refused (they used to pass as admin-like)');
+
+$conv = se_test_db()->rows('tblse_wa_conversations')[0];
+se_eq(10, (int) $conv['assigned_staff'], 'the refused assignments changed nothing');
+
+se_eq(true, $model->assign(901, 0), 'unassigning (0) still works');
+
+// A real Perfex ADMIN needs no mapping row — admins reach every brand.
+se_test_set_admin_ids([999]);
+se_eq(true, $model->assign(901, 999), 'an actual admin assignee passes without a mapping');
+se_test_set_admin_ids([]);
+
+// Out-of-scope conversation: the acting staff member cannot assign at all.
+se_test_reset();
+se_test_act_as(10, []);
+se_eq(false, $model->assign(902, 20), "a conversation outside the actor's scope cannot be assigned");

@@ -212,7 +212,10 @@ sort($files);
 
 $before = [];
 foreach (['leads', 'clients', 'se_patients', 'se_appointments', 'se_conversion_outbox',
-          'se_wa_webhook_events', 'se_meta_leadgen_events', 'se_brands', 'staff'] as $t) {
+          'se_wa_webhook_events', 'se_meta_leadgen_events', 'se_meta_forms',
+          'se_wa_conversations', 'se_wa_messages', 'se_wa_outbound', 'se_wa_numbers',
+          'se_gdm_requests', 'se_reminders', 'se_consent_ledger', 'se_staff_brands',
+          'se_appointment_status_history', 'se_brands', 'staff'] as $t) {
     $before[$t] = (int) $conn->query('SELECT COUNT(*) c FROM ' . db_prefix() . $t)->fetch_assoc()['c'];
 }
 
@@ -257,6 +260,14 @@ $purge = [
     'leads'                => 'id >= ' . SE_TEST_ID_BASE . ' OR brand_id >= ' . SE_TEST_ID_BASE,
     'se_staff_brands'      => 'staff_id >= ' . SE_TEST_ID_BASE . ' OR brand_id >= ' . SE_TEST_ID_BASE,
     'staff'                => 'staffid >= ' . SE_TEST_ID_BASE,
+    'se_meta_leadgen_events' => 'id >= ' . SE_TEST_ID_BASE . ' OR brand_id >= ' . SE_TEST_ID_BASE . " OR page_id LIKE 'ZZ%' OR form_id LIKE 'ZZ%'",
+    'se_meta_forms'        => 'id >= ' . SE_TEST_ID_BASE . ' OR brand_id >= ' . SE_TEST_ID_BASE . " OR page_id LIKE 'ZZ%' OR form_id LIKE 'ZZ%'",
+    'se_wa_conversations'  => 'id >= ' . SE_TEST_ID_BASE . ' OR brand_id >= ' . SE_TEST_ID_BASE . " OR phone_number_id LIKE 'ZZ%' OR wa_user_id LIKE 'ZZ%'",
+    'se_wa_messages'       => 'id >= ' . SE_TEST_ID_BASE . ' OR conversation_id >= ' . SE_TEST_ID_BASE . ' OR brand_id >= ' . SE_TEST_ID_BASE . " OR wamid LIKE 'ZZ%'",
+    'se_wa_outbound'       => 'id >= ' . SE_TEST_ID_BASE . ' OR brand_id >= ' . SE_TEST_ID_BASE . " OR idempotency_key LIKE 'zz-%'",
+    'se_wa_numbers'        => 'id >= ' . SE_TEST_ID_BASE . ' OR brand_id >= ' . SE_TEST_ID_BASE . " OR phone_number_id LIKE 'ZZ%'",
+    'se_gdm_requests'      => 'id >= ' . SE_TEST_ID_BASE . ' OR brand_id >= ' . SE_TEST_ID_BASE,
+    'clients'              => 'userid >= ' . SE_TEST_ID_BASE . " OR company LIKE 'ZZTEST%'",
     'se_brands'            => 'id >= ' . SE_TEST_ID_BASE . " OR name LIKE 'ZZTEST%'",
 ];
 

@@ -248,7 +248,7 @@ $lang['se_google_requests']      = 'Ingest requests';
 $lang['se_google_no_requests']   = 'No ingest requests yet';
 $lang['se_google_event_count']   = 'Events';
 $lang['se_google_created']       = 'Created';
-$lang['se_google_lifecycle_note'] = 'Accepted means the HTTP request succeeded. Submitted means Data Manager queued it. Confirmed means Google reported the events ingested. Renewable credentials and status polling are not implemented, so nothing reaches confirmed yet.';
+$lang['se_google_lifecycle_note'] = 'Accepted means the HTTP request succeeded. Submitted means Data Manager queued it. Confirmed means Google reported the events ingested. Renewable service-account tokens are minted through the official google/auth library once a key file is installed; request-status polling settles submitted rows when its transport is configured.';
 $lang['se_google_external_setup'] = 'External setup required';
 $lang['se_google_step_mcc']      = 'Google Ads customer ID recorded';
 $lang['se_google_step_mcc_hint'] = 'Set on the brand configuration screen.';
@@ -270,3 +270,11 @@ $lang['se_google_min_age']          = 'Minimum event age';
 $lang['se_google_min_age_off']      = 'Off (no artificial delay)';
 $lang['se_google_max_age']          = 'Maximum event age';
 $lang['se_google_partial']          = 'partial';
+
+// SE google status keys (workstream B)
+$lang['se_google_key_readable'] = 'Key file readable';
+$lang['se_google_key_document_valid'] = 'Key document usable (RSA key parses)';
+$lang['se_google_token_not_minted'] = 'None minted in this request';
+$lang['se_google_submitted_vs_confirmed'] = 'Submitted vs confirmed';
+$lang['se_google_submitted_label'] = 'submitted';
+$lang['se_google_confirmed_label'] = 'confirmed';

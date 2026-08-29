@@ -282,11 +282,12 @@ function se_staff_has_any_brand()
  */
 function se_all_brands($active_only = true, $accessible_only = true)
 {
-    $CI = &get_instance();
-
-    if ($active_only) {
-        $CI->db->where('active', 1);
-    }
+    /* Resolve the accessible-id set BEFORE touching the query builder. The
+     * old order added where('active',1) first and then bailed out for a
+     * staff member with no reachable brand — leaving that predicate DANGLING
+     * on the shared builder, where it silently contaminated whatever query
+     * ran next in the same request. */
+    $ids = null;
 
     if ($accessible_only && !se_staff_sees_all_brands()) {
         $ids = array_values(array_filter(se_staff_brand_ids(), function ($id) {
@@ -296,7 +297,15 @@ function se_all_brands($active_only = true, $accessible_only = true)
         if (!$ids) {
             return [];
         }
+    }
 
+    $CI = &get_instance();
+
+    if ($active_only) {
+        $CI->db->where('active', 1);
+    }
+
+    if ($ids !== null) {
         $CI->db->where_in('id', $ids);
     }
 
@@ -304,6 +313,12 @@ function se_all_brands($active_only = true, $accessible_only = true)
 
     return $CI->db->get(db_prefix() . 'se_brands')->result_array();
 }
+
+/**
+ * Sentinel "no brand at all". Matches no row anywhere (brand ids are >= 0),
+ * so every brand-filtered aggregate for it is honestly EMPTY.
+ */
+define('SE_BRAND_NONE', -1);
 
 /**
  * The brand a screen should default to: the first brand this staff member can
@@ -317,10 +332,18 @@ function se_default_brand_id()
         return (int) $brands[0]['id'];
     }
 
-    // No reachable brand. 0 is the triage bucket; a staff member without the
-    // triage capability simply has nothing to show, and every downstream query
-    // is brand-filtered anyway.
-    return 0;
+    /* No reachable real brand. Brand 0 is the TRIAGE bucket and is only a
+     * legitimate default for staff who may actually work it. It used to be
+     * returned unconditionally, which handed an UNMAPPED ordinary staff
+     * member (no tblse_staff_brands rows, no se_tenancy capability) the
+     * brand-0 triage aggregates on the reports screens. Such a staff member
+     * now gets SE_BRAND_NONE: a sentinel no query matches, so every
+     * downstream panel is empty rather than the triage bucket's data. */
+    if (se_staff_can_triage() || se_staff_sees_all_brands()) {
+        return 0;
+    }
+
+    return SE_BRAND_NONE;
 }
 
 function se_brand_name($brand_id)

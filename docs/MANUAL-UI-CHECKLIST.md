@@ -74,3 +74,20 @@ Log in normally at `https://crm.roozbeh.com.tr/admin`. Verify each item. Use **a
 Update the classification rows in `docs/FINAL-QA-MATRIX.md` and `docs/CRM-A-Z-FINAL-REPORT.md` §1/§6/§11.
 Remove every synthetic ZZ brand, lead, patient and appointment created for these checks — then confirm the
 module data tables are back to zero rows, as the automated residue scan does.
+
+---
+
+## Phase-14 update — what has now been browser-verified
+
+An authenticated **admin** browser pass was completed with genuine CDP viewport
+emulation at 390 / 768 / 1728 px across all six required screens (dashboard,
+appointment form, patient detail view, WhatsApp conversation, conversion outbox,
+integration health) — see `docs/ROUTE-UI-EVIDENCE-MATRIX.md` (21 screenshots).
+Rendering, navigation, translation, Dark Theme, responsive layout, console (clean)
+and one AJAX call (200) are therefore verified for the admin role.
+
+**What remains here is the restricted-role pass** — the *Authorization QA* section
+above, performed while logged in as a one-brand and an unmapped staff account. That
+still cannot be self-verified (no restricted account was created this phase), even
+though route- and model-level authorization is proven by the HTTP (146) and
+real-MariaDB (86) tiers and the fixes in `docs/PERMISSION-MATRIX.md`.
