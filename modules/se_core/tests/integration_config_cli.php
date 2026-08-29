@@ -52,33 +52,32 @@ $apply = in_array('--apply', $argv, true);
 $p = pfx();
 echo "mode: " . ($apply ? 'APPLY' : 'DRY-RUN') . "\n";
 
-/* ---- option helpers (tbloptions: columns name, value) ------------------- */
+/* ---- option helpers (tbloptions: columns name, value) -------------------
+ * Production PHP's mysqli is built without mysqlnd, so mysqli_stmt::get_result()
+ * is unavailable. Every value written here is a trusted constant from this
+ * script (never user input), so escaped query() is safe and portable. */
 function opt_get($my, $p, $name) {
-    $st = $my->prepare("SELECT value FROM `{$p}options` WHERE name=? LIMIT 1");
-    $st->bind_param('s', $name); $st->execute();
-    $r = $st->get_result()->fetch_row(); $st->close();
+    $q = $my->query("SELECT value FROM `{$p}options` WHERE name='" . $my->real_escape_string($name) . "' LIMIT 1");
+    $r = $q ? $q->fetch_row() : null;
     return $r ? $r[0] : null;
 }
 function opt_upsert($my, $p, $name, $value, $apply) {
     $cur = opt_get($my, $p, $name);
     if ($cur === (string) $value) { echo "  option {$name}: already correct\n"; return; }
     if (!$apply) { echo "  option {$name}: WOULD set -> {$value}\n"; return; }
+    $n = $my->real_escape_string($name); $v = $my->real_escape_string((string) $value);
     if ($cur === null) {
-        $st = $my->prepare("INSERT INTO `{$p}options` (name, value, autoload) VALUES (?,?,1)");
-        $st->bind_param('ss', $name, $value);
+        $my->query("INSERT INTO `{$p}options` (name, value, autoload) VALUES ('{$n}','{$v}',1)");
     } else {
-        $st = $my->prepare("UPDATE `{$p}options` SET value=? WHERE name=?");
-        $st->bind_param('ss', $value, $name);
+        $my->query("UPDATE `{$p}options` SET value='{$v}' WHERE name='{$n}'");
     }
-    $st->execute(); $st->close();
     echo "  option {$name}: set -> {$value}\n";
 }
 function opt_clear($my, $p, $name, $apply) {
     $cur = opt_get($my, $p, $name);
     if ($cur === null || $cur === '') { echo "  option {$name}: already clear\n"; return; }
     if (!$apply) { echo "  option {$name}: WOULD clear (was stale)\n"; return; }
-    $st = $my->prepare("UPDATE `{$p}options` SET value='' WHERE name=?");
-    $st->bind_param('s', $name); $st->execute(); $st->close();
+    $my->query("UPDATE `{$p}options` SET value='' WHERE name='" . $my->real_escape_string($name) . "'");
     echo "  option {$name}: cleared (removed stale false 'successful fetch')\n";
 }
 
@@ -91,16 +90,16 @@ foreach ($brands as $b) { echo "  brand id={$b['id']} name={$b['name']}\n"; }
 
 /* ---- 1) "Meta Lead Ads" lead source ------------------------------------ */
 $srcName = 'Meta Lead Ads';
-$st = $my->prepare("SELECT id FROM `{$p}leads_sources` WHERE name=? LIMIT 1");
-$st->bind_param('s', $srcName); $st->execute();
-$srcRow = $st->get_result()->fetch_row(); $st->close();
+$srcEsc  = $my->real_escape_string($srcName);
+$q = $my->query("SELECT id FROM `{$p}leads_sources` WHERE name='{$srcEsc}' LIMIT 1");
+$srcRow = $q ? $q->fetch_row() : null;
 $srcId = $srcRow ? (int) $srcRow[0] : 0;
 
 if ($srcId) {
     echo "lead source 'Meta Lead Ads': exists (id={$srcId})\n";
 } elseif ($apply) {
-    $st = $my->prepare("INSERT INTO `{$p}leads_sources` (name) VALUES (?)");
-    $st->bind_param('s', $srcName); $st->execute(); $srcId = (int) $my->insert_id; $st->close();
+    $my->query("INSERT INTO `{$p}leads_sources` (name) VALUES ('{$srcEsc}')");
+    $srcId = (int) $my->insert_id;
     echo "lead source 'Meta Lead Ads': created (id={$srcId})\n";
 } else {
     echo "lead source 'Meta Lead Ads': WOULD create\n";
@@ -127,20 +126,22 @@ $brandForWa = $brands ? (int) $brands[0]['id'] : 0;   // single-clinic: the one 
 if ($brandForWa <= 0) {
     echo "whatsapp seed: SKIP (no active brand)\n";
 } else {
-    $st = $my->prepare("SELECT id, state FROM `{$p}se_wa_numbers` WHERE phone_number_id=? LIMIT 1");
-    $st->bind_param('s', $pnid); $st->execute();
-    $waRow = $st->get_result()->fetch_assoc(); $st->close();
+    $pnidEsc = $my->real_escape_string($pnid);
+    $wabaEsc = $my->real_escape_string($waba);
+    $dispEsc = $my->real_escape_string($disp);
+    $q = $my->query("SELECT id, state FROM `{$p}se_wa_numbers` WHERE phone_number_id='{$pnidEsc}' LIMIT 1");
+    $waRow = $q ? $q->fetch_assoc() : null;
 
     if ($waRow) {
         echo "whatsapp number {$pnid}: exists (state={$waRow['state']})\n";
         if ($waRow['state'] === 'test' && $apply) {
-            $st = $my->prepare("UPDATE `{$p}se_wa_numbers` SET state='configured', waba_id=?, display_number=?, last_updated=NOW() WHERE id=?");
-            $st->bind_param('ssi', $waba, $disp, $waRow['id']); $st->execute(); $st->close();
+            $id = (int) $waRow['id'];
+            $my->query("UPDATE `{$p}se_wa_numbers` SET state='configured', waba_id='{$wabaEsc}', display_number='{$dispEsc}', last_updated=NOW() WHERE id={$id}");
             echo "  -> promoted to state='configured'\n";
         }
     } elseif ($apply) {
-        $st = $my->prepare("INSERT INTO `{$p}se_wa_numbers` (brand_id, waba_id, phone_number_id, display_number, state, date_created) VALUES (?,?,?,?, 'configured', NOW())");
-        $st->bind_param('isss', $brandForWa, $waba, $pnid, $disp); $st->execute(); $st->close();
+        $bid = (int) $brandForWa;
+        $my->query("INSERT INTO `{$p}se_wa_numbers` (brand_id, waba_id, phone_number_id, display_number, state, date_created) VALUES ({$bid},'{$wabaEsc}','{$pnidEsc}','{$dispEsc}','configured',NOW())");
         echo "whatsapp number {$pnid}: seeded (brand {$brandForWa}, state='configured')\n";
     } else {
         echo "whatsapp number {$pnid}: WOULD seed (brand {$brandForWa})\n";
