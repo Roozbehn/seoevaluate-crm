@@ -59,6 +59,13 @@ class Leadgen extends App_Controller
 
     private function verify()
     {
+        // Reaching this controller at all proves the public route is reachable
+        // (through Cloudflare) and the request hit our code — that is the
+        // route_ok evidence behind verification_ready. It is NOT verification.
+        if (function_exists('se_webhook_record')) {
+            se_webhook_record('meta', 'route_ok');
+        }
+
         $mode      = $this->input->get('hub_mode');
         $token     = $this->input->get('hub_verify_token');
         $challenge = $this->input->get('hub_challenge');

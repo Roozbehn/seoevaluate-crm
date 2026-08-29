@@ -57,6 +57,12 @@ class Webhook extends App_Controller
 
     private function verify()
     {
+        // Reaching this controller proves the public route is reachable — the
+        // route_ok evidence behind verification_ready. NOT verification itself.
+        if (function_exists('se_webhook_record')) {
+            se_webhook_record('wa', 'route_ok');
+        }
+
         $mode      = $this->input->get('hub_mode') ?: $this->input->get('hub.mode');
         $token     = $this->input->get('hub_verify_token') ?: $this->input->get('hub.verify_token');
         $challenge = $this->input->get('hub_challenge') ?: $this->input->get('hub.challenge');
