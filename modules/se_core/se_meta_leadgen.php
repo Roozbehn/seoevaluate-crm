@@ -685,13 +685,190 @@ function se_leadgen_capture_consent($brand_id, $lead_id, $question = null, $answ
     return se_consent_grant((int) $brand_id, (int) $lead_id, 'ads', 'meta_lead_ads', $question, $answer);
 }
 
-/** Reconciliation: records a heartbeat; a live fetch of missed leads is gated. */
-function se_leadgen_reconcile($limit = 50)
+/* Reconciliation lookback and page size. A missed webhook (Meta outage, our
+ * downtime) means a lead exists on the form but never reached us; reconciliation
+ * re-fetches recent leads per mapped form and upserts them idempotently. The
+ * window is bounded so a first run can never pull unlimited history. */
+define('SE_LEADGEN_RECONCILE_LOOKBACK_SECONDS', 259200); // 72h default safety window
+define('SE_LEADGEN_RECONCILE_PAGE_SIZE', 50);
+define('SE_LEADGEN_RECONCILE_MAX_PAGES', 20);
+
+$GLOBALS['SE_LEADGEN_LIST_FETCHER'] = null;
+
+/**
+ * Register a form-leads lister for reconciliation:
+ *   callable(string $form_id, int $brand_id, int $since_ts, ?string $cursor): array
+ * returning ['leads' => [{id, created_time, field_data}], 'next' => ?string].
+ * Tests inject a deterministic lister; the live Graph path is used otherwise.
+ */
+function se_leadgen_register_list_fetcher(callable $f)
 {
-    $limit = (int) $limit; if ($limit < 1) { $limit = 50; }
+    $GLOBALS['SE_LEADGEN_LIST_FETCHER'] = $f;
+}
+
+/**
+ * List recent leads for one form since a timestamp, one page at a time.
+ *
+ * Live path: GET /{form_id}/leads with a Page/system-user token (Authorization
+ * header, never the query string) and appsecret_proof. Gated returns a marker
+ * so the caller records an ATTEMPT, not a false success.
+ *
+ * @return array{ok:bool,gated:bool,leads:array,next:?string}
+ */
+function se_leadgen_list_form_leads($form_id, $brand_id, $since_ts, $cursor = null)
+{
+    if (is_callable($GLOBALS['SE_LEADGEN_LIST_FETCHER'] ?? null)) {
+        $r = call_user_func($GLOBALS['SE_LEADGEN_LIST_FETCHER'], (string) $form_id, (int) $brand_id, (int) $since_ts, $cursor);
+
+        return ['ok' => is_array($r), 'gated' => false,
+                'leads' => $r['leads'] ?? [], 'next' => $r['next'] ?? null];
+    }
+
+    $token  = se_meta_page_token($brand_id);
+    $secret = se_meta_app_secret();
+    if ($token === '') {
+        return ['ok' => false, 'gated' => true, 'leads' => [], 'next' => null]; // App Review / token pending
+    }
+
+    $version = get_option('se_meta_graph_version') ?: 'v23.0';
+    $url = 'https://graph.facebook.com/' . $version . '/' . rawurlencode((string) $form_id) . '/leads'
+         . '?fields=id,created_time,field_data'
+         . '&limit=' . (int) SE_LEADGEN_RECONCILE_PAGE_SIZE
+         . '&filtering=' . rawurlencode(json_encode([[
+             'field' => 'time_created', 'operator' => 'GREATER_THAN', 'value' => (int) $since_ts,
+         ]]))
+         . '&appsecret_proof=' . rawurlencode(se_leadgen_appsecret_proof($token, $secret));
+
+    if ($cursor) {
+        $url .= '&after=' . rawurlencode((string) $cursor);
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $token],
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($code === 429 || $code === 613) {
+        throw new SeLeadgenRateLimited('rate limited');
+    }
+    if ($code < 200 || $code >= 300) {
+        update_option('se_meta_token_last_error_' . (int) $brand_id, 'graph list HTTP ' . $code);
+
+        return ['ok' => false, 'gated' => false, 'leads' => [], 'next' => null];
+    }
+
+    $decoded = json_decode((string) $body, true) ?: [];
+
+    return [
+        'ok'    => true,
+        'gated' => false,
+        'leads' => $decoded['data'] ?? [],
+        'next'  => $decoded['paging']['cursors']['after'] ?? null,
+    ];
+}
+
+/**
+ * Reconciliation: re-fetch recent leads for every mapped form and upsert them
+ * idempotently, so a lead created while a webhook was missed still lands.
+ *
+ * Idempotent by design: each lead is upserted through se_leadgen_upsert_lead(),
+ * which dedups on meta_lead_id — a lead the webhook already delivered is a
+ * no-op UPDATE, never a duplicate. Per-form checkpoints (se_meta_reconcile_cursor_*)
+ * advance only on a fully processed page; pagination is bounded; transient
+ * failures back off; a revoked/expired token surfaces as a sanitized error and
+ * does NOT advance the success timestamp.
+ *
+ * TWO DISTINCT TIMESTAMPS, never conflated:
+ *   - se_meta_last_reconcile_at  : an ATTEMPT ran (heartbeat, always set).
+ *   - se_meta_last_fetch_ok_at   : an AUTHENTICATED Graph fetch actually
+ *                                  succeeded (what "Last successful fetch"
+ *                                  must mean). Gated/failed runs never touch it.
+ */
+function se_leadgen_reconcile($limit = null)
+{
     update_option('se_meta_last_reconcile_at', date('Y-m-d H:i:s'));
-    // Live reconciliation (re-fetch recent leads per form) activates with a token.
-    return 0;
+
+    $CI = &get_instance();
+    $CI->db->where('active', 1);
+    $forms = $CI->db->get(db_prefix() . 'se_meta_forms')->result_array();
+
+    if (!$forms) {
+        return 0;   // nothing mapped yet — a truthful zero, not a fake success
+    }
+
+    $lookback = (int) (get_option('se_meta_reconcile_lookback_seconds') ?: SE_LEADGEN_RECONCILE_LOOKBACK_SECONDS);
+    $upserted = 0;
+    $any_ok   = false;
+    $gated    = false;
+
+    foreach ($forms as $form) {
+        $form_id  = (string) $form['form_id'];
+        $brand_id = (int) $form['brand_id'];
+
+        $ckKey = 'se_meta_reconcile_cursor_' . preg_replace('/[^0-9]/', '', $form_id);
+        $since = (int) (get_option($ckKey) ?: (time() - $lookback));
+        $cursor  = null;
+        $newest  = $since;
+
+        for ($page = 0; $page < SE_LEADGEN_RECONCILE_MAX_PAGES; $page++) {
+            $res = se_leadgen_list_form_leads($form_id, $brand_id, $since, $cursor);
+
+            if ($res['gated']) { $gated = true; break; }
+            if (!$res['ok'])   { break; }   // sanitized error already recorded; do not advance
+
+            $any_ok = true;
+
+            foreach ($res['leads'] as $lead) {
+                $leadgen_id = (string) ($lead['id'] ?? '');
+                if ($leadgen_id === '') { continue; }
+
+                $created = (int) ($lead['created_time'] ?? 0);
+                if ($created > $newest) { $newest = $created; }
+
+                $route = se_leadgen_route($form['page_id'], $form_id);
+                if (!$route) { continue; }
+
+                $mapped  = se_leadgen_map_fields($lead['field_data'] ?? [], $route['field_map']);
+                $lead_id = se_leadgen_upsert_lead($route['brand_id'], $leadgen_id, $mapped['lead']);
+
+                if (is_int($lead_id) && $lead_id > 0) {
+                    $upserted++;
+
+                    if ($mapped['consent_state'] === SE_CONSENT_GRANTED) {
+                        se_consent_grant((int) $route['brand_id'], (int) $lead_id, 'ads', 'meta_lead_ads',
+                            $mapped['consent_question'], $mapped['consent_answer']);
+
+                        if (function_exists('se_outbox_queue')) {
+                            foreach (se_outbox_destinations_for_brand($route['brand_id']) as $dest) {
+                                se_outbox_queue($route['brand_id'], $lead_id, $dest, 'Lead');
+                            }
+                        }
+                    }
+                }
+            }
+
+            $cursor = $res['next'];
+            if (!$cursor) { break; }
+        }
+
+        // Advance the checkpoint only when we actually fetched for this form.
+        if ($any_ok && !$gated) {
+            update_option($ckKey, (string) $newest);
+        }
+    }
+
+    // "Last successful fetch" means exactly that: an authenticated fetch worked.
+    if ($any_ok) {
+        update_option('se_meta_last_fetch_ok_at', date('Y-m-d H:i:s'));
+        update_option('se_meta_token_last_error_0', '');
+    }
+
+    return $upserted;
 }
 
 /* ------------------------------- controls + health ---------------------- */
@@ -710,6 +887,26 @@ function se_capi_enabled($brand_id)
     return (int) get_option('se_capi_enabled_' . (int) $brand_id) === 1;
 }
 
+/**
+ * Is the Meta CAPI leg READY for a brand?
+ *
+ * CAPI depends ONLY on a Conversions API token (provider meta_capi) and a
+ * dataset id. It does NOT depend on the Lead Ads Page token or on Lead Ads
+ * App Review — the two were historically conflated into one blocker, so a
+ * fully-working CAPI setup looked broken because Lead Ads advanced access was
+ * still pending. They are independent legs of the same app and are reported
+ * independently everywhere.
+ */
+function se_capi_ready($brand_id)
+{
+    $CI = &get_instance();
+    $CI->db->where('id', (int) $brand_id);
+    $brand = $CI->db->get(db_prefix() . 'se_brands')->row();
+    $dataset = $brand ? ($brand->meta_dataset_id ?? null) : null;
+
+    return se_secret_configured('meta_capi', (int) $brand_id) && !empty($dataset);
+}
+
 /** Per-brand Meta integration health snapshot (for the health interface). */
 function se_meta_health($brand_id)
 {
@@ -722,25 +919,56 @@ function se_meta_health($brand_id)
     $CI->db->where('brand_id', $brand_id);
     $forms = $CI->db->get(db_prefix() . 'se_meta_forms')->result_array();
 
-    $token = se_meta_page_token($brand_id);   // file provider — same source as enforcement
+    $token     = se_meta_page_token($brand_id);   // file provider — same source as enforcement
+    $appSecret = se_meta_app_secret();
+    $verify    = se_meta_verify_token();
+    $dataset   = $brand ? ($brand->meta_dataset_id ?? null) : null;
+    $capiToken = se_secret_configured('meta_capi', $brand_id);
+    $activeForms = count(array_filter($forms, function ($f) { return (int) $f['active'] === 1; }));
 
     $outbox = function_exists('se_outbox_health') ? se_outbox_health($brand_id) : [];
 
+    // Lead Ads is ready to RECEIVE once the app secret + verify token are
+    // installed (webhook verification passes) and a page+form mapping exists;
+    // live lead RETRIEVAL additionally needs the Page token (App Review).
+    $webhookReady = $appSecret !== '' && $verify !== '';
+    $leadgenTestReady = $webhookReady && $activeForms > 0;
+
     return [
         'brand_id'          => $brand_id,
-        'dataset_id'        => $brand ? ($brand->meta_dataset_id ?? null) : null,
+        'dataset_id'        => $dataset,
         'forms'             => array_map(function ($f) {
             return ['page_id' => $f['page_id'], 'form_id' => $f['form_id'], 'name' => $f['form_name'], 'active' => (int) $f['active']];
         }, $forms),
-        'token_configured'  => $token !== '',
+        'active_form_count' => $activeForms,
+
+        // --- CAPI leg (independent of Lead Ads) ---
+        'capi_token'        => $capiToken,
+        'capi_ready'        => se_capi_ready($brand_id),
+        'capi_enabled'      => se_capi_enabled($brand_id),
+        'capi_gated'        => !$capiToken,
+        'last_capi_at'      => get_option('se_meta_last_capi_at') ?: null,
+
+        // --- Lead Ads leg (independent of CAPI) ---
+        'page_token'        => $token !== '',
+        'app_secret'        => $appSecret !== '',
+        'verify_token'      => $verify !== '',
+        'webhook_ready'     => $webhookReady,
+        'leadgen_test_ready' => $leadgenTestReady,
+        'leadgen_gated'     => $token === '',       // live lead retrieval pending App Review/token
+        'token_configured'  => $token !== '',       // back-compat alias
+        // Back-compat: legacy callers/tests read externally_gated. It now means
+        // exactly the LEAD ADS leg (live lead retrieval), never CAPI — the two
+        // are reported independently everywhere else.
+        'externally_gated'  => $token === '',
         'token_last_error'  => get_option('se_meta_token_last_error_' . $brand_id) ?: null,
         'last_webhook_at'   => get_option('se_meta_last_webhook_at') ?: null,
         'last_reconcile_at' => get_option('se_meta_last_reconcile_at') ?: null,
+        'last_fetch_ok_at'  => get_option('se_meta_last_fetch_ok_at') ?: null,
+
         'outbox_pending'    => (int) ($outbox['pending'] ?? 0),
         'outbox_failed'     => (int) ($outbox['failed'] ?? 0),
         'outbox_sent'       => (int) ($outbox['sent'] ?? 0),
-        'capi_enabled'      => se_capi_enabled($brand_id),
-        'externally_gated'  => $token === '',   // no token => live fetch/send gated
     ];
 }
 

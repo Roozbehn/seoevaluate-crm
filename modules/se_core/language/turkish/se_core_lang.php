@@ -296,3 +296,15 @@ $lang['se_rep_cost_per_lead']      = 'Fırsat başına maliyet';
 $lang['se_rep_cost_per_treatment'] = 'Tedavi başına maliyet';
 $lang['se_rep_no_imported_spend']  = 'içe aktarılmış harcama yok';
 $lang['se_rep_failed_to_load']     = 'Yüklenemedi';
+
+/* Entegrasyon tanılama (2026-08-30) — eklenen etiketler. */
+$lang['se_meta_verify_token']      = 'Webhook doğrulama anahtarı';
+$lang['se_meta_page_form_map']     = 'Sayfa/form eşlemesi';
+$lang['se_meta_last_reconcile']    = 'Son mutabakat denemesi';
+$lang['se_meta_reconcile_gated']   = 'Evet (canlı çekim jetona bağlı)';
+$lang['se_google_do_not_upload']         = 'Yükleme (hassas veri)';
+$lang['se_google_sensitive_excluded_note'] = 'Klinik veya hassas aşamalar hariç tutulur ve Google\'a yüklenemez.';
+$lang['se_credentials_store_path']    = 'Gizli anahtar dizini';
+$lang['se_credentials_diag_hint']     = 'Depoyu güvenle doğrulayın (değer gösterilmez):';
+$lang['se_credentials_expected_file'] = 'Beklenen dosya';
+$lang['se_credentials_inherited']     = 'Meta Uygulama Anahtarından devralındı';

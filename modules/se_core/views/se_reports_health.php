@@ -1,6 +1,30 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
 <?php init_head(); ?>
-<div id="wrapper"><div class="content"><div class="row"><div class="col-md-10 col-md-offset-1">
+<style>
+/* Higher-contrast health cards; readable in the dark theme. Status is carried
+ * by TEXT as well as colour, so it never depends on colour alone. */
+.se-health-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:12px}
+.se-hc{border:1px solid rgba(148,163,184,.28);border-radius:8px;padding:14px 16px;background:rgba(148,163,184,.06)}
+.se-hc h5{margin:0 0 10px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.se-hc dl{margin:0}
+.se-hc .row-kv{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px solid rgba(148,163,184,.14);font-size:13px}
+.se-hc .row-kv:last-child{border-bottom:0}
+.se-hc .k{color:#94a3b8}
+.se-hc .v{color:#e2e8f0;text-align:right;font-variant-numeric:tabular-nums}
+.se-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.02em}
+.se-ready{background:#065f46;color:#d1fae5}
+.se-warn{background:#78350f;color:#fde68a}
+.se-blocked{background:#7f1d1d;color:#fecaca}
+.se-disabled{background:#334155;color:#cbd5e1}
+.se-error{background:#7f1d1d;color:#fecaca}
+.se-blockers{margin-top:16px}
+.se-blocker{border-left:3px solid #f59e0b;background:rgba(245,158,11,.08);padding:10px 12px;border-radius:4px;margin:8px 0}
+.se-blocker .why{color:#fde68a;font-weight:600}
+.se-blocker .meta{color:#cbd5e1;font-size:12px;margin-top:3px}
+.se-blocker a{color:#93c5fd}
+.se-checked{color:#94a3b8;font-size:12px;margin-top:6px}
+</style>
+<div id="wrapper"><div class="content"><div class="row"><div class="col-md-12">
   <div class="panel_s"><div class="panel-body">
     <h4><?php echo _l('se_reports_health'); ?></h4>
     <a href="<?php echo admin_url('se_core/se_reports/index?brand=' . (int) $brand); ?>">&laquo; <?php echo _l('se_reports'); ?></a>
@@ -14,19 +38,103 @@
   fetch('<?php echo admin_url('se_core/se_reports/health_data'); ?>?brand='+b,{credentials:'same-origin'})
    .then(function(r){return r.json()}).then(function(d){
      function esc(s){var e=document.createElement('div');e.textContent=s==null?'':String(s);return e.innerHTML;}
-     var h='';
-     h+='<p>Cron: '+(d.cron_healthy?'<span class="label label-success">healthy</span>':'<span class="label label-danger">stale</span>')+' ('+esc(d.cron_age_seconds)+'s ago)</p>';
-     h+='<p>Outbox — pending: '+esc(d.outbox.pending)+' · failed: '+esc(d.outbox.failed)+' · sent: '+esc(d.outbox.sent)+'</p>';
-     h+='<p>Meta token: '+((d.meta&&d.meta.token_configured)?'yes':'no')+' · Google SA: '+((d.google&&d.google.sa_token_configured)?'yes':'no')+'</p>';
-     h+='<h5>WhatsApp numbers</h5>';
-     if((d.whatsapp_numbers||[]).length){ d.whatsapp_numbers.forEach(function(n){h+='<p>'+esc(n.number)+' — quality '+esc(n.quality)+' — '+esc(n.state)+'</p>';}); } else { h+='<p class="text-muted">none</p>'; }
-     h+='<h5>Data freshness</h5><ul>';
-     Object.keys(d.data_freshness||{}).forEach(function(k){h+='<li>'+esc(k)+': '+esc(d.data_freshness[k]||'never')+'</li>';});
-     h+='</ul>';
-     h+='<h5>Blockers</h5>';
-     if((d.blockers||[]).length){h+='<ul>';d.blockers.forEach(function(x){h+='<li class="text-warning">'+esc(x)+'</li>';});h+='</ul>';}else{h+='<p class="text-success">none</p>';}
+     function yn(v){return v?'Yes':'No';}
+     function ts(v){return v?esc(v):'—';}
+     function badge(state){
+       var m={ready:['se-ready','Ready'],warning:['se-warn','Warning'],blocked:['se-blocked','Blocked'],
+               disabled:['se-disabled','Disabled'],error:['se-error','Error'],healthy:['se-ready','Healthy'],
+               failed:['se-error','Failed'],unknown:['se-disabled','Unknown']};
+       var x=m[state]||m.unknown; return '<span class="se-badge '+x[0]+'">'+x[1]+'</span>';
+     }
+     function kv(k,v){return '<div class="row-kv"><span class="k">'+esc(k)+'</span><span class="v">'+v+'</span></div>';}
+     function card(title,state,rows){
+       var h='<div class="se-hc"><h5>'+esc(title)+' '+badge(state)+'</h5>';
+       rows.forEach(function(r){h+=kv(r[0],r[1]);}); return h+'</div>';
+     }
+
+     var m=d.meta||{}, g=d.google||{}, w=d.whatsapp||{}, o=d.outbox||{};
+
+     // System / cron
+     var cronState=d.cron_state||'unknown';
+     var sys=card('System / Cron',cronState,[
+       ['Status', cronState],
+       ['Last run', (d.cron_age_seconds==null?'never':esc(d.cron_age_seconds)+'s ago')],
+       ['Expected interval', esc(d.cron_expected_interval_seconds)+'s'],
+       ['Warn / fail after', esc(d.cron_warn_seconds)+'s / '+esc(d.cron_fail_seconds)+'s'],
+       ['Outbox pending / failed', esc(o.pending)+' / '+esc(o.failed)],
+       ['Outbox sent / dead', esc(o.sent)+' / '+esc(o.dead)]
+     ]);
+
+     // Meta CAPI (independent of Lead Ads)
+     var capiState=m.capi_ready?(m.capi_enabled?'ready':'disabled'):(m.capi_token?'warning':'blocked');
+     var capi=card('Meta Conversions API',capiState,[
+       ['Credential', yn(m.capi_token)],
+       ['Dataset id', esc(m.dataset_id||'—')],
+       ['Ready', yn(m.capi_ready)],
+       ['Transmission', m.capi_enabled?'Enabled':'Disabled'],
+       ['Last event', ts(m.last_capi_at)]
+     ]);
+
+     // Meta Lead Ads (independent of CAPI)
+     var laState=!m.webhook_ready?'blocked':(m.leadgen_gated?'warning':(m.leadgen_test_ready?'ready':'warning'));
+     var la=card('Meta Lead Ads',laState,[
+       ['App secret', yn(m.app_secret)],
+       ['Verify token', yn(m.verify_token)],
+       ['Webhook verification', m.webhook_ready?'Ready':'Not ready'],
+       ['Page token', yn(m.page_token)],
+       ['Page/form mapping', esc(m.active_form_count||0)],
+       ['Last webhook', ts(m.last_webhook_at)],
+       ['Last successful fetch', ts(m.last_fetch_ok_at)],
+       ['App Review / retrieval', m.leadgen_gated?'Pending':'Granted']
+     ]);
+
+     // WhatsApp
+     var waState=!w.identifiers_configured?'blocked':((w.app_secret&&w.webhook_verified)?'ready':'warning');
+     var waRows=[
+       ['Identifiers configured', yn(w.identifiers_configured)],
+       ['App secret'+(w.app_secret_inherited?' (inherited)':''), yn(w.app_secret)],
+       ['Webhook verified', yn(w.webhook_verified)],
+       ['Last inbound', ts(w.last_inbound_at)],
+       ['Last status event', ts(w.last_status_at)]
+     ];
+     (w.numbers||[]).forEach(function(n){
+       waRows.push(['Number '+esc(n.number||n.phone_number_id), esc(n.state)+(n.quality?(' · '+esc(n.quality)):'')]);
+     });
+     var wa=card('WhatsApp',waState,waRows);
+
+     // Google Data Manager (optional)
+     var gState=g.externally_gated?'disabled':(g.credential_failing?'error':(g.status_polling?'ready':'warning'));
+     var goog=card('Google Data Manager',gState,[
+       ['Customer id', esc(g.customer_id||'—')],
+       ['Credential', g.credential_present?(g.credential_failing?'Present (failing)':'Present'):'Not configured'],
+       ['Authentication', g.sa_token_configured?'OK':(g.credential_failing?'Failing':'—')],
+       ['Request-status polling', g.status_polling?'Implemented':'Off'],
+       ['Last request', ts(g.last_request_id)],
+       ['Last status', esc(g.last_request_status||'—')]
+     ]);
+
+     var h='<div class="se-health-grid">'+sys+capi+la+wa+goog+'</div>';
+
+     // Optional Google properties freshness (deliberately-disabled != unhealthy)
+     h+='<div class="se-checked">Optional data freshness — GA4: '+ts((d.data_freshness||{}).ga4)
+       +' · Search Console: '+ts((d.data_freshness||{}).search_console)
+       +' · Google Ads: '+ts((d.data_freshness||{}).google_ads)+'</div>';
+
+     // Precise, per-provider blockers with remediation
+     h+='<div class="se-blockers"><h5>Blockers</h5>';
+     if((d.blockers||[]).length){
+       d.blockers.forEach(function(x){
+         h+='<div class="se-blocker"><div class="why">'+esc(x.reason)+'</div>'
+           +'<div class="meta">Impact: '+esc(x.impact)+'</div>'
+           +'<div class="meta">Next: '+esc(x.action)+(x.link?(' — <a href="'+esc(x.link)+'">Open</a>'):'')+'</div>'
+           +'<div class="meta">Checked: '+ts(x.checked_at)+'</div></div>';
+       });
+     } else { h+='<p class="text-success">No blockers — all configured integrations are ready.</p>'; }
+     h+='</div>';
+     h+='<div class="se-checked">Snapshot taken: '+ts(d.checked_at)+'</div>';
+
      el.innerHTML=h;
-   }).catch(function(){el.innerHTML='<p class="text-danger">Failed to load</p>';});
+   }).catch(function(){el.innerHTML='<p class="text-danger">Failed to load health snapshot.</p>';});
 })();
 </script>
 <?php init_tail(); ?>

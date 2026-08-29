@@ -122,13 +122,26 @@ function se_secret_status($provider, $brand_id = 0)
         $modeOk = $mode === '600';
     }
 
+    // A shared secret may be INHERITED from a canonical one, so the UI can say
+    // so instead of showing a working provider as "missing". Currently only the
+    // WhatsApp app secret inherits the Meta App Secret (same Meta app).
+    $inheritedFrom = null;
+    if ($provider === 'wa_app' && !$configured && se_secret_read('meta_app') !== '') {
+        $inheritedFrom = 'meta_app';
+    }
+
     return [
         'provider'    => $provider,
         'brand_id'    => (int) $brand_id,
-        'configured'  => $configured,
+        'configured'  => $configured || $inheritedFrom !== null,
+        'own_file'    => $configured,           // a dedicated file really exists
+        'inherited_from' => $inheritedFrom,     // null, or the canonical provider key
         'readable'    => $readable,
         'mode'        => $mode,
         'mode_ok'     => $modeOk,
+        // The expected filename is CONFIGURATION, safe to show — it helps the
+        // owner install the right file, and is never the value.
+        'expected_file' => basename((string) $path),
         'installed_at' => $exists ? date('Y-m-d H:i:s', (int) @filemtime($path)) : null,
         'last_auth_at' => get_option('se_secret_last_auth_' . $provider . '_' . (int) $brand_id) ?: null,
         'last_error'   => get_option('se_secret_last_error_' . $provider . '_' . (int) $brand_id) ?: null,
@@ -183,6 +196,10 @@ function se_secret_store_status()
         'mode_ok'   => $mode === '700',
         'outside_docroot' => !$inside,
         'configured_path' => defined('SE_SECRET_DIR'),
+        // The absolute path is CONFIGURATION, not a secret, so the UI can derive
+        // owner instructions from the REAL resolved path instead of a hard-coded
+        // one that may be wrong for this host.
+        'dir'       => $dir,
     ];
 }
 

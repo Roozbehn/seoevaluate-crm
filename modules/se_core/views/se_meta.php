@@ -22,10 +22,15 @@
       _l('se_meta_webhook_ready') => $status['webhook_ready'] ? se_ui_badge('ok', _l('se_yes')) : se_ui_badge('warning', _l('se_no')),
       _l('se_meta_page_token')   => $status['page_token'] ? se_ui_badge('ok', _l('se_credentials_installed')) : se_ui_badge('warning', _l('se_credentials_missing')),
       _l('se_meta_app_secret')   => $status['app_secret'] ? se_ui_badge('ok', _l('se_credentials_installed')) : se_ui_badge('warning', _l('se_credentials_missing')),
+      _l('se_meta_verify_token') => $status['verify_token'] ? se_ui_badge('ok', _l('se_credentials_installed')) : se_ui_badge('warning', _l('se_credentials_missing')),
+      _l('se_meta_page_form_map') => !empty($status['page_form_mapped']) ? se_ui_badge('ok', _l('se_yes')) : se_ui_badge('warning', _l('se_no')),
       _l('se_meta_last_webhook') => html_escape((string) ($status['last_webhook_at'] ?: '—')),
-      _l('se_meta_last_fetch')   => html_escape((string) ($status['last_reconcile_at'] ?: '—')),
+      // "Last successful fetch" now reads the AUTHENTICATED-fetch timestamp, not
+      // the reconcile heartbeat — so it is truthfully "—" until a token exists.
+      _l('se_meta_last_fetch')   => html_escape((string) ($status['last_fetch_ok_at'] ?: '—')),
+      _l('se_meta_last_reconcile') => html_escape((string) ($status['last_reconcile_at'] ?: '—')),
       _l('se_meta_reconcile')    => $status['reconcile_implemented']
-          ? se_ui_badge('ok', _l('se_yes'))
+          ? se_ui_badge('ok', !empty($status['reconcile_gated']) ? _l('se_meta_reconcile_gated') : _l('se_yes'))
           : se_ui_badge('unknown', _l('se_not_implemented')),
       _l('se_meta_last_error')   => html_escape((string) ($status['last_error'] ?: '—')),
   ], true); ?>

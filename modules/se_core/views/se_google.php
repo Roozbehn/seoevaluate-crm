@@ -72,10 +72,14 @@ $seGdmAuth = function_exists('se_gdm_credential_status') ? se_gdm_credential_sta
     <div class="form-group">
       <label for="stage" class="control-label"><?php echo html_escape(_l('se_google_stage')); ?></label>
       <select class="form-control" id="stage" name="stage">
-        <?php foreach ($stages as $st) { ?>
+        <?php foreach ($stages as $st) {
+            $uploadable = function_exists('se_gdm_stage_uploadable') ? se_gdm_stage_uploadable($st) : true;
+            if (!$uploadable) { continue; } // sensitive/clinical stages are never selectable
+        ?>
           <option value="<?php echo html_escape($st); ?>"><?php echo html_escape($st); ?></option>
         <?php } ?>
       </select>
+      <p class="text-muted mtop5"><small><i class="fa fa-shield"></i> <?php echo html_escape(_l('se_google_sensitive_excluded_note')); ?></small></p>
     </div>
     <div class="form-group">
       <label for="action_id" class="control-label"><?php echo html_escape(_l('se_google_action_id')); ?></label>
@@ -86,10 +90,21 @@ $seGdmAuth = function_exists('se_gdm_credential_status') ? se_gdm_credential_sta
 
   <hr />
   <div class="table-responsive"><table class="table table-striped"><tbody>
-  <?php foreach ($mappings as $stage => $action) { ?>
+  <?php foreach ($mappings as $stage => $row) {
+      $action     = is_array($row) ? (string) $row['action_id'] : (string) $row;
+      $uploadable = is_array($row) ? (bool) $row['uploadable'] : true;
+  ?>
     <tr>
       <td><?php echo html_escape($stage); ?></td>
-      <td><?php echo $action !== '' ? '<code>' . html_escape($action) . '</code>' : '<span class="text-muted">—</span>'; ?></td>
+      <td>
+        <?php if (!$uploadable) { ?>
+          <span class="text-muted"><i class="fa fa-lock"></i> <?php echo html_escape(_l('se_google_do_not_upload')); ?></span>
+        <?php } elseif ($action !== '') { ?>
+          <code><?php echo html_escape($action); ?></code>
+        <?php } else { ?>
+          <span class="text-muted">—</span>
+        <?php } ?>
+      </td>
     </tr>
   <?php } ?>
   </tbody></table></div>
@@ -100,7 +115,7 @@ $seGdmAuth = function_exists('se_gdm_credential_status') ? se_gdm_credential_sta
     ['label' => _l('se_google_step_mcc'),    'hint' => _l('se_google_step_mcc_hint'),    'done' => (bool) $status['customer_id']],
     ['label' => _l('se_google_step_project'),'hint' => _l('se_google_step_project_hint'),'done' => false],
     ['label' => _l('se_google_step_sa'),     'hint' => _l('se_google_step_sa_hint'),     'done' => $status['credential_ready']],
-    ['label' => _l('se_google_step_actions'),'hint' => _l('se_google_step_actions_hint'),'done' => count(array_filter($mappings)) > 0],
+    ['label' => _l('se_google_step_actions'),'hint' => _l('se_google_step_actions_hint'),'done' => count(array_filter($mappings, function ($r) { return is_array($r) ? $r['action_id'] !== '' : $r !== ''; })) > 0],
     ['label' => _l('se_google_step_enable'), 'hint' => _l('se_google_step_enable_hint'), 'done' => $status['enabled']],
 ]); ?>
 </div></div>

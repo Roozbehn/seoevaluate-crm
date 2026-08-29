@@ -301,3 +301,15 @@ $lang['se_rep_cost_per_lead']      = 'Cost / lead';
 $lang['se_rep_cost_per_treatment'] = 'Cost / treatment';
 $lang['se_rep_no_imported_spend']  = 'no imported spend';
 $lang['se_rep_failed_to_load']     = 'Failed to load';
+
+/* Integration diagnostics (2026-08-30) — added labels. */
+$lang['se_meta_verify_token']      = 'Webhook verify token';
+$lang['se_meta_page_form_map']     = 'Page/form mapping';
+$lang['se_meta_last_reconcile']    = 'Last reconcile attempt';
+$lang['se_meta_reconcile_gated']   = 'Yes (live fetch gated on token)';
+$lang['se_google_do_not_upload']         = 'Do not upload (sensitive)';
+$lang['se_google_sensitive_excluded_note'] = 'Clinical or sensitive stages are excluded and cannot be uploaded to Google.';
+$lang['se_credentials_store_path']    = 'Secret store path';
+$lang['se_credentials_diag_hint']     = 'Verify the store safely (no values shown):';
+$lang['se_credentials_expected_file'] = 'Expected file';
+$lang['se_credentials_inherited']     = 'Inherited from Meta App Secret';

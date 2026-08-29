@@ -41,9 +41,34 @@ define('SE_WA_BACKOFF_CAP', 21600);
  * dropping a secret FILE (providers wa_app / wa_verify), no code change.
  * Absent file => '' => every check fails CLOSED. */
 
+/**
+ * WhatsApp signature secret.
+ *
+ * CANONICAL SOURCE IS THE META APP SECRET. Lead Ads and WhatsApp are the same
+ * Meta app (1375062474780237), so the App Secret that signs an X-Hub-Signature
+ * is identical for both products. A dedicated `wa_app` file is still honoured
+ * for backward compatibility and for the (unusual) case of a separate WhatsApp
+ * app, but when it is absent this inherits the canonical `meta_app` secret
+ * rather than failing closed — otherwise an operator has to install the same
+ * value twice and a drift between the two silently breaks one product.
+ *
+ * File provider only; never logged.
+ */
 function se_wa_app_secret()
 {
-    return se_secret_read('wa_app'); // file provider; never logged
+    $own = se_secret_read('wa_app');
+
+    return $own !== '' ? $own : se_secret_read('meta_app');
+}
+
+/**
+ * Does the WhatsApp signature secret come from the shared Meta App Secret
+ * rather than a dedicated wa_app file? Boolean only — for the UI's
+ * "Inherited from Meta App Secret" badge. Never reveals a value.
+ */
+function se_wa_app_secret_inherited()
+{
+    return se_secret_read('wa_app') === '' && se_secret_read('meta_app') !== '';
 }
 
 /** WhatsApp webhook verify token. File provider only; '' fails verification closed. */

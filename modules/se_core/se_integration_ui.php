@@ -24,6 +24,13 @@ function se_meta_ui_status($brand_id = 0)
     // Leadgen::verify() enforces, not the WhatsApp one.
     $verifyPresent    = se_secret_configured('meta_verify', 0);
 
+    $activeForms = 0;
+    if ($brand_id > 0) {
+        $CI = &get_instance();
+        $CI->db->where('brand_id', (int) $brand_id)->where('active', 1);
+        $activeForms = $CI->db->count_all_results(db_prefix() . 'se_meta_forms');
+    }
+
     return [
         'enabled'            => $brand_id > 0 ? se_capi_enabled($brand_id) : false,
         'page_token'         => $tokenConfigured,
@@ -31,12 +38,19 @@ function se_meta_ui_status($brand_id = 0)
         'verify_token'       => $verifyPresent,
         'webhook_url'        => $leadgenUrl,
         'webhook_ready'      => $appSecretPresent && $verifyPresent,
+        'page_form_mapped'   => $activeForms > 0,
         'app_owner'          => get_option('se_meta_app_owner_label') ?: null,
+        // "Last successful fetch" now means an AUTHENTICATED Graph fetch really
+        // succeeded — not the reconcile heartbeat, which used to be written on
+        // every cron run and read as a false success even with no token.
+        'last_fetch_ok_at'   => get_option('se_meta_last_fetch_ok_at') ?: null,
         'last_webhook_at'    => get_option('se_meta_last_webhook_at') ?: null,
         'last_reconcile_at'  => get_option('se_meta_last_reconcile_at') ?: null,
         'last_error'         => $brand_id > 0 ? (get_option('se_meta_token_last_error_' . $brand_id) ?: null) : null,
-        // Reconciliation is a heartbeat only; saying otherwise would be a lie.
-        'reconcile_implemented' => false,
+        // Reconciliation is implemented: it re-fetches recent leads per mapped
+        // form and upserts them idempotently; live fetching is gated on a token.
+        'reconcile_implemented' => true,
+        'reconcile_gated'    => !$tokenConfigured,
     ];
 }
 
@@ -295,7 +309,7 @@ function se_google_ui_status($brand_id = 0)
         // The abstraction is built; the signer and poller are pluggable and
         // are not registered here, so both remain honestly reported.
         'token_renewal_implemented'  => $cred['signer_available'],
-        'status_polling_implemented' => se_gdm_status_poller_available(),
+        'status_polling_implemented' => se_gdm_status_polling_implemented(),
         'min_age_seconds'    => se_gdm_min_age_seconds($brand_id),
         'max_age_days'       => se_gdm_max_age_days($brand_id),
     ];
@@ -338,7 +352,13 @@ function se_google_ui_requests($brand_id = 0, $limit = 25)
     return $CI->db->get(db_prefix() . 'se_gdm_requests')->result_array();
 }
 
-/** Stage → conversion-action id mappings for a brand. */
+/**
+ * Stage → conversion-action mapping rows for a brand.
+ *
+ * Each row carries whether the stage is uploadable at all (policy allowlist) so
+ * the view can render clinical-adjacent stages as a locked "Do not upload"
+ * rather than an editable field.
+ */
 function se_google_ui_mappings($brand_id)
 {
     $out = [];
@@ -347,9 +367,14 @@ function se_google_ui_mappings($brand_id)
         return $out;
     }
 
+    $uploadable = function_exists('se_gdm_uploadable_stages') ? se_gdm_uploadable_stages() : [];
+
     foreach (se_pipeline_stages() as $stage) {
         $slug = preg_replace('/[^a-z0-9]+/', '_', strtolower($stage));
-        $out[$stage] = (string) get_option('se_google_conv_action_' . (int) $brand_id . '_' . $slug);
+        $out[$stage] = [
+            'action_id'  => (string) get_option('se_google_conv_action_' . (int) $brand_id . '_' . $slug),
+            'uploadable' => in_array($stage, $uploadable, true),
+        ];
     }
 
     return $out;
@@ -358,6 +383,15 @@ function se_google_ui_mappings($brand_id)
 function se_google_ui_save_mapping($brand_id, $stage, $action_id)
 {
     if (!in_array($stage, se_pipeline_stages(), true)) {
+        return false;
+    }
+
+    // POLICY GUARD: a clinical-adjacent stage may never be mapped to a Google
+    // conversion, whatever the UI sends. Only allowlisted generic stages persist.
+    if (function_exists('se_gdm_stage_uploadable') && !se_gdm_stage_uploadable($stage)) {
+        log_activity('SE google mapping refused for non-uploadable stage [' . $stage
+            . ', brand ' . (int) $brand_id . ', staff ' . (int) get_staff_user_id() . ']');
+
         return false;
     }
 

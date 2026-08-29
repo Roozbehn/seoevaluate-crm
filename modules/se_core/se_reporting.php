@@ -249,10 +249,34 @@ function se_report_cron_age()
     return $last ? (time() - $last) : null;
 }
 
-/** Aggregated integration-health snapshot for a brand (no external calls). */
+/* Cron cadence, made explicit so the UI can explain what "healthy" means rather
+ * than showing a bare green dot against an unstated threshold. The system cron
+ * fires every 15 minutes (900s); we warn once two intervals could have been
+ * missed and fail after ~1h. */
+define('SE_CRON_EXPECTED_INTERVAL_SECONDS', 900);
+define('SE_CRON_WARN_SECONDS', 1800);
+define('SE_CRON_FAIL_SECONDS', 3600);
+
+/** Admin URL for a remediation target, or null outside an HTTP context. */
+function se_health_link($path)
+{
+    return function_exists('admin_url') ? admin_url($path) : null;
+}
+
+/**
+ * Aggregated integration-health snapshot for a brand (no external calls).
+ *
+ * PER-PROVIDER and TRUTHFUL. Every leg reports independently: a pending Lead
+ * Ads App Review never marks CAPI unhealthy, and a deliberately-disabled
+ * optional Google property never marks the provider unhealthy. Each blocker
+ * carries a precise reason, its scope, a next action, a remediation link and a
+ * last-checked time.
+ */
 function se_integration_health($brand_id)
 {
     $brand_id = (int) $brand_id;
+    $now      = date('Y-m-d H:i:s');
+
     $meta   = function_exists('se_meta_health') ? se_meta_health($brand_id) : [];
     $google = function_exists('se_google_health') ? se_google_health($brand_id) : [];
     $outbox = function_exists('se_outbox_health') ? se_outbox_health($brand_id) : [];
@@ -260,7 +284,33 @@ function se_integration_health($brand_id)
     $CI = &get_instance();
     $CI->db->where('brand_id', $brand_id);
     $wa_numbers = $CI->db->get(db_prefix() . 'se_wa_numbers')->result_array();
-    $quality = array_map(function ($n) { return ['number' => $n['display_number'], 'quality' => $n['quality_rating'], 'tier' => $n['messaging_tier'], 'state' => $n['state']]; }, $wa_numbers);
+    $quality = array_map(function ($n) {
+        return [
+            'number'  => $n['display_number'],
+            'phone_number_id' => $n['phone_number_id'],
+            'waba_id' => $n['waba_id'],
+            'quality' => $n['quality_rating'],
+            'tier'    => $n['messaging_tier'],
+            'state'   => $n['state'],
+        ];
+    }, $wa_numbers);
+
+    // WhatsApp is CONFIGURED once its identifiers exist (a seeded/discovered
+    // row), AUTHENTICATED once the app secret is installed, and WEBHOOK-VERIFIED
+    // once the verify token is installed. "no number configured" must mean the
+    // identifiers really are absent, not merely that no message has arrived yet.
+    $waIdentifiers = !empty($quality);
+    $waAppSecret   = function_exists('se_wa_app_secret') ? se_wa_app_secret() !== '' : false;
+    $waVerify      = function_exists('se_wa_verify_token') ? se_wa_verify_token() !== '' : false;
+    $wa = [
+        'identifiers_configured' => $waIdentifiers,
+        'app_secret'             => $waAppSecret,
+        'app_secret_inherited'   => function_exists('se_wa_app_secret_inherited') ? se_wa_app_secret_inherited() : false,
+        'webhook_verified'       => $waVerify,
+        'last_inbound_at'        => get_option('se_wa_last_inbound_at_' . $brand_id) ?: (get_option('se_wa_last_inbound_at') ?: null),
+        'last_status_at'         => get_option('se_wa_last_status_at_' . $brand_id) ?: (get_option('se_wa_last_status_at') ?: null),
+        'numbers'                => $quality,
+    ];
 
     $freshness = [
         'ga4'            => get_option('se_report_last_import_ga4') ?: null,
@@ -269,21 +319,79 @@ function se_integration_health($brand_id)
         'meta_webhook'   => get_option('se_meta_last_webhook_at') ?: null,
     ];
 
+    // --- Precise, per-provider blockers (never one combined line) -----------
     $blockers = [];
-    if (!empty($meta['externally_gated'])) { $blockers[] = 'meta_capi/leadgen: no token (App Review pending)'; }
-    if (!empty($google['externally_gated'])) { $blockers[] = 'google_dm: no service account'; }
-    if (empty($quality)) { $blockers[] = 'whatsapp: no number configured'; }
+    $blk = function ($key, $reason, $impact, $action, $link) use (&$blockers, $now) {
+        $blockers[] = ['key' => $key, 'reason' => $reason, 'impact' => $impact,
+                       'action' => $action, 'link' => $link, 'checked_at' => $now];
+    };
+
+    if (!empty($meta['capi_gated'])) {
+        $blk('meta_capi', 'No Conversions API token installed for this brand',
+             'Server-side conversions are not transmitted; browser Pixel is unaffected',
+             'Install the meta_capi credential for this brand and set the dataset id',
+             se_health_link('se_core/se_credentials'));
+    }
+    if (empty($meta['webhook_ready'])) {
+        $blk('meta_leadgen_webhook', 'Meta app secret and/or webhook verify token not installed',
+             'Lead Ads webhook cannot verify or validate signatures',
+             'Install meta_app and meta_verify credentials',
+             se_health_link('se_core/se_meta'));
+    }
+    if (!empty($meta['webhook_ready']) && !empty($meta['leadgen_gated'])) {
+        $blk('meta_leadgen_retrieval', 'Lead Ads page token pending (App Review / token)',
+             'Webhook receives events but lead field data cannot be fetched yet — events are held, not lost',
+             'Complete Lead Ads advanced access and install the page/system-user token',
+             se_health_link('se_core/se_meta'));
+    }
+    if (empty($meta['active_form_count'])) {
+        $blk('meta_leadgen_mapping', 'No active Page/form mapping for this brand',
+             'Incoming leadgen events cannot be routed to a brand',
+             'Map at least one Page + Instant Form to this brand',
+             se_health_link('se_core/se_meta'));
+    }
+    if (empty($wa['identifiers_configured'])) {
+        $blk('whatsapp_identifiers', 'No WhatsApp number configured for this brand',
+             'WhatsApp inbound/outbound is unavailable',
+             'Configure the WABA and phone-number identifiers for this brand',
+             se_health_link('se_whatsapp/se_whatsapp/inbox'));
+    } elseif (!$wa['app_secret'] || !$wa['webhook_verified']) {
+        $blk('whatsapp_auth', 'WhatsApp app secret and/or verify token not installed',
+             'WhatsApp webhook cannot verify or validate signatures',
+             'Install meta_app (shared) and wa_verify credentials',
+             se_health_link('se_core/se_credentials'));
+    }
+    if (!empty($google['externally_gated'])) {
+        $blk('google_dm', 'No Google service-account credential installed',
+             'Offline conversion upload to Google is unavailable (optional; does not affect Meta)',
+             'Install the google_sa credential and enable the integration for the brand',
+             se_health_link('se_core/se_google'));
+    }
 
     $cronAge = se_report_cron_age();
+    $cronState = $cronAge === null ? 'unknown'
+        : ($cronAge < SE_CRON_WARN_SECONDS ? 'healthy'
+        : ($cronAge < SE_CRON_FAIL_SECONDS ? 'warning' : 'failed'));
 
     return [
         'brand_id'        => $brand_id,
+        'checked_at'      => $now,
         'meta'            => $meta,
         'google'          => $google,
-        'outbox'          => ['pending' => (int) ($outbox['pending'] ?? 0), 'failed' => (int) ($outbox['failed'] ?? 0), 'sent' => (int) ($outbox['sent'] ?? 0)],
-        'whatsapp_numbers' => $quality,
+        'whatsapp'        => $wa,
+        'outbox'          => [
+            'pending' => (int) ($outbox['pending'] ?? 0),
+            'failed'  => (int) ($outbox['failed'] ?? 0),
+            'sent'    => (int) ($outbox['sent'] ?? 0),
+            'dead'    => (int) ($outbox['dead'] ?? 0),
+        ],
+        'whatsapp_numbers' => $quality,   // back-compat
         'cron_age_seconds' => $cronAge,
-        'cron_healthy'    => $cronAge !== null && $cronAge < 3600,
+        'cron_state'      => $cronState,
+        'cron_healthy'    => $cronState === 'healthy',
+        'cron_expected_interval_seconds' => SE_CRON_EXPECTED_INTERVAL_SECONDS,
+        'cron_warn_seconds' => SE_CRON_WARN_SECONDS,
+        'cron_fail_seconds' => SE_CRON_FAIL_SECONDS,
         'data_freshness'  => $freshness,
         'blockers'        => $blockers,
     ];

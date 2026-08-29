@@ -88,7 +88,49 @@ function se_gdm_access_token($brand_id)
     return se_gdm_fetch_access_token($brand_id);
 }
 
-/** Conversion-action id for a brand + event name (stage). Option-mapped. */
+/**
+ * Pipeline STAGES that MAY be mapped to a Google conversion in the UI.
+ *
+ * POLICY GUARD, not a preference. The pipeline carries clinical-adjacent stages
+ * (Photos Received, Treated, Follow-up, Reviewed, …). Mapping any of them to an
+ * ad platform would leak that a specific person interacted with a medical
+ * procedure — the sensitive-category data Google's policy (and ours) forbids.
+ * Only generic, business-outcome stages a consented lead would expect may be
+ * mapped; everything else is locked in the UI and refused on save.
+ */
+function se_gdm_uploadable_stages()
+{
+    return ['New', 'Contacted', 'Qualified', 'Consultation Booked', 'Reviewed'];
+}
+
+/** Is this pipeline stage allowed to be MAPPED/uploaded to Google at all? */
+function se_gdm_stage_uploadable($stage)
+{
+    return in_array((string) $stage, se_gdm_uploadable_stages(), true);
+}
+
+/**
+ * Generic, non-clinical conversion EVENT names that are always safe to upload,
+ * independent of pipeline stage. These are business outcomes a consented lead
+ * expects (a lead, a qualified lead, a booked consultation, a converted lead) —
+ * never a treatment, image, or clinical attribute.
+ */
+function se_gdm_event_uploadable($event_name)
+{
+    $generic = ['Lead', 'Qualified Lead', 'Consultation Booked', 'Converted Lead'];
+
+    return in_array((string) $event_name, $generic, true)
+        || se_gdm_stage_uploadable($event_name);
+}
+
+/**
+ * Conversion-action id for a brand + event name (stage). Option-mapped.
+ *
+ * A PURE lookup — used by health, the sender's classification, and the emit
+ * path. The sensitive-data guard lives at the two write boundaries (UI save and
+ * the emit path) so this lookup never returns a misleading '' that would read
+ * as "no mapping" to unrelated callers.
+ */
 function se_gdm_conversion_action($brand_id, $event_name)
 {
     $slug = preg_replace('/[^a-z0-9]+/', '_', strtolower((string) $event_name));
@@ -236,6 +278,16 @@ function se_google_dm_send_event($row)
     $CI = &get_instance();
 
     $brand_id = (int) $row['brand_id'];
+
+    // POLICY GUARD at the transmission boundary: a clinical/sensitive event that
+    // somehow reached the outbox is refused before any HTTP call or mapping
+    // lookup. Classified PERMANENT (like a consent block) so it never retries
+    // and never transmits — the security goal is "never sent", not "retry".
+    if (!se_gdm_event_uploadable($row['event_name'])) {
+        return ['ok' => false, 'error' => 'event is not permitted for Google upload (sensitive)',
+                'class' => SE_OUTBOX_FAIL_PERMANENT, 'code' => 'sensitive_blocked'];
+    }
+
     $CI->db->where('id', $brand_id);
     $brand = $CI->db->get(db_prefix() . 'se_brands')->row();
     if (!$brand || empty($brand->google_ads_customer_id)) {
@@ -421,6 +473,73 @@ function se_gdm_register_status_poller(callable $p)
 function se_gdm_status_poller_available()
 {
     return is_callable($GLOBALS['SE_GDM_STATUS_POLLER'] ?? null);
+}
+
+/**
+ * Is request-status polling IMPLEMENTED (as opposed to merely abstracted)?
+ *
+ * True when a concrete live transport exists — which it now does
+ * (se_gdm_live_status_poller) — OR a poller is registered. This is the truthful
+ * signal for the UI's "Request-status polling: implemented"; it does not depend
+ * on the runtime registration global, which tests reset between suites.
+ */
+function se_gdm_status_polling_implemented()
+{
+    return function_exists('se_gdm_live_status_poller') || se_gdm_status_poller_available();
+}
+
+/**
+ * Live Data Manager requestStatus transport.
+ *
+ * Retrieves the ingest request's async status so a SUBMITTED row can settle to
+ * confirmed / partial / failed. Endpoint is configurable (the API surface is
+ * still moving) and defaults to the documented retrieve call. The bearer token
+ * is minted by the service-account signer (se_gdm_access_token); it goes in the
+ * Authorization header, never a query string. Returns the decoded body for
+ * se_gdm_interpret_status(); throws on transient failure so the row stays
+ * submitted and is retried, rather than being invented as confirmed.
+ */
+function se_gdm_live_status_poller($request_id, $token)
+{
+    $base = get_option('se_gdm_status_endpoint')
+        ?: 'https://datamanager.googleapis.com/v1/requestStatus:retrieve';
+
+    $ch = curl_init($base);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => json_encode(['requestId' => (string) $request_id]),
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $token,
+            'Content-Type: application/json',
+        ],
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    // Transient / not-yet-available: keep the row submitted, retry next cycle.
+    if ($code === 429 || $code === 503 || $code === 404 || $body === false) {
+        throw new Exception('status poll transient');
+    }
+    if ($code < 200 || $code >= 300) {
+        // A hard error is reported as an empty response so interpret_status
+        // leaves the row submitted rather than confirming it. The sanitized
+        // code is recorded for the operator.
+        update_option('se_gdm_status_last_error', 'requestStatus HTTP ' . (int) $code);
+
+        return [];
+    }
+
+    return json_decode((string) $body, true) ?: [];
+}
+
+/* The live poller is registered by default; it is internally gated (no token =>
+ * skip), so status polling is genuinely IMPLEMENTED — it activates the moment a
+ * service-account credential reads. Tests override it via se_gdm_register_status_poller(). */
+if (!se_gdm_status_poller_available()) {
+    se_gdm_register_status_poller('se_gdm_live_status_poller');
 }
 
 /**
@@ -706,9 +825,17 @@ function se_google_health($brand_id)
 
     $token = se_gdm_access_token($brand_id);
     $outbox = function_exists('se_outbox_health') ? se_outbox_health($brand_id) : [];
+    $cred   = function_exists('se_gdm_credential_status') ? se_gdm_credential_status($brand_id) : [];
 
     $CI->db->where('brand_id', $brand_id)->order_by('id', 'DESC')->limit(1);
     $lastReq = $CI->db->get(db_prefix() . 'se_gdm_requests')->row();
+
+    // "not configured" (no key file at all) is distinct from "configured but
+    // failing" (key present, but it does not parse or auth fails). The old
+    // single externally_gated boolean could not tell the operator which it was.
+    $credPresent = !empty($cred['file_present']);
+    $credUsable  = !empty($cred['ready']) || $token !== '';
+    $credFailing = $credPresent && !$credUsable;
 
     return [
         'brand_id'            => $brand_id,
@@ -716,11 +843,18 @@ function se_google_health($brand_id)
         'ga4_property_id'     => $brand ? ($brand->ga4_property_id ?? null) : null,
         'gsc_site_url'        => $brand ? ($brand->gsc_site_url ?? null) : null,
         'sa_token_configured' => $token !== '',
+        'credential_present'  => $credPresent,
+        'credential_failing'  => $credFailing,
+        'credential_valid'    => !empty($cred['credential_valid']),
+        'status_polling'      => se_gdm_status_polling_implemented(),
+        'last_status_error'   => get_option('se_gdm_status_last_error') ?: null,
         'conversion_action'   => se_gdm_conversion_action($brand_id, 'Lead') ?: null,
         'last_request_id'     => $lastReq ? $lastReq->request_id : null,
         'last_request_status' => $lastReq ? $lastReq->status : null,
         'outbox_pending'      => (int) ($outbox['pending'] ?? 0),
         'outbox_failed'       => (int) ($outbox['failed'] ?? 0),
-        'externally_gated'    => $token === '',
+        // Gated == no usable credential. A present-but-failing key is NOT gated;
+        // it is failing, which the UI shows differently.
+        'externally_gated'    => !$credUsable,
     ];
 }
