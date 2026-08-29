@@ -4,7 +4,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 /*
 Module Name: SE Appointments
-Description: Brand-scoped appointment booking and calendar for the SEO Evaluate CRM. Consultation Booked / Held feed the conversion outbox as first-class signals.
+Description: Brand-scoped appointment booking and calendar for the Azin Asgari – Kaş Ekimi, İstanbul clinic CRM. Consultation Booked / Held feed the conversion outbox as first-class signals.
 Version: 1.0.0
 Requires at least: 3.4.1
 */

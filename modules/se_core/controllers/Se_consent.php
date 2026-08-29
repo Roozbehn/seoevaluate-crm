@@ -8,6 +8,10 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * Configures the wording and version that the web-to-lead forms render and
  * that the ledger files. There are no secret fields here and no way to
  * pre-check a box.
+ *
+ * Gate: se_clinic_can_manage_consent() — brand configuration OR the
+ * dedicated se_consent.manage capability, so the clinic owner can maintain
+ * the wording without reaching the credential and platform screens.
  */
 class Se_consent extends AdminController
 {
@@ -15,7 +19,7 @@ class Se_consent extends AdminController
     {
         parent::__construct();
 
-        if (!se_staff_can_configure_brands()) {
+        if (!se_clinic_can_manage_consent()) {
             access_denied('se_consent');
         }
     }
@@ -50,7 +54,7 @@ class Se_consent extends AdminController
             access_denied('se_consent');
         }
 
-        if (!se_staff_can_configure_brands()) {
+        if (!se_clinic_can_manage_consent()) {
             access_denied('se_consent');
         }
 

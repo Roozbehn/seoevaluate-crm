@@ -79,6 +79,12 @@ class SeFakeDb
         return $this->tables[$table] ?? [];
     }
 
+    /** CI_DB::table_exists() — a table exists once it has been seeded. */
+    public function table_exists($table)
+    {
+        return array_key_exists($table, $this->tables);
+    }
+
     /* ---------------- query builder ---------------- */
 
     public function select($cols)          { $this->sel = $cols; return $this; }

@@ -384,11 +384,14 @@ se_test_act_as(1, [], true);
 se_eq(1, se_default_brand_id(), 'admin defaults to the first brand by name');
 
 /* ======================================================================== */
-se_group('F4: the se-health nav item matches the Se_reports controller gate');
+se_group('F4: the se-health nav item is never looser than the Se_reports controller gate');
 
+/* Clinic mode moved Integration Health into the Integrations group, gated on
+ * report AND configure. The controller gate is still se_staff_can_report(),
+ * so the invariant under test is: whoever sees the item can open it. */
 function se_test_nav_item($slug)
 {
-    foreach (se_nav_items() as $item) {
+    foreach (array_merge(se_nav_items(), se_nav_integration_items()) as $item) {
         if ($item['slug'] === $slug) { return $item; }
     }
 
@@ -396,19 +399,24 @@ function se_test_nav_item($slug)
 }
 
 se_test_reset();
-se_test_act_as(30, ['se_reports.view']);   // reporter
-se_eq(true, call_user_func(se_test_nav_item('se-health')['can']), 'a reporter sees the health item');
-se_eq(true, call_user_func(se_test_nav_item('se-reports')['can']), 'and the reports item');
+se_test_act_as(30, ['se_reports.view']);   // reporter (the clinic owner)
+se_eq(false, call_user_func(se_test_nav_item('se-health')['can']), 'a report-only staff member is not offered the health item (clinic mode: Integrations are config-capable only)');
+se_eq(true, se_staff_can_report(), '...although the controller would admit them, so nothing bounces');
+se_eq(true, call_user_func(se_test_nav_item('se-reports')['can']), 'they see the reports item');
 
 se_test_reset();
 se_test_act_as(40, ['se_brands.view']);    // configure-only (the F4 victim)
 se_eq(false, call_user_func(se_test_nav_item('se-health')['can']),
-    'a configure-ONLY staff member no longer sees the health item the controller would bounce');
+    'a configure-ONLY staff member still does not see the health item the controller would bounce');
 se_eq(true, call_user_func(se_test_nav_item('se-meta-leadgen')['can']), 'their other items are unchanged');
 
 se_test_reset();
 se_test_act_as(50, ['se_tenancy.all_brands']);
-se_eq(true, call_user_func(se_test_nav_item('se-health')['can']), 'all_brands satisfies se_staff_can_report and sees it');
+se_eq(false, call_user_func(se_test_nav_item('se-health')['can']), 'all_brands alone (report, no configure) is not offered it either');
+
+se_test_reset();
+se_test_act_as(45, ['se_reports.view', 'se_brands.view']);
+se_eq(true, call_user_func(se_test_nav_item('se-health')['can']), 'report + configure sees it, and the controller admits them');
 
 se_test_reset();
 se_test_act_as(1, [], true);

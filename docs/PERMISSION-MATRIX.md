@@ -14,8 +14,16 @@ staff account was out of scope this phase, so the rendered-UI restricted pass in
 
 Capabilities: `se_brands` (config), `se_reports` (reporting),
 `se_tenancy.all_brands` / `se_tenancy.triage_unassigned` (cross-brand reach),
-plus per-feature `view/create/edit/delete` on `se_patients` / `se_appointments` /
-`se_whatsapp`.
+`se_consent.manage` (consent wording only — clinic mode), plus per-feature
+`view/create/edit/delete` on `se_patients` / `se_appointments` / `se_whatsapp`.
+
+**Clinic mode (see `CLINIC-MODE.md`)** changed three rows below and added the
+two seeded roles. The sidebar is now flat (Dashboard, Leads, Patients,
+Appointments, WhatsApp, Customers, Reports) plus an admin-only *Integrations*
+group; the clinic dashboard admits any clinic role; Consent Settings admits
+`se_consent.manage`. The fake-DB suite `test_clinic.php` (147 assertions)
+covers the new gates, the seeded roles and provisioning; the restricted-user
+browser pass remains an owner action.
 
 ## Roles
 - **Administrator** — `is_admin()`; sees and reaches everything, all brands.
@@ -25,11 +33,22 @@ plus per-feature `view/create/edit/delete` on `se_patients` / `se_appointments` 
   brand mapping and no `se_tenancy.*`.
 - **All-brands / triage staff** — holds `se_tenancy.all_brands` (or
   `triage_unassigned` for brand-0).
+- **Clinic Owner (seeded role)** — one-brand staff holding `customers.*`,
+  `leads.view/delete`, `se_patients.*`, `se_appointments.*`, `se_whatsapp.*`,
+  `se_reports.view`, `se_consent.manage`. No `se_brands.*`, no `se_tenancy.*`.
+- **Sales (seeded role)** — one-brand staff holding `customers.view/create/edit`,
+  `leads.view`, and `view/create/edit` on patients, appointments, WhatsApp.
+  No delete, no reports, no configuration.
 
 ## Matrix
 | Surface | Administrator | One-brand staff | Unmapped staff | All-brands staff |
 |---------|---------------|-----------------|----------------|------------------|
-| SEO Evaluate nav group | all 11 items | items for held capabilities only | items for held capabilities only | all reporting/config items held |
+| Clinic sidebar items (Patients, Appointments, WhatsApp, Reports) | all four | items for held capabilities only | items for held capabilities only | Reports (+ feature items held) |
+| *Integrations* group (Meta, Outbox, Google, Health, Credentials, Consent) | all six | **hidden** unless `se_brands.view`; with `se_consent.manage` alone, Consent Settings appears as a plain sidebar item | hidden | hidden (Health needs report **and** configure) |
+| Core Perfex sidebar (Sales, Subscriptions, Expenses, Contracts, Projects, Tasks, Support, Estimate Request, Knowledge Base, Utilities, Reports) | **removed for everyone** (`se_clinic_filter_sidebar`) | removed | removed | removed |
+| Setup menu | shown | **hidden** (`show_setup_menu` → admin only) | hidden | hidden |
+| `/admin` (Perfex dashboard) | redirects to the clinic dashboard | redirects if any clinic capability is held | Perfex dashboard | redirects |
+| Clinic dashboard (`se_core/se_dashboard`) | all cards + warnings + Health button | six clinic cards; Outbox cards with `se_reports.view`; Consent card with `se_consent.manage`; Meta/Google/Credentials cards and warnings only with `se_brands.view` | **no-brand panel** | six clinic cards + Outbox cards |
 | Dashboard counts | all brands | own brand only (scoped) | **empty / no-brand** (never brand-0 leak) | all brands |
 | Patients list | all brands | own brand only | **empty (fail-closed `1=0`)** | all/allowed brands |
 | Patient view by foreign id | allowed | **access denied** (brand scope) | denied | allowed within reach |
@@ -44,7 +63,8 @@ plus per-feature `view/create/edit/delete` on `se_patients` / `se_appointments` 
 | SE Reports / report data | all brands | own brand; foreign brand → 401 | **empty (brand −1, zero aggregates)** — no brand-0 leak (fixed) | all/allowed |
 | Integration Health page | allowed (report) | allowed only if report-capable | empty/denied | allowed |
 | Integration Health **nav item** | shown | shown only to report-capable (fixed: no longer to configure-only) | hidden | shown |
-| Credentials / Consent config | configure-capable, accessible brands | configure-capable, own brand | denied | configure-capable |
+| Credentials config | configure-capable, accessible brands | configure-capable, own brand | denied | configure-capable |
+| Consent config | allowed | `se_brands.view` **or** `se_consent.manage`, own brand | denied | configure-capable |
 | Public webhooks | n/a (unauthenticated; HMAC-gated) | — | — | — |
 
 Rows marked **(fixed)** were authorization defects closed this phase (see the

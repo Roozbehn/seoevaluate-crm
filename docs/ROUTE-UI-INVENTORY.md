@@ -10,7 +10,7 @@ otherwise; every unauthenticated admin request returns **302** to `/admin/authen
 |-------|---------|
 | **backend** | Server-side logic exists |
 | **UI** | A usable screen exists, inside the Perfex layout |
-| **nav** | Reachable from the SEO Evaluate CRM navigation group |
+| **nav** | Reachable from the sidebar: a flat clinic item, or a child of the admin-only *Integrations* group (clinic mode; before it, one grouped section) |
 | **browser** | Rendered and inspected in an authenticated browser |
 | **fake-DB** | Covered by the network-free unit suite |
 | **real-DB** | Covered against MariaDB with real model execution |
@@ -22,7 +22,7 @@ otherwise; every unauthenticated admin request returns **302** to `/admin/authen
 
 | Screen | URL | Capability | backend | UI | nav | browser | mobile |
 |--------|-----|-----------|:-------:|:--:|:---:|:-------:|:------:|
-| SE Dashboard | `/admin/se_core/se_dashboard` | `se_reports.view` or `se_brands.view` | yes | yes | yes | yes | 390/768 |
+| Clinic Dashboard | `/admin/se_core/se_dashboard` | `se_reports.view` or `se_brands.view` or any of `se_patients/se_appointments/se_whatsapp.view` (clinic mode; `/admin` redirects here) | yes | yes | yes | yes | 390/768 |
 | Patients list | `/admin/se_core/se_patients` | `se_patients.view` | yes | yes | yes | yes | 390 |
 | Patient create | `/admin/se_core/se_patients/create` | `se_patients.create` | yes | yes | — | yes | — |
 | Patient view | `/admin/se_core/se_patients/view/{id}` | `se_patients.view` | yes | yes | — | yes | — |
@@ -45,9 +45,9 @@ otherwise; every unauthenticated admin request returns **302** to `/admin/authen
 | Outbox detail | `/admin/se_core/se_outbox/detail/{id}` | as above | yes | yes | — | yes | — |
 | Google Data Manager | `/admin/se_core/se_google` | `se_brands.view` | yes | yes | yes | yes | — |
 | Integration Credentials | `/admin/se_core/se_credentials` | `se_brands.view` | yes | yes | yes | yes | — |
-| Consent Settings | `/admin/se_core/se_consent` | `se_brands.view` | yes | yes | yes | yes | — |
-| SE Reports | `/admin/se_core/se_reports/index` | `se_reports.view` | yes | yes | yes | yes | — |
-| Integration Health | `/admin/se_core/se_reports/health` | `se_reports.view` | yes | yes | yes | yes | 390/768 |
+| Consent Settings | `/admin/se_core/se_consent` | `se_brands.view` or `se_consent.manage` | yes | yes | yes | yes | — |
+| Reports | `/admin/se_core/se_reports/index` | `se_reports.view` | yes | yes | yes | yes | — |
+| Integration Health | `/admin/se_core/se_reports/health` | `se_reports.view` (nav item: report **and** configure) | yes | yes | yes | yes | 390/768 |
 | Brands (Setup) | `/admin/se_core/brands` | `se_brands.view` | yes | yes | Setup | yes | — |
 
 ## Public endpoints
@@ -70,6 +70,7 @@ otherwise; every unauthenticated admin request returns **302** to `/admin/authen
 | `se_patients` | `view` / `create` / `edit` / `delete` | Patient records within reachable brands. |
 | `se_appointments` | `view` / `create` / `edit` / `delete` | Appointments within reachable brands. |
 | `se_whatsapp` | `view` / `create` / `edit` / `delete` | Conversations within reachable brands. |
+| `se_consent` | `manage` | Consent wording for reachable brands — nothing else (clinic mode). |
 
 No ordinary `view`/`create`/`edit`/`delete` on any feature implies cross-brand
 access. Only `se_tenancy.all_brands`, or being a Perfex admin, does.

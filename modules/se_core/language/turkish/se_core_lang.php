@@ -51,20 +51,23 @@ $lang['se_patient_audit_history']    = 'Erişim geçmişi';
 $lang['se_patient_link_conflict']    = 'Bu markada aynı kayda bağlı başka bir hasta var.';
 $lang['se_patient_deletion_requested'] = 'Silme talebi kaydedildi';
 
-$lang['se_reports']                  = 'SE Raporları';
+$lang['se_reports']                  = 'Raporlar';
 $lang['se_reports_health']           = 'Entegrasyon sağlığı';
 $lang['se_reports_loading']          = 'Yükleniyor…';
 
-$lang['se_perm_feature_brands']      = 'SE Marka yapılandırması';
-$lang['se_perm_feature_reports']     = 'SE Raporlar';
-$lang['se_perm_feature_tenancy']     = 'SE Kiracı erişimi';
+$lang['se_perm_feature_brands']      = 'Marka yapılandırması';
+$lang['se_perm_feature_reports']     = 'Klinik raporları';
+$lang['se_perm_feature_tenancy']     = 'Kiracı erişimi';
 $lang['se_perm_brand_config_view']   = 'Marka yapılandırmasını görüntüle (markalar arası veri erişimi vermez)';
 $lang['se_perm_reports_view']        = 'Raporları görüntüle (yalnızca atanmış markalar)';
 $lang['se_perm_all_brands']          = 'TÜM markaların verilerine eriş (bilinçli olarak verin)';
 $lang['se_perm_triage']              = 'Atanmamış kayıtlara eriş (triyaj kuyruğu)';
+$lang['se_perm_feature_consent']     = 'Onay ayarları';
+$lang['se_perm_consent_manage']      = 'Onay metnini yönet (kimlik bilgisi veya platform erişimi vermez)';
 
 # --- SE navigation and dashboard ---
-$lang['se_group']                    = 'SEO Evaluate CRM';
+$lang['se_group']                    = 'Azin Asgari – Kaş Ekimi, İstanbul';
+$lang['se_integrations']             = 'Entegrasyonlar';
 $lang['se_dashboard']                = 'Panel';
 $lang['se_settings']                 = 'Ayarlar';
 $lang['se_outbox']                   = 'Dönüşüm kuyruğu';

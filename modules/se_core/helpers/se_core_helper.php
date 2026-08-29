@@ -22,6 +22,10 @@ function se_authz_reset_cache()
 {
     $cache = &se_authz_cache();
     $cache = [];
+
+    if (function_exists('se_clinic_reset_cache')) {
+        se_clinic_reset_cache();
+    }
 }
 
 function se_authz_memo($key, callable $resolver)

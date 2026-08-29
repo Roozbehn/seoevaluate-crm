@@ -4,7 +4,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 /*
 Module Name: SE Core
-Description: Multi-brand foundation for the SEO Evaluate CRM - brand registry, staff-to-brand scoping, attribution fields and the ad-platform conversion outbox.
+Description: Foundation of the Azin Asgari – Kaş Ekimi, İstanbul clinic CRM - brand registry, staff-to-brand scoping, clinic mode (lean navigation, roles, provisioning), attribution fields and the ad-platform conversion outbox.
 Version: 1.0.0
 Requires at least: 3.4.1
 */
@@ -18,6 +18,7 @@ require_once __DIR__ . '/se_authz.php';
 require_once __DIR__ . '/se_secret_provider.php';
 require_once __DIR__ . '/se_consent_settings.php';
 require_once __DIR__ . '/se_navigation.php';
+require_once __DIR__ . '/se_clinic.php';
 require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/pipeline.php';
 require_once __DIR__ . '/se_consent.php';
@@ -28,6 +29,8 @@ register_language_files(SE_CORE_MODULE_NAME, [SE_CORE_MODULE_NAME]);
 register_activation_hook(SE_CORE_MODULE_NAME, 'se_core_activation_hook');
 
 hooks()->add_action('admin_init', 'se_core_migrate', 1);
+hooks()->add_action('admin_init', 'se_clinic_provision', 2);
+hooks()->add_action('admin_init', 'se_clinic_dashboard_redirect', 5);
 hooks()->add_action('admin_init', 'se_patient_permissions');
 
 hooks()->add_action('admin_init', 'se_core_permissions');
@@ -35,14 +38,26 @@ hooks()->add_action('admin_init', 'se_core_menu_items');
 hooks()->add_action('admin_init', 'se_nav_register');
 hooks()->add_action('admin_init', 'se_authz_request_guard');
 
+// Clinic mode: lean sidebar, reduced quick-create menu, admin-only Setup menu.
+// See se_clinic.php. Priority 1000 runs after the Menu Builder module (999).
+hooks()->add_filter('sidebar_menu_items', 'se_clinic_filter_sidebar', 1000);
+hooks()->add_filter('quick_actions_links', 'se_clinic_filter_quick_actions', 1000);
+hooks()->add_filter('show_setup_menu', 'se_clinic_show_setup_menu');
+
 // Brand scoping. See docs/SCOPING.md in the fork for why each seam is used.
 hooks()->add_filter('leads_table_sql_join', 'se_core_scope_leads_table');
 hooks()->add_filter('customers_table_sql_join', 'se_core_scope_customers_table');
 hooks()->add_action('kanban_query_initiated', 'se_core_scope_kanban');
 
-// Stamp the brand on new records.
+// Stamp the brand on new records. In single-brand (clinic) mode the second
+// hook stamps whatever the first one left at brand 0 — including admin-created
+// leads and webhook leads, which the multi-brand rule leaves for triage.
 hooks()->add_action('lead_created', 'se_core_stamp_lead_brand');
+hooks()->add_action('lead_created', 'se_clinic_stamp_lead', 20);
 hooks()->add_action('lead_converted_to_customer', 'se_core_carry_brand_to_customer');
+
+// Single-brand mode: a new staff member belongs to the clinic.
+hooks()->add_action('staff_member_created', 'se_clinic_map_staff');
 
 function se_core_activation_hook()
 {
@@ -84,6 +99,15 @@ function se_core_permissions()
             SE_CAP_TRIAGE     => _l('se_perm_triage'),
         ],
     ], _l('se_perm_feature_tenancy'));
+
+    // Consent wording, on its own: the clinic owner maintains it without
+    // holding se_brands.view, which would also unlock credentials and the
+    // Meta/Google configuration screens.
+    register_staff_capabilities(SE_FEATURE_CONSENT, [
+        'capabilities' => [
+            SE_CAP_CONSENT_MANAGE => _l('se_perm_consent_manage'),
+        ],
+    ], _l('se_perm_feature_consent'));
 }
 
 function se_core_menu_items()
@@ -91,8 +115,8 @@ function se_core_menu_items()
     $CI = &get_instance();
 
     // Brand configuration lives under Setup and needs the config capability.
-    // Everything else is registered as one grouped sidebar section by
-    // se_nav_register() in se_navigation.php.
+    // Everything else is registered as flat sidebar items plus one
+    // Integrations group by se_nav_register() in se_navigation.php.
     if (se_staff_can_configure_brands()) {
         $CI->app_menu->add_setup_menu_item('se-brands', [
             'name'     => _l('se_brands'),
@@ -146,6 +170,14 @@ function se_core_scope_kanban($kanban)
 
 function se_core_stamp_lead_brand($lead_id)
 {
+    // Forms.php fires lead_created with ['lead_id' => id, 'web_to_lead_form' => true];
+    // the model and the cron importer pass the bare id.
+    $lead_id = se_clinic_lead_id_from_hook($lead_id);
+
+    if ($lead_id <= 0) {
+        return;
+    }
+
     $CI = &get_instance();
 
     $CI->db->select('brand_id')->where('id', $lead_id);
@@ -190,7 +222,9 @@ function se_core_carry_brand_to_customer($data)
 
 function se_core_deny()
 {
-    if (is_ajax_request()) {
+    $CI = &get_instance();
+
+    if (isset($CI->input) && $CI->input->is_ajax_request()) {
         header('HTTP/1.0 403 Forbidden');
         echo json_encode(['success' => false, 'message' => _l('se_brand_access_denied')]);
         die;

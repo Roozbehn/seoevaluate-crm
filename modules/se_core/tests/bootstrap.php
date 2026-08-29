@@ -39,6 +39,7 @@ $GLOBALS['se_test'] = [
     'get'         => [],
     'method'      => 'get',
     'is_ajax'     => false,
+    'staff_member' => true,
 ];
 
 function se_test_reset()
@@ -50,6 +51,7 @@ function se_test_reset()
     $GLOBALS['se_test']['uri']       = [];
     $GLOBALS['se_test']['method']    = 'get';
     $GLOBALS['se_test']['is_ajax']   = false;
+    $GLOBALS['se_test']['staff_member'] = true;
     $GLOBALS['se_test']['admin_ids'] = [];
     se_authz_reset_cache();
 }
@@ -103,6 +105,9 @@ class SeTestInput
     }
 
     public function method() { return $GLOBALS['se_test']['method']; }
+
+    /** CI_Input::is_ajax_request() — the ONLY ajax check that exists in production. */
+    public function is_ajax_request() { return (bool) $GLOBALS['se_test']['is_ajax']; }
 }
 
 class SeTestLoader
@@ -192,7 +197,9 @@ function _l($key, $x = '') { return $key; }
 
 function log_activity($msg) { $GLOBALS['se_test']['activity'][] = $msg; }
 
-function is_ajax_request() { return $GLOBALS['se_test']['is_ajax']; }
+/* No global is_ajax_request() stub: Perfex has none (only $CI->input->is_ajax_request()),
+ * and a stub here once hid a fatal in production code. */
+function is_staff_member($staff_id = '') { return (bool) $GLOBALS['se_test']['staff_member']; }
 
 function access_denied($what = '')
 {
@@ -338,6 +345,7 @@ require_once $SE_MODULES . '/se_whatsapp/helpers.php';
 require_once $SE_MODULES . '/se_whatsapp/outbound.php';
 require_once $SE_MODULES . '/se_core/se_integration_ui.php';
 require_once $SE_MODULES . '/se_core/se_reporting.php';
+require_once $SE_MODULES . '/se_core/se_clinic.php';
 require_once $SE_MODULES . '/se_core/se_navigation.php';
 require_once $SE_MODULES . '/se_appointments/se_appointments.php';
 require_once $SE_MODULES . '/se_whatsapp/models/Se_whatsapp_model.php';

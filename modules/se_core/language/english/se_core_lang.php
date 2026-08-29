@@ -24,7 +24,7 @@ $lang['se_ga4_property_id']        = 'GA4 property ID';
 $lang['se_gsc_site_url']           = 'Search Console property';
 $lang['se_brand_added']            = 'Brand created';
 $lang['se_brand_updated']          = 'Brand updated';
-$lang['se_reports'] = 'SE Reports';
+$lang['se_reports'] = 'Reports';
 $lang['se_reports_health'] = 'Integration Health';
 $lang['se_reports_loading'] = 'Loading…';
 $lang['se_patients'] = 'Patients';
@@ -51,14 +51,18 @@ $lang['se_patient_archive'] = 'Archive';
 $lang['se_patient_archive_confirm'] = 'Archive this patient? Consent and history are kept.';
 
 /* --- Phase 10: separated tenancy capabilities ---------------------------- */
-$lang['se_perm_feature_brands']   = 'SE Brand configuration';
-$lang['se_perm_feature_reports']  = 'SE Reports';
-$lang['se_perm_feature_tenancy']  = 'SE Tenant access';
+$lang['se_perm_feature_brands']   = 'Brand configuration';
+$lang['se_perm_feature_reports']  = 'Clinic reports';
+$lang['se_perm_feature_tenancy']  = 'Tenant access';
 $lang['se_perm_brand_config_view'] = 'View brand configuration (no cross-brand data access)';
 $lang['se_perm_reports_view']     = 'View reports (restricted to assigned brands)';
 $lang['se_perm_all_brands']       = 'Access ALL brands\' data (grant deliberately)';
 $lang['se_perm_triage']           = 'Access unassigned records (triage queue)';
 $lang['se_brand_access_denied']   = 'You do not have access to this brand.';
+
+/* --- Clinic mode: consent capability ------------------------------------- */
+$lang['se_perm_feature_consent']  = 'Consent settings';
+$lang['se_perm_consent_manage']   = 'Manage consent wording (no credential or platform access)';
 
 /* --- Phase 10: patient safety --------------------------------------------- */
 $lang['se_patient_link_conflict']     = 'Another patient is already linked to that lead or customer in this brand.';
@@ -66,7 +70,8 @@ $lang['se_patient_deletion_requested'] = 'Deletion request recorded';
 $lang['se_patient_passport_hidden']   = 'Not collected';
 
 /* --- Phase 12: grouped navigation + new screens -------------------------- */
-$lang['se_group']             = 'SEO Evaluate CRM';
+$lang['se_group']             = 'Azin Asgari – Kaş Ekimi, İstanbul';
+$lang['se_integrations']      = 'Integrations';
 $lang['se_dashboard']         = 'Dashboard';
 $lang['se_settings']          = 'Settings';
 $lang['se_outbox']            = 'Conversion Outbox';

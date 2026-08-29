@@ -4,7 +4,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 /*
 Module Name: SE WhatsApp
-Description: Multi-brand WhatsApp Cloud API inbox for the SEO Evaluate CRM. Signed webhook receiver, tenant routing, conversations/messages, templates, metering. Live Meta connection is externally gated.
+Description: WhatsApp Cloud API inbox for the Azin Asgari – Kaş Ekimi, İstanbul clinic CRM. Signed webhook receiver, tenant routing, conversations/messages, templates, metering. Live Meta connection is externally gated.
 Version: 1.0.0
 Requires at least: 3.4.1
 */

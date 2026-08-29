@@ -3,54 +3,72 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 /**
- * One grouped "SEO Evaluate CRM" sidebar section.
+ * Clinic navigation.
  *
- * WHY THIS REPLACES THE OLD PER-MODULE MENUS
- * ------------------------------------------
- * Each module registered its own top-level sidebar entry, so the SE features
- * appeared scattered between Contracts and Projects with no relationship to one
- * another — and two of them ("se_appointments", "se_whatsapp") rendered their
- * raw translation keys because those modules never called
- * register_language_files(). Half the built functionality (conversion outbox,
- * Meta Lead Ads, Google Data Manager, consent settings, credentials) had no
- * entry at all, so it was undiscoverable however well it worked.
+ * WHY FLAT
+ * --------
+ * The screens used to sit in one grouped "SEO Evaluate CRM" section beside
+ * the Perfex modules of an agency install. The CRM now serves a single clinic,
+ * so the working screens are top-level items in working order — Dashboard,
+ * Leads, Patients, Appointments, WhatsApp, Customers, Reports — and the
+ * integration screens (Meta Lead Ads, Conversion Outbox, Google Data Manager,
+ * Integration Health, Integration Credentials, Consent Settings) sit in one
+ * "Integrations" group that only configuration-capable staff see.
  *
  * Every item is permission-aware: a staff member sees only what they may open,
- * and the parent disappears entirely when they may open nothing.
+ * and the Integrations group disappears entirely when they may open nothing in
+ * it. The gate on each item is never looser than the controller's own gate, so
+ * nothing shown here bounces on click.
+ *
+ * Positions interleave with the surviving core items (see
+ * se_clinic_sidebar_positions() in se_clinic.php, which also removes the core
+ * items a clinic does not use and points the core "Dashboard" item at the
+ * clinic dashboard).
  */
 
-/** Menu definition: [slug, capability-check, label key, href, icon]. */
+/** Top-level clinic items: [slug, label key, href, icon, position, can]. */
 function se_nav_items()
 {
     return [
         [
-            'slug'  => 'se-dashboard',
-            'label' => 'se_dashboard',
-            'href'  => 'se_core/se_dashboard',
-            'icon'  => 'fa fa-tachometer',
-            'can'   => function () { return se_staff_can_report() || se_staff_can_configure_brands(); },
+            'slug'     => 'se-patients',
+            'label'    => 'se_patients',
+            'href'     => 'se_core/se_patients',
+            'icon'     => 'fa fa-user-md',
+            'position' => 3,
+            'can'      => function () { return staff_can('view', 'se_patients'); },
         ],
         [
-            'slug'  => 'se-patients',
-            'label' => 'se_patients',
-            'href'  => 'se_core/se_patients',
-            'icon'  => 'fa fa-user-md',
-            'can'   => function () { return staff_can('view', 'se_patients'); },
+            'slug'     => 'se-appointments',
+            'label'    => 'se_appointments',
+            'href'     => 'se_appointments/se_appointments/manage',
+            'icon'     => 'fa fa-calendar-check-o',
+            'position' => 4,
+            'can'      => function () { return staff_can('view', 'se_appointments'); },
         ],
         [
-            'slug'  => 'se-appointments',
-            'label' => 'se_appointments',
-            'href'  => 'se_appointments/se_appointments/manage',
-            'icon'  => 'fa fa-calendar-check-o',
-            'can'   => function () { return staff_can('view', 'se_appointments'); },
+            'slug'     => 'se-whatsapp',
+            'label'    => 'se_whatsapp',
+            'href'     => 'se_whatsapp/se_whatsapp/inbox',
+            'icon'     => 'fa fa-whatsapp',
+            'position' => 5,
+            'can'      => function () { return staff_can('view', 'se_whatsapp'); },
         ],
         [
-            'slug'  => 'se-whatsapp',
-            'label' => 'se_whatsapp',
-            'href'  => 'se_whatsapp/se_whatsapp/inbox',
-            'icon'  => 'fa fa-whatsapp',
-            'can'   => function () { return staff_can('view', 'se_whatsapp'); },
+            'slug'     => 'se-reports',
+            'label'    => 'se_reports',
+            'href'     => 'se_core/se_reports/index',
+            'icon'     => 'fa fa-bar-chart',
+            'position' => 7,
+            'can'      => function () { return se_staff_can_report(); },
         ],
+    ];
+}
+
+/** Children of the "Integrations" group: [slug, label key, href, icon, can]. */
+function se_nav_integration_items()
+{
+    return [
         [
             'slug'  => 'se-meta-leadgen',
             'label' => 'se_meta_leadgen',
@@ -63,7 +81,9 @@ function se_nav_items()
             'label' => 'se_outbox',
             'href'  => 'se_core/se_outbox',
             'icon'  => 'fa fa-paper-plane-o',
-            'can'   => function () { return se_staff_can_report() || se_staff_can_configure_brands(); },
+            // The controller admits report-capable staff too; the nav keeps
+            // this delivery-queue screen with the people who can act on it.
+            'can'   => function () { return se_staff_can_configure_brands(); },
         ],
         [
             'slug'  => 'se-google',
@@ -73,21 +93,15 @@ function se_nav_items()
             'can'   => function () { return se_staff_can_configure_brands(); },
         ],
         [
-            'slug'  => 'se-reports',
-            'label' => 'se_reports',
-            'href'  => 'se_core/se_reports/index',
-            'icon'  => 'fa fa-bar-chart',
-            'can'   => function () { return se_staff_can_report(); },
-        ],
-        [
             'slug'  => 'se-health',
             'label' => 'se_reports_health',
             'href'  => 'se_core/se_reports/health',
             'icon'  => 'fa fa-heartbeat',
-            // EXACTLY the gate Se_reports::__construct enforces. The old
-            // `|| se_staff_can_configure_brands()` showed the item to
-            // configure-only staff who were then bounced on click.
-            'can'   => function () { return se_staff_can_report(); },
+            // The controller gate is se_staff_can_report(). The nav requires
+            // report AND configure: stricter than the controller (so nothing
+            // shown here bounces on click — the F4 defect stays closed), and
+            // report-only clinic staff keep to Reports.
+            'can'   => function () { return se_staff_can_report() && se_staff_can_configure_brands(); },
         ],
         [
             'slug'  => 'se-credentials',
@@ -101,12 +115,13 @@ function se_nav_items()
             'label' => 'se_consent_settings',
             'href'  => 'se_core/se_consent',
             'icon'  => 'fa fa-check-square-o',
-            'can'   => function () { return se_staff_can_configure_brands(); },
+            // EXACTLY the gate Se_consent::__construct enforces.
+            'can'   => function () { return se_clinic_can_manage_consent(); },
         ],
     ];
 }
 
-/** Which items may the CURRENT staff member open? */
+/** Which top-level items may the CURRENT staff member open? */
 function se_nav_visible_items()
 {
     $out = [];
@@ -120,11 +135,25 @@ function se_nav_visible_items()
     return $out;
 }
 
+/** Which Integrations children may the CURRENT staff member open? */
+function se_nav_visible_integration_items()
+{
+    $out = [];
+
+    foreach (se_nav_integration_items() as $item) {
+        if (call_user_func($item['can'])) {
+            $out[] = $item;
+        }
+    }
+
+    return $out;
+}
+
 /**
- * Register the grouped section.
+ * Register the clinic items and the Integrations group.
  *
- * Runs on admin_init. If the staff member may open nothing, no parent is
- * registered at all — an empty expandable group is worse than no group.
+ * Runs on admin_init. An empty expandable group is worse than no group, so
+ * the group is only registered when at least one child is visible.
  */
 function se_nav_register()
 {
@@ -132,24 +161,49 @@ function se_nav_register()
         return;
     }
 
-    $visible = se_nav_visible_items();
+    $CI = &get_instance();
 
-    if (!$visible) {
+    foreach (se_nav_visible_items() as $item) {
+        $CI->app_menu->add_sidebar_menu_item($item['slug'], [
+            'name'     => _l($item['label']),
+            'href'     => admin_url($item['href']),
+            'icon'     => $item['icon'],
+            'position' => $item['position'],
+            'badge'    => [],
+        ]);
+    }
+
+    $integrations = se_nav_visible_integration_items();
+
+    if (!$integrations) {
         return;
     }
 
-    $CI = &get_instance();
+    // A group of one is noise: the clinic owner holds only se_consent.manage,
+    // so Consent Settings becomes a plain item for them.
+    if (count($integrations) === 1 && $integrations[0]['slug'] === 'se-consent') {
+        $CI->app_menu->add_sidebar_menu_item('se-consent', [
+            'name'     => _l($integrations[0]['label']),
+            'href'     => admin_url($integrations[0]['href']),
+            'icon'     => $integrations[0]['icon'],
+            'position' => 9,
+            'badge'    => [],
+        ]);
 
-    $CI->app_menu->add_sidebar_menu_item('se-crm', [
-        'name'     => _l('se_group'),
-        'icon'     => 'fa fa-stethoscope',
-        'position' => 26,
+        return;
+    }
+
+    $CI->app_menu->add_sidebar_menu_item('se-integrations', [
+        'collapse' => true,
+        'name'     => _l('se_integrations'),
+        'icon'     => 'fa fa-plug',
+        'position' => 8,
     ]);
 
     $position = 1;
 
-    foreach ($visible as $item) {
-        $CI->app_menu->add_sidebar_children_item('se-crm', [
+    foreach ($integrations as $item) {
+        $CI->app_menu->add_sidebar_children_item('se-integrations', [
             'slug'     => $item['slug'],
             'name'     => _l($item['label']),
             'href'     => admin_url($item['href']),
