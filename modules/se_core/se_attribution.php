@@ -64,11 +64,56 @@ function se_attr_hidden_fields()
     }
 }
 
+/**
+ * Render the consent control for a web-to-lead form.
+ *
+ * Server-rendered from approved configuration, never from the page author's
+ * markup. Unchecked by default and with no way to express a pre-checked box —
+ * a pre-ticked consent control is not freely given consent.
+ *
+ * With no approved text for the brand, NOTHING grant-capable is rendered.
+ */
+function se_attr_consent_fields($brand_id = 0, $lang = 'en')
+{
+    if (!function_exists('se_consent_text_configured')) {
+        return;
+    }
+
+    $any = false;
+
+    foreach (se_consent_configurable_purposes() as $purpose) {
+        if (!se_consent_text_configured($brand_id, $purpose)) {
+            continue;
+        }
+
+        $any  = true;
+        $text = se_consent_text($brand_id, $purpose, $lang);
+
+        echo '<div class="form-group se-consent-field">'
+           . '<label style="font-weight:normal">'
+           . '<input type="checkbox" name="se_consent_' . htmlspecialchars($purpose, ENT_QUOTES, 'UTF-8')
+           . '" value="yes" />&nbsp;'
+           . htmlspecialchars($text, ENT_QUOTES, 'UTF-8')
+           . '</label></div>' . PHP_EOL;
+    }
+
+    // No hidden version field is emitted: the server resolves the version.
+    if (!$any) {
+        echo '<!-- se: no approved consent text configured for this brand -->' . PHP_EOL;
+    }
+}
+
 function se_attr_form_head()
 {
     // URL-driven values captured last-touch; the rest are read from cookies.
     $urlKeys = json_encode(['gclid', 'gbraid', 'wbraid', 'fbclid',
         'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ctwa_clid']);
+
+    $trackingAllowed = function_exists('se_consent_tracking_allowed')
+        ? (se_consent_tracking_allowed(se_attr_form_brand()) ? 'true' : 'false')
+        : 'false';
+
+    echo '<script>window.SE_ATTR_TRACKING_ALLOWED = ' . $trackingAllowed . ';</script>' . PHP_EOL;
 
     echo <<<HTML
 <script>
@@ -87,6 +132,12 @@ function se_attr_form_head()
         + ';path=/;SameSite=Lax' + (location.protocol === 'https:' ? ';Secure' : ''); } catch (e) {}
   }
   function nowStr() { return new Date().toISOString().slice(0, 19).replace('T', ' '); }
+
+  // Tracking storage is gated: the 90-day first-party attribution cookie is
+  // only written when this brand has approved, enabled ads-consent text.
+  // It used to be written on every page view, before anyone agreed to
+  // anything.
+  if (!window.SE_ATTR_TRACKING_ALLOWED) { return; }
 
   var p = new URLSearchParams(location.search);
   var s = readStore();
@@ -170,39 +221,113 @@ function se_attr_persist($data)
         unset($update['last_touch_at']);
     }
 
-    // Consent: coerce to 0/1; capture the consent-text version.
-    $consentAds       = (int) (bool) $CI->input->post('se_consent_ads');
-    $consentMarketing = (int) (bool) $CI->input->post('se_consent_marketing');
-    $consentVersion   = $CI->input->post('se_consent_text_version');
-    $update['consent_ads']       = $consentAds;
-    $update['consent_marketing'] = $consentMarketing;
-    if ($consentVersion !== null && $consentVersion !== '') {
-        $update['consent_text_version'] = mb_substr((string) $consentVersion, 0, 32);
-    }
-
-    // Brand comes from the form.
+    /* --- BRAND FIRST -------------------------------------------------- *
+     * The brand is resolved from the submitted FORM, server-side, before any
+     * consent decision — the decision depends on that brand's approved text.
+     * A visitor never chooses the brand.
+     */
     $brand_id = 0;
+
     if (!empty($data['form_id'])) {
         $CI->db->select('brand_id')->where('id', (int) $data['form_id']);
         $form = $CI->db->get(db_prefix() . 'web_to_lead')->row();
+
         if ($form && (int) $form->brand_id > 0) {
             $brand_id = (int) $form->brand_id;
             $update['brand_id'] = $brand_id;
         }
     }
 
+    /* --- CONSENT ------------------------------------------------------- *
+     * The old rule was `(int) (bool) $CI->input->post('se_consent_ads')`.
+     * Every non-empty string is truthy in PHP, so posting "no", "hayir",
+     * "false" or "0"(string) granted consent — the same class of defect that
+     * was fixed for Meta Lead Ads, still live on the web form.
+     *
+     * The decision now comes from se_consent_decide()'s affirmative allowlist,
+     * and NOTHING else. A missing field is unknown, which is not consent.
+     */
+    $decisions = [];
+
+    foreach (['ads' => 'se_consent_ads', 'marketing' => 'se_consent_marketing'] as $purpose => $field) {
+        $raw = $CI->input->post($field);
+
+        $decisions[$purpose] = [
+            // A field that was never submitted is UNKNOWN, not a refusal:
+            // the form may simply not offer that purpose.
+            'state' => $raw === null ? SE_CONSENT_UNKNOWN : se_consent_decide($raw),
+            'raw'   => $raw === null ? null : (string) $raw,
+            'field' => $field,
+        ];
+    }
+
+    // The derived flag is written from the DECISION, never from the raw post.
+    $update['consent_ads']       = $decisions['ads']['state'] === SE_CONSENT_GRANTED ? 1 : 0;
+    $update['consent_marketing'] = $decisions['marketing']['state'] === SE_CONSENT_GRANTED ? 1 : 0;
+
+    /* The consent-text version is resolved SERVER-side from this brand's
+     * approved configuration. `se_consent_text_version` arrives as a hidden
+     * field and is attacker-controlled, so it is read only to be ignored —
+     * and a mismatch is worth knowing about. */
+    $claimedVersion = $CI->input->post('se_consent_text_version');
+    $serverVersion  = function_exists('se_consent_configured_version')
+        ? se_consent_configured_version($brand_id)
+        : '';
+
+    if ($serverVersion !== '') {
+        $update['consent_text_version'] = $serverVersion;
+    }
+
+    if ($claimedVersion !== null && $serverVersion !== '' && (string) $claimedVersion !== $serverVersion) {
+        log_activity('SE consent version mismatch ignored [lead ' . $lead_id . ']');
+    }
+
     $CI->db->where('id', $lead_id)->update(db_prefix() . 'leads', $update);
 
-    // Mirror consent into the brand-scoped ledger (append-only).
-    if (function_exists('se_consent_record')) {
-        $version = $update['consent_text_version'] ?? null;
-        if ($consentAds) {
-            se_consent_record($brand_id, 'lead', $lead_id, 'ads', 'granted', $version, 'web_to_lead');
-        }
-        if ($consentMarketing) {
-            se_consent_record($brand_id, 'lead', $lead_id, 'marketing', 'granted', $version, 'web_to_lead');
+    /* --- LEDGER (authoritative) ---------------------------------------- *
+     * A grant is a grant; an explicit refusal is recorded as a WITHDRAWAL so
+     * "we asked and they said no" is provable. An unknown answer records
+     * nothing, and nothing is granted.
+     */
+    if (function_exists('se_consent_grant')) {
+        foreach ($decisions as $purpose => $d) {
+            if ($d['state'] === SE_CONSENT_GRANTED) {
+                // Fail closed: never record a grant for a purpose that has no
+                // approved text behind it.
+                if (function_exists('se_consent_text_configured')
+                    && !se_consent_text_configured($brand_id, $purpose)) {
+                    log_activity('SE consent grant refused, no approved text [lead ' . $lead_id . ', ' . $purpose . ']');
+                    continue;
+                }
+
+                se_consent_grant($brand_id, $lead_id, $purpose, 'web_to_lead', $d['field'], $d['raw']);
+            } elseif ($d['state'] === SE_CONSENT_WITHDRAWN) {
+                se_consent_withdraw($brand_id, $lead_id, $purpose, 'web_to_lead', $d['field'], $d['raw']);
+            }
         }
     }
 
     log_activity('SE attribution captured [lead ' . $lead_id . ']');
 }
+
+/**
+ * Brand for the web-to-lead form currently being rendered.
+ * Resolved server-side from the form id in the URI; never from a request field.
+ */
+function se_attr_form_brand()
+{
+    $CI = &get_instance();
+
+    // /forms/wtl/<key> — the last URI segment identifies the form.
+    $key = $CI->uri->segment(3);
+
+    if (!$key) {
+        return 0;
+    }
+
+    $CI->db->select('brand_id')->where('form_key', $key);
+    $row = $CI->db->get(db_prefix() . 'web_to_lead')->row();
+
+    return $row ? (int) $row->brand_id : 0;
+}
+

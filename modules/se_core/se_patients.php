@@ -208,12 +208,16 @@ function se_patient_validate(array $data)
 }
 
 /** Apply the brand scope to the current query builder (unless admin/all). */
+/**
+ * Apply the brand scope to the current query builder.
+ *
+ * `$ids ?: [0]` used to substitute the brand-0 triage bucket when a staff
+ * member had no mapped brands — widening access for precisely the user who
+ * should see nothing. It now fails closed.
+ */
 function se_patient_apply_scope($CI)
 {
-    $ids = se_patient_scope_ids();
-    if ($ids !== null) {
-        $CI->db->where_in('brand_id', $ids ?: [0]);
-    }
+    se_apply_scope_in('brand_id');
 }
 
 /** Brand-scoped patient list with optional search + pagination. */
@@ -430,15 +434,8 @@ function se_patient_permissions()
 /** Sidebar menu entry, gated on the view capability. */
 function se_patient_menu()
 {
-    $CI = &get_instance();
-    if (staff_can('view', 'se_patients')) {
-        $CI->app_menu->add_sidebar_menu_item('se-patients', [
-            'name'     => _l('se_patients'),
-            'href'     => admin_url('se_core/se_patients'),
-            'icon'     => 'fa fa-user-md',
-            'position' => 29,
-        ]);
-    }
+    // Registered by se_core/se_navigation.php as part of the grouped
+    // "SEO Evaluate CRM" section. Kept as a no-op for compatibility.
 }
 
 /* ---------------------------------------------------------------------------

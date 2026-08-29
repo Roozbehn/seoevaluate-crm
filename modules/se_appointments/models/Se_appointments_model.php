@@ -22,11 +22,9 @@ class Se_appointments_model extends App_Model
             'left'
         );
 
-        // Brand scoping: staff see only their brands, plus the unassigned bucket.
-        if (function_exists('se_staff_sees_all_brands') && !se_staff_sees_all_brands()) {
-            $ids = se_staff_brand_ids();
-            $this->db->where('(' . db_prefix() . 'se_appointments.brand_id IN (' . implode(',', array_map('intval', $ids)) . '))');
-        }
+        // Brand scoping, fail closed: an unmapped staff member gets 1=0 rather
+        // than the `IN ()` syntax error the old inline implode produced.
+        se_apply_scope_in(db_prefix() . 'se_appointments.brand_id');
 
         foreach ($filters as $col => $val) {
             $this->db->where(db_prefix() . 'se_appointments.' . $col, $val);

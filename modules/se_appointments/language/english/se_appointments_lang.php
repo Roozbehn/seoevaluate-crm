@@ -22,3 +22,25 @@ $lang['se_appt_status_completed'] = 'Completed';
 $lang['se_appt_status_no_show']   = 'No-show';
 $lang['se_appt_status_cancelled'] = 'Cancelled';
 $lang['se_appt_invalid_window'] = 'Appointment not saved: the end time must be after the start time.';
+
+/* --- Phase 12: appointment UI -------------------------------------------- */
+$lang['se_appt_brand']               = 'Brand';
+$lang['se_appt_customer']            = 'Customer';
+$lang['se_appt_relation']            = 'Related record';
+$lang['se_appt_format']              = 'Consultation format';
+$lang['se_appt_format_online']       = 'Online';
+$lang['se_appt_format_in_person']    = 'In person';
+$lang['se_appt_timezone']            = 'Timezone';
+$lang['se_appt_cancellation_reason'] = 'Cancellation reason';
+$lang['se_appt_none']                = 'No appointments';
+$lang['se_appt_conflict']            = 'That staff member already has an appointment in this slot';
+$lang['se_appt_history']             = 'Status history';
+$lang['se_appt_reminder']            = 'Reminder';
+$lang['se_appt_sync_state']          = 'Calendar sync';
+$lang['se_appt_filter_all']          = 'All';
+$lang['se_appt_detail']              = 'Appointment detail';
+
+$lang['se_appt_conflict_hint']  = 'Availability is re-checked whenever the start, end or assigned staff changes. A clash is refused and reported here.';
+$lang['se_appt_status_confirm'] = 'Change the status of this appointment?';
+$lang['se_appt_availability']   = 'Availability';
+$lang['se_appt_relation_type']  = 'Relation type';

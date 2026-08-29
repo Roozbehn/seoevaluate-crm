@@ -13,7 +13,11 @@ define('SE_CORE_MODULE_NAME', 'se_core');
 
 $CI = &get_instance();
 $CI->load->helper(SE_CORE_MODULE_NAME . '/se_core');
+$CI->load->helper(SE_CORE_MODULE_NAME . '/se_ui');
 require_once __DIR__ . '/se_authz.php';
+require_once __DIR__ . '/se_secret_provider.php';
+require_once __DIR__ . '/se_consent_settings.php';
+require_once __DIR__ . '/se_navigation.php';
 require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/pipeline.php';
 require_once __DIR__ . '/se_consent.php';
@@ -25,9 +29,10 @@ register_activation_hook(SE_CORE_MODULE_NAME, 'se_core_activation_hook');
 
 hooks()->add_action('admin_init', 'se_core_migrate', 1);
 hooks()->add_action('admin_init', 'se_patient_permissions');
-hooks()->add_action('admin_init', 'se_patient_menu');
+
 hooks()->add_action('admin_init', 'se_core_permissions');
 hooks()->add_action('admin_init', 'se_core_menu_items');
+hooks()->add_action('admin_init', 'se_nav_register');
 hooks()->add_action('admin_init', 'se_authz_request_guard');
 
 // Brand scoping. See docs/SCOPING.md in the fork for why each seam is used.
@@ -86,21 +91,13 @@ function se_core_menu_items()
     $CI = &get_instance();
 
     // Brand configuration lives under Setup and needs the config capability.
+    // Everything else is registered as one grouped sidebar section by
+    // se_nav_register() in se_navigation.php.
     if (se_staff_can_configure_brands()) {
         $CI->app_menu->add_setup_menu_item('se-brands', [
             'name'     => _l('se_brands'),
             'href'     => admin_url('se_core/brands'),
             'position' => 31,
-        ]);
-    }
-
-    // Reporting is its own capability and does NOT imply cross-brand access.
-    if (se_staff_can_report()) {
-        $CI->app_menu->add_sidebar_menu_item('se-reports', [
-            'name'     => _l('se_reports'),
-            'href'     => admin_url('se_core/se_reports/index'),
-            'icon'     => 'fa fa-bar-chart',
-            'position' => 28,
         ]);
     }
 }
@@ -143,14 +140,8 @@ function se_core_scope_kanban($kanban)
         return;
     }
 
-    if (se_staff_sees_all_brands()) {
-        return;
-    }
-
-    $ids = se_staff_brand_ids();
-
-    $CI = &get_instance();
-    $CI->db->where('(' . db_prefix() . 'leads.brand_id IN (' . implode(',', $ids) . '))');
+    // Fail closed: an unmapped staff member gets 1=0, not `IN ()`.
+    se_apply_scope_in(db_prefix() . 'leads.brand_id');
 }
 
 function se_core_stamp_lead_brand($lead_id)
@@ -214,7 +205,8 @@ function se_core_deny()
  * se_meta_leadgen.php is wired but its live Graph fetch/send stays gated on a
  * Meta Page token + App Review; se_whatsapp is now its own module.
  */
-foreach (['se_outbox_snapshot.php', 'se_outbox.php', 'se_capi.php', 'se_google_dm.php', 'se_meta_leadgen.php', 'se_reporting.php'] as $__se_b2) {
+foreach (['se_outbox_snapshot.php', 'se_outbox.php', 'se_capi.php', 'se_google_dm.php',
+          'se_meta_leadgen.php', 'se_reporting.php', 'se_outbox_ui.php', 'se_integration_ui.php'] as $__se_b2) {
     $__se_b2_path = __DIR__ . '/' . $__se_b2;
     if (is_file($__se_b2_path)) {
         require_once $__se_b2_path;

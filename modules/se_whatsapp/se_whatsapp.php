@@ -11,12 +11,19 @@ Requires at least: 3.4.1
 
 define('SE_WHATSAPP_MODULE_NAME', 'se_whatsapp');
 
+/*
+ * Register the module's language files. Missing for the same reason as
+ * se_appointments: the inbox rendered se_wa_all / se_wa_no_conversations
+ * instead of its English strings.
+ */
+register_language_files(SE_WHATSAPP_MODULE_NAME, [SE_WHATSAPP_MODULE_NAME]);
+
 require_once __DIR__ . '/helpers.php';
 
 register_activation_hook(SE_WHATSAPP_MODULE_NAME, 'se_whatsapp_activation');
 
 hooks()->add_action('admin_init', 'se_whatsapp_permissions');
-hooks()->add_action('admin_init', 'se_whatsapp_menu');
+
 
 // Async: drain webhook events + consume due reminders after core cron tasks.
 hooks()->add_action('after_cron_run', 'se_wa_process_pending');
@@ -46,14 +53,8 @@ function se_whatsapp_permissions()
 function se_whatsapp_menu()
 {
     $CI = &get_instance();
-    if (staff_can('view', 'se_whatsapp')) {
-        $CI->app_menu->add_sidebar_menu_item('se-whatsapp', [
-            'name'     => _l('se_whatsapp'),
-            'href'     => admin_url('se_whatsapp/inbox'),
-            'icon'     => 'fa fa-whatsapp',
-            'position' => 27,
-        ]);
-    }
+    // Registered by se_core/se_navigation.php as part of the grouped
+    // "SEO Evaluate CRM" section. Kept as a no-op for compatibility.
 }
 
 /** Read-only conversation summary on the lead profile. */
