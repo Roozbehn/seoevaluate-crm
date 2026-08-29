@@ -350,6 +350,25 @@ function se_default_brand_id()
     return SE_BRAND_NONE;
 }
 
+/**
+ * Resolve the brand an integration screen should show from the raw ?brand
+ * query value.
+ *
+ *   - param ABSENT (null)  => default to this staff member's brand, so a
+ *     single-clinic deployment lands on its real brand instead of an empty
+ *     "All" aggregate. This is the 2F fix: the selector defaults to the brand,
+ *     not to "All".
+ *   - param PRESENT ('0')  => the user explicitly chose "All"; honour it.
+ *   - param PRESENT ('22') => that brand.
+ */
+function se_requested_brand_or_default($raw)
+{
+    if ($raw === null || $raw === '') {
+        return (int) se_default_brand_id();
+    }
+    return (int) $raw;
+}
+
 function se_brand_name($brand_id)
 {
     if ((int) $brand_id === 0) {

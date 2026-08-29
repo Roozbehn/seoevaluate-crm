@@ -21,7 +21,7 @@ class Se_google extends AdminController
 
     public function index()
     {
-        $brand = (int) $this->input->get('brand');
+        $brand = se_requested_brand_or_default($this->input->get('brand'));
 
         if ($brand > 0 && !se_can_access_brand($brand)) {
             access_denied('se_google');
