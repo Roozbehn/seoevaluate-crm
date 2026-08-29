@@ -67,6 +67,30 @@ function se_meta_page_token($brand_id)
     return $token !== '' ? $token : se_secret_read('meta_page', 0);
 }
 
+/**
+ * Per-brand Meta Conversions API token.
+ *
+ * Reads the FILE secret store first (meta_capi_<brand>, then the shared
+ * meta_capi), so this matches se_capi_ready()/health exactly: "ready" now
+ * truthfully implies the send path has a token. Legacy option storage
+ * (se_meta_capi_token_<brand>, then se_meta_capi_token) is honoured last, only
+ * so a pre-existing option-based install keeps working. The file store is the
+ * documented, diagnosable location.
+ */
+function se_meta_capi_token($brand_id)
+{
+    $token = se_secret_read('meta_capi', (int) $brand_id);
+    if ($token !== '') { return $token; }
+
+    $token = se_secret_read('meta_capi', 0);
+    if ($token !== '') { return $token; }
+
+    $opt = (string) get_option('se_meta_capi_token_' . (int) $brand_id);
+    if ($opt !== '') { return $opt; }
+
+    return (string) get_option('se_meta_capi_token');
+}
+
 function se_leadgen_verify_signature($raw_body, $header, $app_secret = null)
 {
     $secret = $app_secret !== null ? $app_secret : se_meta_app_secret();

@@ -62,12 +62,14 @@ function se_capi_send_event($row)
                 'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'disabled'];
     }
 
-    // The system-user token is a secret; it is stored in options, never in the
-    // brands table that renders in the UI, and never in git.
-    $token = get_option('se_meta_capi_token_' . $brand_id);
-    if (empty($token)) {
-        $token = get_option('se_meta_capi_token'); // agency-wide fallback
-    }
+    // The system-user token is a secret: it lives in the FILE secret store
+    // (meta_capi_<brand>), the same source se_capi_ready()/health check, so a
+    // "ready" CAPI leg truthfully implies this send has a token. Legacy option
+    // storage is honoured last for back-compat. Never in the brands table that
+    // renders in the UI, and never in git.
+    $token = function_exists('se_meta_capi_token')
+        ? se_meta_capi_token($brand_id)
+        : (get_option('se_meta_capi_token_' . $brand_id) ?: get_option('se_meta_capi_token'));
 
     if (empty($token)) {
         // An external gate is not a delivery failure: hold without consuming
