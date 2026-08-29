@@ -44,7 +44,24 @@ class Webhook extends App_Controller
 
     private function receive()
     {
-        $raw    = file_get_contents('php://input');
+        // Bounded read: refuse an oversized body before buffering it.
+        $declared = isset($_SERVER['CONTENT_LENGTH']) ? (int) $_SERVER['CONTENT_LENGTH'] : 0;
+
+        if ($declared > SE_WA_MAX_BODY_BYTES) {
+            header('HTTP/1.1 413 Payload Too Large');
+            echo 'payload too large';
+            return;
+        }
+
+        $raw = file_get_contents('php://input', false, null, 0, SE_WA_MAX_BODY_BYTES + 1);
+
+        if ($raw !== false && strlen($raw) > SE_WA_MAX_BODY_BYTES) {
+            header('HTTP/1.1 413 Payload Too Large');
+            echo 'payload too large';
+            return;
+        }
+
+        $raw    = (string) $raw;
         $header = isset($_SERVER['HTTP_X_HUB_SIGNATURE_256']) ? $_SERVER['HTTP_X_HUB_SIGNATURE_256'] : '';
 
         if (!se_wa_verify_signature($raw, $header)) {
@@ -53,7 +70,17 @@ class Webhook extends App_Controller
             return;
         }
 
-        se_wa_store_event($raw, true);
+        /* 200 means DURABLY ACCEPTED. A failed insert previously still returned
+         * 200, so Meta considered the message delivered and never retried it:
+         * the inbound message was lost with no trace. A duplicate IS accepted
+         * (we already hold it); anything else must return 500 to be retried. */
+        $stored = se_wa_store_event($raw, true);
+
+        if (empty($stored['stored']) && empty($stored['duplicate'])) {
+            header('HTTP/1.1 500 Internal Server Error');
+            echo 'not stored';
+            return;
+        }
 
         // Fast ack; heavy work is done by cron.
         header('HTTP/1.1 200 OK');

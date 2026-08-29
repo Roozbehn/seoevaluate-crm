@@ -57,8 +57,19 @@ function se_outbox_build_snapshot($brand_id, $lead_id, $event_name, $event_time)
 {
     $CI = &get_instance();
 
-    $CI->db->where('id', (int) $lead_id);
+    /* The lead must EXIST and must belong to the supplied brand.
+     *
+     * The snapshot previously loaded the lead by id alone, so a caller that
+     * passed a mismatched brand (a mis-routed webhook, a bug in a producer)
+     * built a conversion attributed to one tenant out of another tenant's
+     * lead, and nothing downstream could tell. Returning null makes the
+     * producer refuse to queue rather than queue something wrong. */
+    $CI->db->where('id', (int) $lead_id)->where('brand_id', (int) $brand_id);
     $lead = $CI->db->get(db_prefix() . 'leads')->row();
+
+    if (!$lead) {
+        return null;
+    }
 
     $attribution = [
         'v'            => SE_OUTBOX_PAYLOAD_VERSION,
@@ -72,7 +83,7 @@ function se_outbox_build_snapshot($brand_id, $lead_id, $event_name, $event_time)
         'destination'  => [],
     ];
 
-    if ($lead) {
+    {
         // First-touch click ids and campaign context. Immutable by design.
         foreach (['gclid', 'gbraid', 'wbraid', 'fbclid', 'fbc', 'fbp', 'ctwa_clid',
                   'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
@@ -130,8 +141,11 @@ function se_outbox_row_has_snapshot($row)
 /**
  * The consent decision recorded for a row.
  *
- * Falls back to the lead's CURRENT flag only for pre-snapshot rows, and says
- * which of the two it used so the caller can log the difference honestly.
+ * FAILS CLOSED on a pre-snapshot row. There is no live-lead fallback any more:
+ * rebuilding a historical conversion from the lead's CURRENT flag is exactly
+ * the defect the snapshot exists to remove, and keeping it "just for old rows"
+ * kept the defect alive for every row queued before the migration. A
+ * version-0 row is now unsendable and says so.
  *
  * @return array{state:string,version:?string,ledger_id:int,source:string}
  */
@@ -149,10 +163,10 @@ function se_outbox_row_consent($row, $lead = null)
     }
 
     return [
-        'state'     => ($lead && (int) ($lead->consent_ads ?? 0) === 1) ? 'granted' : 'unknown',
-        'version'   => $lead->consent_text_version ?? null,
+        'state'     => 'unknown',
+        'version'   => null,
         'ledger_id' => 0,
-        'source'    => 'live_lead_fallback',
+        'source'    => 'no_snapshot',
     ];
 }
 
@@ -171,6 +185,12 @@ function se_outbox_row_consent($row, $lead = null)
  */
 function se_outbox_consent_allows_send($row, $lead = null)
 {
+    // A row with no snapshot cannot be sent at all: we cannot prove what the
+    // consent, attribution or identifiers were when the event happened.
+    if (!se_outbox_row_has_snapshot($row)) {
+        return ['ok' => false, 'reason' => 'no event snapshot; cannot verify consent at event time'];
+    }
+
     $snapshot = se_outbox_row_consent($row, $lead);
 
     if ($snapshot['state'] !== 'granted') {
@@ -180,9 +200,10 @@ function se_outbox_consent_allows_send($row, $lead = null)
     if (function_exists('se_consent_granted')) {
         $stillGranted = se_consent_granted((int) $row['brand_id'], 'lead', (int) $row['lead_id'], 'ads');
 
-        // A pre-snapshot row has no ledger history to contradict; only enforce
-        // the withdrawal check when the ledger actually knows about this lead.
-        if (!$stillGranted && $snapshot['ledger_id'] > 0) {
+        /* Authoritative recheck immediately before transport. Unconditional:
+         * the snapshot proves consent existed at event time, the ledger proves
+         * it still does. A withdrawal between the two must stop the send. */
+        if (!$stillGranted) {
             return ['ok' => false, 'reason' => 'consent withdrawn before transmission'];
         }
     }

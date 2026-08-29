@@ -121,7 +121,7 @@ se_eq(json_encode($event), json_encode(se_capi_build_event($row, null)), 'CAPI e
 se_eq(json_encode($g), json_encode(se_gdm_build_event($row, null, true)), 'Google event is identical across retries');
 
 /* ======================================================================== */
-se_group('Pre-snapshot rows keep the old live-lead behaviour (no backfill)');
+se_group('Pre-snapshot rows are UNSENDABLE (no live-lead fallback)');
 
 se_test_seed_outbox();
 $db = se_test_db();
@@ -134,10 +134,24 @@ $db->seed('tblse_conversion_outbox', [
 $legacy = $db->rows('tblse_conversion_outbox')[0];
 se_eq(false, se_outbox_row_has_snapshot($legacy), 'a v0 row is recognised as pre-snapshot');
 
+/* The BUILDER is pure and still accepts a lead, so a caller can inspect what
+ * an old row would have produced. The SENDER refuses: rebuilding a historical
+ * conversion from the lead's current row is exactly the defect the snapshot
+ * removes, and keeping a fallback "just for old rows" kept it alive for every
+ * row queued before the migration. */
 $lead = (object) ['meta_lead_id' => 'm-101', 'email' => '', 'phonenumber' => '',
                   'ctwa_clid' => '', 'fbc' => '', 'fbp' => '', 'consent_ads' => 1];
 $ev = se_capi_build_event($legacy, $lead);
-se_eq('m-101', $ev['user_data']['lead_id'], 'v0 row still builds from the live lead');
+se_eq('m-101', $ev['user_data']['lead_id'], 'the pure builder can still be driven with a lead');
+
+$gate = se_outbox_consent_allows_send($legacy);
+se_eq(false, $gate['ok'], 'a v0 row FAILS the send gate');
+se_eq('no event snapshot; cannot verify consent at event time', $gate['reason'],
+    'and the reason names the missing snapshot');
+
+$consent = se_outbox_row_consent($legacy);
+se_eq('unknown', $consent['state'], 'a v0 row reports UNKNOWN consent, never the live flag');
+se_eq('no_snapshot', $consent['source'], 'and says the snapshot is missing');
 
 /* ======================================================================== */
 se_group('Consent gate at send time');
@@ -334,3 +348,37 @@ se_eq('', se_gdm_access_token(1), 'the static bearer-token option is no longer r
 
 $GLOBALS['se_test']['options']['se_google_sa_token_1'] = 'ya29.SHOULD-NEVER-BE-USED';
 se_eq('', se_gdm_access_token(1), 'even when the old option is set, it is not used');
+
+/* ======================================================================== */
+se_group('Producer refuses to queue without a valid same-brand snapshot');
+
+se_test_seed_outbox();
+se_test_backdated_grant(1, 101, '2026-05-01 09:00:00');
+$db = se_test_db();
+
+// Lead 101 is brand 1. Queueing it under brand 2 must be refused outright.
+$bad = se_outbox_queue(2, 101, 'meta_capi', 'Lead', [], '2026-06-01 12:00:00');
+se_eq(false, $bad, 'a cross-brand queue attempt is refused');
+se_eq(0, count($db->rows('tblse_conversion_outbox')), 'and writes no row at all');
+
+// A lead that does not exist is refused too.
+$missing = se_outbox_queue(1, 999999, 'meta_capi', 'Lead', [], '2026-06-01 12:00:00');
+se_eq(false, $missing, 'a missing lead is refused');
+se_eq(0, count($db->rows('tblse_conversion_outbox')), 'and writes no row');
+
+// The correct brand still works.
+$ok = se_outbox_queue(1, 101, 'meta_capi', 'Lead', [], '2026-06-01 12:00:00');
+se_ok($ok > 0, 'the same lead under its own brand queues normally');
+se_eq(1, count($db->rows('tblse_conversion_outbox')), 'exactly one row written');
+
+/* ======================================================================== */
+se_group('Consent withdrawal blocks transmission unconditionally');
+
+$row = $db->rows('tblse_conversion_outbox')[0];
+se_eq(true, se_outbox_consent_allows_send($row)['ok'], 'a granted snapshot passes');
+
+se_consent_record(1, 'lead', 101, 'ads', SE_CONSENT_WITHDRAWN, null, 'dsr', 0, 'consent_ads', 'no');
+$gate = se_outbox_consent_allows_send($row);
+se_eq(false, $gate['ok'], 'a later withdrawal blocks the send');
+se_eq('consent withdrawn before transmission', $gate['reason'], 'and names the withdrawal');
+

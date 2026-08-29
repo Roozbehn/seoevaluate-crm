@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 8);
+define('SE_CORE_SCHEMA_VERSION', 9);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -276,6 +276,22 @@ function se_core_migration_statements()
 
     /* --- v8.8: brand-scoping index coverage for tenant queries ------------- */
     $stmts[] = "ALTER TABLE `{$p}se_staff_brands` ADD INDEX IF NOT EXISTS `staff_id` (`staff_id`)";
+
+    /* =====================================================================
+     * Phase 13 (schema v9) — Meta Lead Ads queue durability. Additive only.
+     * The leadgen drainer had no claim at all: two overlapping cron runs
+     * processed the same notification twice, and a credential-gated event
+     * parked as `held` was never selected again because the drainer only ever
+     * looked for `pending`.
+     * ===================================================================== */
+    $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD COLUMN IF NOT EXISTS `locked_at` datetime DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD COLUMN IF NOT EXISTS `locked_by` varchar(64) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD COLUMN IF NOT EXISTS `next_attempt_at` datetime DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD COLUMN IF NOT EXISTS `fence` bigint(20) NOT NULL DEFAULT 0";
+    $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD COLUMN IF NOT EXISTS `failure_class` varchar(24) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD COLUMN IF NOT EXISTS `brand_id` int(11) NOT NULL DEFAULT 0";
+    $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD INDEX IF NOT EXISTS `claim` (`state`,`next_attempt_at`)";
+    $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD INDEX IF NOT EXISTS `brand_id` (`brand_id`)";
 
     return $stmts;
 }

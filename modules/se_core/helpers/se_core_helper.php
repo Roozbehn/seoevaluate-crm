@@ -372,6 +372,20 @@ function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $
         ? se_outbox_build_snapshot($brand_id, $lead_id, $event_name, $event_time)
         : null;
 
+    /* No snapshot, no row.
+     *
+     * build_snapshot returns null when the lead is missing or belongs to a
+     * different brand. Queueing anyway would create a conversion that can
+     * never be verified and — because the senders fail closed on a
+     * snapshot-less row — could never be delivered either. Refuse at the
+     * producer, where the caller can still see why. */
+    if ($snapshot === null) {
+        log_activity('SE outbox refused: no snapshot for brand ' . (int) $brand_id
+            . ' lead ' . (int) $lead_id . ' (missing or cross-brand)');
+
+        return false;
+    }
+
     $row = [
         'brand_id'    => (int) $brand_id,
         'lead_id'     => (int) $lead_id,
@@ -386,11 +400,9 @@ function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $
         'next_attempt_at' => $event_time,
     ];
 
-    if ($snapshot) {
-        $row['attribution_snapshot'] = json_encode($snapshot['attribution']);
-        $row['consent_snapshot']     = json_encode($snapshot['consent']);
-        $row['payload_version']      = SE_OUTBOX_PAYLOAD_VERSION;
-    }
+    $row['attribution_snapshot'] = json_encode($snapshot['attribution']);
+    $row['consent_snapshot']     = json_encode($snapshot['consent']);
+    $row['payload_version']      = SE_OUTBOX_PAYLOAD_VERSION;
 
     $CI->db->insert(db_prefix() . 'se_conversion_outbox', $row);
 

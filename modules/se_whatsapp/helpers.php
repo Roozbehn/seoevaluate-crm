@@ -99,7 +99,14 @@ function se_wa_store_event($raw_body, $signature_valid)
             'received_at'     => se_db_now(),
         ]);
     } catch (Exception $e) {
-        return ['stored' => false, 'duplicate' => true];
+        /* A duplicate-key collision is the expected outcome of Meta redelivering
+         * a notification we already hold, and IS acceptance. Any other failure
+         * is not: report it so the caller returns 500 and Meta retries. */
+        if (stripos($e->getMessage(), 'duplicate') !== false) {
+            return ['stored' => false, 'duplicate' => true];
+        }
+
+        return ['stored' => false, 'duplicate' => false, 'error' => true];
     }
 
     return ['stored' => true, 'duplicate' => false];

@@ -196,12 +196,19 @@ function se_google_dm_send_event($row)
     $CI->db->where('id', $brand_id);
     $brand = $CI->db->get(db_prefix() . 'se_brands')->row();
     if (!$brand || empty($brand->google_ads_customer_id)) {
-        return ['ok' => false, 'error' => 'brand has no google_ads_customer_id'];
+        return ['ok' => false, 'error' => 'brand has no google_ads_customer_id',
+                'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'no_customer_id'];
     }
 
     $action = se_gdm_conversion_action($brand_id, $row['event_name']);
+
     if ($action === '') {
-        return ['ok' => false, 'error' => 'no conversion action mapped'];
+        /* A missing conversion-action mapping is unfinished CONFIGURATION, not
+         * a delivery failure. Classifying it as permanent parked the row for
+         * good, so adding the mapping later recovered nothing. Gated rows hold
+         * without consuming an attempt and resume by themselves. */
+        return ['ok' => false, 'error' => 'no conversion action mapped for this stage',
+                'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'no_mapping'];
     }
 
     if (!se_google_dm_enabled($brand_id)) {
@@ -223,18 +230,13 @@ function se_google_dm_send_event($row)
         return ['ok' => false, 'error' => $age, 'class' => $class, 'code' => 'age_window'];
     }
 
-    // Pre-snapshot rows still need the live lead.
-    $lead = null;
-
+    /* Same rule as the Meta sender: no snapshot, no send. */
     if (!se_outbox_row_has_snapshot($row)) {
-        $CI->db->where('id', (int) $row['lead_id']);
-        $lead = $CI->db->get(db_prefix() . 'leads')->row();
-
-        if (!$lead) {
-            return ['ok' => false, 'error' => 'lead no longer exists',
-                    'class' => SE_OUTBOX_FAIL_PERMANENT, 'code' => 'lead_gone'];
-        }
+        return ['ok' => false, 'error' => 'no event snapshot; refusing to rebuild from the live lead',
+                'class' => SE_OUTBOX_FAIL_PERMANENT, 'code' => 'no_snapshot'];
     }
+
+    $lead = null;
 
     // Consent comes from the snapshot for snapshot rows: it is the decision that
     // applied when the conversion happened, not the lead's current flag.

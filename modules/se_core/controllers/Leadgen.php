@@ -40,7 +40,25 @@ class Leadgen extends App_Controller
 
     private function receive()
     {
-        $raw = file_get_contents('php://input');
+        // Bounded read. Content-Length is checked first so an oversized body is
+        // refused before it is buffered at all.
+        $declared = isset($_SERVER['CONTENT_LENGTH']) ? (int) $_SERVER['CONTENT_LENGTH'] : 0;
+
+        if ($declared > SE_LEADGEN_MAX_BODY_BYTES) {
+            header('HTTP/1.1 413 Payload Too Large');
+            echo 'payload too large';
+            return;
+        }
+
+        $raw = file_get_contents('php://input', false, null, 0, SE_LEADGEN_MAX_BODY_BYTES + 1);
+
+        if ($raw !== false && strlen($raw) > SE_LEADGEN_MAX_BODY_BYTES) {
+            header('HTTP/1.1 413 Payload Too Large');
+            echo 'payload too large';
+            return;
+        }
+
+        $raw = (string) $raw;
         $sig = isset($_SERVER['HTTP_X_HUB_SIGNATURE_256']) ? $_SERVER['HTTP_X_HUB_SIGNATURE_256'] : '';
 
         if (!se_leadgen_verify_signature($raw, $sig)) {
@@ -49,8 +67,22 @@ class Leadgen extends App_Controller
             return;
         }
 
-        se_leadgen_store_event($raw, true);
-        update_option('se_meta_last_webhook_at', date('Y-m-d H:i:s'));
+        /* 200 means DURABLY ACCEPTED.
+         *
+         * The result of the store was previously discarded and 200 returned
+         * unconditionally, so a failed insert told Meta the notification was
+         * safely received and Meta never redelivered it — the lead was lost
+         * silently. A duplicate is genuinely accepted (we already hold it);
+         * anything else must return 500 so Meta retries. */
+        $stored = se_leadgen_store_event($raw, true);
+
+        if (empty($stored['stored']) && empty($stored['duplicate'])) {
+            header('HTTP/1.1 500 Internal Server Error');
+            echo 'not stored';
+            return;
+        }
+
+        update_option('se_meta_last_webhook_at', se_db_now());
 
         header('HTTP/1.1 200 OK');
         echo 'ok';

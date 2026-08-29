@@ -60,18 +60,15 @@ function se_capi_send_event($row)
                 'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'no_token'];
     }
 
-    // Pre-snapshot rows (payload_version 0) still need the live lead.
-    $lead = null;
-
+    /* A row without a snapshot is unsendable: we cannot prove what the consent
+     * or identifiers were when the event happened, and rebuilding them from the
+     * lead's current row is the defect the snapshot exists to remove. */
     if (!se_outbox_row_has_snapshot($row)) {
-        $CI->db->where('id', $lead_id);
-        $lead = $CI->db->get(db_prefix() . 'leads')->row();
-
-        if (!$lead) {
-            return ['ok' => false, 'error' => 'lead no longer exists',
-                    'class' => SE_OUTBOX_FAIL_PERMANENT, 'code' => 'lead_gone'];
-        }
+        return ['ok' => false, 'error' => 'no event snapshot; refusing to rebuild from the live lead',
+                'class' => SE_OUTBOX_FAIL_PERMANENT, 'code' => 'no_snapshot'];
     }
+
+    $lead = null;
 
     $CI->load->library('se_core/se_hash');
 
