@@ -41,14 +41,54 @@ class Se_whatsapp_model extends App_Model
         return $this->db->get(db_prefix() . 'se_wa_messages')->result_array();
     }
 
+    /**
+     * Assign a conversation to a staff member.
+     *
+     * The assignee must belong to the CONVERSATION's brand. Any staff id used
+     * to be accepted, so a conversation could be handed to another tenant's
+     * staff member, who would then see the thread on their inbox.
+     *
+     * @return bool true only when a row was actually assigned
+     */
     public function assign($conversation_id, $staff_id)
     {
-        $this->db->where('id', (int) $conversation_id);
-        $this->scope();
-        $this->db->update(db_prefix() . 'se_wa_conversations', [
-            'assigned_staff' => (int) $staff_id,
+        $conversation = $this->get_conversation($conversation_id);
+
+        if (!$conversation) {
+            return false;   // out of scope
+        }
+
+        $staff_id = (int) $staff_id;
+
+        if ($staff_id > 0 && !$this->staff_in_brand($staff_id, (int) $conversation->brand_id)) {
+            return false;
+        }
+
+        $affected = se_guarded_update(db_prefix() . 'se_wa_conversations', 'id', (int) $conversation_id, [
+            'assigned_staff' => $staff_id,
             'last_updated'   => date('Y-m-d H:i:s'),
         ]);
-        return $this->db->affected_rows() >= 0;
+
+        return $affected > 0;
+    }
+
+    /** Is this staff member mapped to the brand? Unmapped staff (admins) pass. */
+    protected function staff_in_brand($staff_id, $brand_id)
+    {
+        $rows = $this->db->query(
+            'SELECT brand_id FROM ' . db_prefix() . 'se_staff_brands WHERE staff_id = ' . (int) $staff_id
+        )->result_array();
+
+        if (!$rows) {
+            return true;
+        }
+
+        foreach ($rows as $row) {
+            if ((int) $row['brand_id'] === (int) $brand_id) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

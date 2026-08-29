@@ -24,7 +24,16 @@ function se_reminder_dedup_key($appointment_id, $type, $scheduled_at)
 function se_reminder_enqueue($brand_id, $appointment_id, $scheduled_at, $type = 'appointment', $language = null, $template_ref = null)
 {
     $appointment_id = (int) $appointment_id;
+
     if ($appointment_id <= 0 || empty($scheduled_at) || !strtotime($scheduled_at)) {
+        return 0;
+    }
+
+    // Never queue a reminder in the past. Booking an appointment for later
+    // today, with a 24h lead time, produced a reminder dated yesterday, which
+    // the consumer would fire immediately - a "reminder" for a consultation
+    // that has not happened yet, sent the moment it was booked.
+    if (strtotime($scheduled_at) <= time()) {
         return 0;
     }
 

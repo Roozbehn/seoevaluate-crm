@@ -37,11 +37,13 @@ function se_capi_send_event($row)
     $brand = $CI->db->get(db_prefix() . 'se_brands')->row();
 
     if (!$brand || empty($brand->meta_dataset_id)) {
-        return ['ok' => false, 'error' => 'brand has no meta_dataset_id'];
+        return ['ok' => false, 'error' => 'brand has no meta_dataset_id',
+                'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'no_dataset'];
     }
 
     if (function_exists('se_capi_enabled') && !se_capi_enabled($brand_id)) {
-        return ['ok' => false, 'error' => 'meta capi disabled for brand'];
+        return ['ok' => false, 'error' => 'meta capi disabled for brand',
+                'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'disabled'];
     }
 
     // The system-user token is a secret; it is stored in options, never in the
@@ -52,14 +54,23 @@ function se_capi_send_event($row)
     }
 
     if (empty($token)) {
-        return ['ok' => false, 'error' => 'no Meta system-user token configured (App Review pending)'];
+        // An external gate is not a delivery failure: hold without consuming
+        // an attempt, so the queue survives however long App Review takes.
+        return ['ok' => false, 'error' => 'no Meta system-user token configured (App Review pending)',
+                'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'no_token'];
     }
 
-    $CI->db->where('id', $lead_id);
-    $lead = $CI->db->get(db_prefix() . 'leads')->row();
+    // Pre-snapshot rows (payload_version 0) still need the live lead.
+    $lead = null;
 
-    if (!$lead) {
-        return ['ok' => false, 'error' => 'lead no longer exists'];
+    if (!se_outbox_row_has_snapshot($row)) {
+        $CI->db->where('id', $lead_id);
+        $lead = $CI->db->get(db_prefix() . 'leads')->row();
+
+        if (!$lead) {
+            return ['ok' => false, 'error' => 'lead no longer exists',
+                    'class' => SE_OUTBOX_FAIL_PERMANENT, 'code' => 'lead_gone'];
+        }
     }
 
     $CI->load->library('se_core/se_hash');
@@ -67,21 +78,27 @@ function se_capi_send_event($row)
     $event = se_capi_build_event($row, $lead);
 
     if (empty($event['user_data'])) {
-        return ['ok' => false, 'error' => 'no usable identifiers on lead'];
+        return ['ok' => false, 'error' => 'no usable identifiers on lead',
+                'class' => SE_OUTBOX_FAIL_PERMANENT, 'code' => 'no_identifiers'];
     }
 
     $payload = ['data' => [$event]];
 
     $version = get_option('se_meta_graph_version') ?: 'v26.0';
+
+    // The token goes in the Authorization header, NOT the query string: a URL
+    // is logged by proxies, appears in error text and lands in access logs.
     $url = 'https://graph.facebook.com/' . $version . '/'
-         . rawurlencode($brand->meta_dataset_id) . '/events'
-         . '?access_token=' . rawurlencode($token);
+         . rawurlencode($brand->meta_dataset_id) . '/events';
 
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => json_encode($payload),
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $token,
+        ],
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT        => 30,
     ]);
@@ -92,14 +109,20 @@ function se_capi_send_event($row)
     curl_close($ch);
 
     if ($cerr) {
-        return ['ok' => false, 'error' => 'curl: ' . $cerr];
+        return ['ok' => false, 'error' => 'transport error',
+                'class' => SE_OUTBOX_FAIL_RETRYABLE, 'code' => 'curl'];
     }
 
     if ($code >= 200 && $code < 300) {
-        return ['ok' => true, 'error' => ''];
+        return ['ok' => true, 'error' => '', 'class' => null, 'code' => 'ok'];
     }
 
-    return ['ok' => false, 'error' => 'HTTP ' . $code . ': ' . substr((string) $body, 0, 500)];
+    // 4xx is our problem and will not fix itself; 401/403/429 and 5xx will.
+    $class = ($code >= 400 && $code < 500 && !in_array($code, [401, 403, 408, 429], true))
+        ? SE_OUTBOX_FAIL_PERMANENT
+        : SE_OUTBOX_FAIL_RETRYABLE;
+
+    return ['ok' => false, 'error' => 'HTTP ' . $code, 'class' => $class, 'code' => 'http_' . $code];
 }
 
 /**
@@ -116,31 +139,51 @@ function se_capi_send_event($row)
  *   - email/phone are Turkish-safe normalised then SHA-256 hashed; ctwa_clid is
  *     emitted UNHASHED per Meta's spec.
  */
-function se_capi_build_event($row, $lead)
+function se_capi_build_event($row, $lead = null)
 {
     $user_data = [];
 
-    // Lead-Ads leads: lead_id is the deterministic key.
-    if (!empty($lead->meta_lead_id)) {
-        $user_data['lead_id'] = (string) $lead->meta_lead_id;
-    }
+    if (se_outbox_row_has_snapshot($row)) {
+        /* --- snapshot path: what was true when the conversion happened --- */
+        $snap = se_outbox_snapshot_decode($row['attribution_snapshot']);
+        $ft   = $snap['first_touch'] ?? [];
+        $ids  = $snap['identifiers'] ?? [];
+        $dest = $snap['destination'] ?? [];
 
-    // Redundant / fallback identifiers, always hashed.
-    if (!empty($lead->email) && ($em = Se_hash::email($lead->email))) {
-        $user_data['em'] = [Se_hash::sha256($em)];
-    }
-    if (!empty($lead->phonenumber) && ($ph = Se_hash::phone($lead->phonenumber))) {
-        $user_data['ph'] = [Se_hash::sha256($ph)];
-    }
-    // Click-to-WhatsApp click id is sent UNHASHED per Meta's spec.
-    if (!empty($lead->ctwa_clid)) {
-        $user_data['ctwa_clid'] = (string) $lead->ctwa_clid;
-    }
-    if (!empty($lead->fbc)) {
-        $user_data['fbc'] = (string) $lead->fbc;
-    }
-    if (!empty($lead->fbp)) {
-        $user_data['fbp'] = (string) $lead->fbp;
+        if (!empty($dest['meta_lead_id'])) {
+            $user_data['lead_id'] = (string) $dest['meta_lead_id'];
+        }
+        if (!empty($ids['em'])) {
+            $user_data['em'] = [(string) $ids['em']];   // already SHA-256
+        }
+        if (!empty($ids['ph'])) {
+            $user_data['ph'] = [(string) $ids['ph']];
+        }
+        foreach (['ctwa_clid', 'fbc', 'fbp'] as $raw) {
+            if (!empty($ft[$raw])) {
+                $user_data[$raw] = (string) $ft[$raw];
+            }
+        }
+    } elseif ($lead) {
+        /* --- pre-snapshot rows keep the original live-lead behaviour ----- */
+        if (!empty($lead->meta_lead_id)) {
+            $user_data['lead_id'] = (string) $lead->meta_lead_id;
+        }
+        if (!empty($lead->email) && ($em = Se_hash::email($lead->email))) {
+            $user_data['em'] = [Se_hash::sha256($em)];
+        }
+        if (!empty($lead->phonenumber) && ($ph = Se_hash::phone($lead->phonenumber))) {
+            $user_data['ph'] = [Se_hash::sha256($ph)];
+        }
+        if (!empty($lead->ctwa_clid)) {
+            $user_data['ctwa_clid'] = (string) $lead->ctwa_clid;
+        }
+        if (!empty($lead->fbc)) {
+            $user_data['fbc'] = (string) $lead->fbc;
+        }
+        if (!empty($lead->fbp)) {
+            $user_data['fbp'] = (string) $lead->fbp;
+        }
     }
 
     // These are CRM/appointment conversions fired by our own system, not messages

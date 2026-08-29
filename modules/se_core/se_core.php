@@ -13,8 +13,10 @@ define('SE_CORE_MODULE_NAME', 'se_core');
 
 $CI = &get_instance();
 $CI->load->helper(SE_CORE_MODULE_NAME . '/se_core');
+require_once __DIR__ . '/se_authz.php';
 require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/pipeline.php';
+require_once __DIR__ . '/se_consent.php';
 require_once __DIR__ . '/se_patients.php';
 require_once __DIR__ . '/se_attribution.php';
 
@@ -26,7 +28,7 @@ hooks()->add_action('admin_init', 'se_patient_permissions');
 hooks()->add_action('admin_init', 'se_patient_menu');
 hooks()->add_action('admin_init', 'se_core_permissions');
 hooks()->add_action('admin_init', 'se_core_menu_items');
-hooks()->add_action('admin_init', 'se_core_brand_guard');
+hooks()->add_action('admin_init', 'se_authz_request_guard');
 
 // Brand scoping. See docs/SCOPING.md in the fork for why each seam is used.
 hooks()->add_filter('leads_table_sql_join', 'se_core_scope_leads_table');
@@ -43,30 +45,57 @@ function se_core_activation_hook()
     se_core_migrate();
 }
 
+/**
+ * Three separate features, deliberately.
+ *
+ * Previously a single `se_brands.view` capability meant "read brand config",
+ * "open reports" AND "reach every tenant's data" at once, so any reporting
+ * user became a global tenant user. Splitting them is the fix; nothing here
+ * grants cross-brand reach except se_tenancy.all_brands.
+ */
 function se_core_permissions()
 {
-    $capabilities = [];
+    // Brand CONFIGURATION only. Grants no access to another brand's records.
+    register_staff_capabilities('se_brands', [
+        'capabilities' => [
+            'view'   => _l('se_perm_brand_config_view'),
+            'create' => _l('permission_create'),
+            'edit'   => _l('permission_edit'),
+            'delete' => _l('permission_delete'),
+        ],
+    ], _l('se_perm_feature_brands'));
 
-    $capabilities['capabilities'] = [
-        'view'   => _l('permission_view') . '(' . _l('permission_global') . ')',
-        'create' => _l('permission_create'),
-        'edit'   => _l('permission_edit'),
-        'delete' => _l('permission_delete'),
-    ];
+    // Reporting screens. Reports stay restricted to the staff member's brands.
+    register_staff_capabilities('se_reports', [
+        'capabilities' => [
+            'view' => _l('se_perm_reports_view'),
+        ],
+    ], _l('se_perm_feature_reports'));
 
-    register_staff_capabilities('se_brands', $capabilities, _l('se_brands'));
+    // The only capabilities that widen the tenant boundary. Grant deliberately.
+    register_staff_capabilities('se_tenancy', [
+        'capabilities' => [
+            SE_CAP_ALL_BRANDS => _l('se_perm_all_brands'),
+            SE_CAP_TRIAGE     => _l('se_perm_triage'),
+        ],
+    ], _l('se_perm_feature_tenancy'));
 }
 
 function se_core_menu_items()
 {
-    if (staff_can('view', 'se_brands')) {
-        $CI = &get_instance();
+    $CI = &get_instance();
+
+    // Brand configuration lives under Setup and needs the config capability.
+    if (se_staff_can_configure_brands()) {
         $CI->app_menu->add_setup_menu_item('se-brands', [
             'name'     => _l('se_brands'),
             'href'     => admin_url('se_core/brands'),
             'position' => 31,
         ]);
+    }
 
+    // Reporting is its own capability and does NOT imply cross-brand access.
+    if (se_staff_can_report()) {
         $CI->app_menu->add_sidebar_menu_item('se-reports', [
             'name'     => _l('se_reports'),
             'href'     => admin_url('se_core/se_reports/index'),
@@ -137,7 +166,11 @@ function se_core_stamp_lead_brand($lead_id)
 
     // A lead created by a staff member who works on exactly one brand belongs
     // to that brand. Anything else stays unassigned and shows in the triage list.
-    $ids = se_staff_brand_ids();
+    //
+    // This reads the REAL brand set. The row-visibility set folds in the brand-0
+    // triage bucket, so a single-brand staff member used to look like a
+    // two-brand user here and their leads were never stamped at all.
+    $ids = se_staff_real_brand_ids();
 
     if (count($ids) === 1 && !se_staff_sees_all_brands()) {
         $CI->db->where('id', $lead_id)->update(db_prefix() . 'leads', ['brand_id' => (int) $ids[0]]);
@@ -164,54 +197,6 @@ function se_core_carry_brand_to_customer($data)
     }
 }
 
-/**
- * Blocks direct record access across a brand boundary.
- *
- * Scoping the list queries is not enough - /admin/leads/lead/123 loads by id.
- * This runs on every admin request and refuses the ones that reach outside
- * the staff member's brands.
- */
-function se_core_brand_guard()
-{
-    $CI = &get_instance();
-
-    if (!is_staff_logged_in() || se_staff_sees_all_brands()) {
-        return;
-    }
-
-    $checks = [
-        ['leads', 'lead', db_prefix() . 'leads', 'id'],
-        ['clients', 'client', db_prefix() . 'clients', 'userid'],
-    ];
-
-    $segments = $CI->uri->segment_array();
-
-    foreach ($checks as [$controller, $method, $table, $pk]) {
-        if ($CI->uri->segment(2) !== $controller) {
-            continue;
-        }
-
-        $id = 0;
-
-        if ($CI->uri->segment(3) === $method) {
-            $id = (int) $CI->uri->segment(4);
-        } elseif ($controller === 'clients' && is_numeric($CI->uri->segment(3))) {
-            $id = (int) $CI->uri->segment(3);
-        }
-
-        if ($id <= 0) {
-            continue;
-        }
-
-        $CI->db->select('brand_id')->where($pk, $id);
-        $row = $CI->db->get($table)->row();
-
-        if ($row && !se_can_access_brand($row->brand_id)) {
-            se_core_deny();
-        }
-    }
-}
-
 function se_core_deny()
 {
     if (is_ajax_request()) {
@@ -229,7 +214,7 @@ function se_core_deny()
  * se_meta_leadgen.php is wired but its live Graph fetch/send stays gated on a
  * Meta Page token + App Review; se_whatsapp is now its own module.
  */
-foreach (['se_outbox.php', 'se_capi.php', 'se_google_dm.php', 'se_meta_leadgen.php', 'se_reporting.php'] as $__se_b2) {
+foreach (['se_outbox_snapshot.php', 'se_outbox.php', 'se_capi.php', 'se_google_dm.php', 'se_meta_leadgen.php', 'se_reporting.php'] as $__se_b2) {
     $__se_b2_path = __DIR__ . '/' . $__se_b2;
     if (is_file($__se_b2_path)) {
         require_once $__se_b2_path;

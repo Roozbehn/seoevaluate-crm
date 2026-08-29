@@ -49,3 +49,19 @@ $lang['se_patient_invalid'] = 'Patient not saved: check brand and lead/customer 
 $lang['se_patient_archived'] = 'Patient archived';
 $lang['se_patient_archive'] = 'Archive';
 $lang['se_patient_archive_confirm'] = 'Archive this patient? Consent and history are kept.';
+
+/* --- Phase 10: separated tenancy capabilities ---------------------------- */
+$lang['se_perm_feature_brands']   = 'SE Brand configuration';
+$lang['se_perm_feature_reports']  = 'SE Reports';
+$lang['se_perm_feature_tenancy']  = 'SE Tenant access';
+$lang['se_perm_brand_config_view'] = 'View brand configuration (no cross-brand data access)';
+$lang['se_perm_reports_view']     = 'View reports (restricted to assigned brands)';
+$lang['se_perm_all_brands']       = 'Access ALL brands\' data (grant deliberately)';
+$lang['se_perm_triage']           = 'Access unassigned records (triage queue)';
+$lang['se_brand_access_denied']   = 'You do not have access to this brand.';
+
+/* --- Phase 10: patient safety --------------------------------------------- */
+$lang['se_patient_link_conflict']     = 'Another patient is already linked to that lead or customer in this brand.';
+$lang['se_patient_deletion_requested'] = 'Deletion request recorded';
+$lang['se_patient_passport_hidden']   = 'Not collected';
+

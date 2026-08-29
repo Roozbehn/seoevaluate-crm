@@ -12,7 +12,8 @@ class Brands extends AdminController
 
     public function index()
     {
-        if (staff_cant('view', 'se_brands')) {
+        // Brand configuration capability. Distinct from cross-brand data reach.
+        if (!se_staff_can_configure_brands()) {
             access_denied('se_brands');
         }
 
@@ -25,6 +26,12 @@ class Brands extends AdminController
 
     public function save($id = '')
     {
+        // Configuration mutations are POST-only and CSRF-protected by Perfex's
+        // global CSRF layer; a GET must never reach the model.
+        if ($this->input->method() !== 'post') {
+            access_denied('se_brands');
+        }
+
         if ($this->input->post()) {
             $data = $this->input->post();
 

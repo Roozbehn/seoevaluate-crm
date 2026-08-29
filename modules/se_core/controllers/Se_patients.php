@@ -56,6 +56,11 @@ class Se_patients extends AdminController
         }
         $data['title']   = _l('se_patients');
         $data['patient'] = null;
+        // Scoped selectors: the form offers only records this staff member may
+        // link, instead of a bare numeric input that invites a foreign id.
+        $data['brands']  = se_all_brands(true, true);
+        $data['leads']   = se_patient_selectable_leads();
+        $data['clients'] = se_patient_selectable_clients();
         $this->load->view('se_core/se_patients_form', $data);
     }
 
@@ -70,61 +75,126 @@ class Se_patients extends AdminController
         }
         $data['title']   = _l('se_patients');
         $data['patient'] = $patient;
+        $data['brands']  = se_all_brands(true, true);
+        $data['leads']   = se_patient_selectable_leads((int) $patient->brand_id);
+        $data['clients'] = se_patient_selectable_clients((int) $patient->brand_id);
         $this->load->view('se_core/se_patients_form', $data);
     }
 
     public function save($id = '')
     {
-        if (!$this->input->post()) {
+        // Mutations are POST-only. AdminController enforces CSRF on POST; a GET
+        // that reaches a writer bypasses that entirely.
+        if ($this->input->method() !== 'post' || !$this->input->post()) {
             redirect(admin_url('se_core/se_patients'));
         }
-        $v = se_patient_validate($this->input->post());
 
         if (!$id) {
             if (staff_cant('create', 'se_patients')) {
                 access_denied('se_patients');
             }
-            // Creating: the acting staff must be allowed on the target brand.
-            if (function_exists('se_can_access_brand') && !se_can_access_brand($v['clean']['brand_id'])) {
-                access_denied('se_patients');
-            }
+
+            $v = se_patient_validate($this->input->post());
+
+            // se_patient_validate() already refuses a brand this staff member
+            // cannot reach and any cross-brand lead/client link.
             if ($v['errors']) {
                 set_alert('warning', _l('se_patient_invalid'));
                 redirect(admin_url('se_core/se_patients/create'));
             }
+
+            if (se_patient_link_conflict($v['clean']['brand_id'], $v['clean']['lead_id'], $v['clean']['client_id'])) {
+                set_alert('warning', _l('se_patient_link_conflict'));
+                redirect(admin_url('se_core/se_patients/create'));
+            }
+
             se_patient_create($v['clean']);
             set_alert('success', _l('se_patient_saved'));
         } else {
             if (staff_cant('edit', 'se_patients')) {
                 access_denied('se_patients');
             }
+
             $existing = se_patient_get($id); // brand-scoped: foreign id -> null -> deny
             if (!$existing) {
                 access_denied('se_patients');
             }
-            // Keep the record on its own brand; ignore any brand change from the form.
-            $v['clean']['brand_id'] = (int) $existing->brand_id;
+
+            // The record keeps its own brand. The posted brand_id is replaced
+            // BEFORE validation so the link checks run against the authorized
+            // brand rather than whatever the form claimed.
+            $post = $this->input->post();
+            $post['brand_id'] = (int) $existing->brand_id;
+
+            $v = se_patient_validate($post);
+
             if ($v['errors']) {
                 set_alert('warning', _l('se_patient_invalid'));
                 redirect(admin_url('se_core/se_patients/edit/' . (int) $id));
             }
+
+            if (se_patient_link_conflict($v['clean']['brand_id'], $v['clean']['lead_id'],
+                                         $v['clean']['client_id'], (int) $id)) {
+                set_alert('warning', _l('se_patient_link_conflict'));
+                redirect(admin_url('se_core/se_patients/edit/' . (int) $id));
+            }
+
+            // Never overwrite a stored passport with a blank on an ordinary edit.
+            if ($v['clean']['passport_no'] === null) {
+                unset($v['clean']['passport_no']);
+            }
+
             se_patient_update((int) $id, $v['clean']);
             set_alert('success', _l('se_patient_saved'));
         }
+
         redirect(admin_url('se_core/se_patients'));
     }
 
+    /**
+     * Archive a patient. POST-only + CSRF.
+     *
+     * This was a GET route, so any link, prefetch or crafted image could
+     * archive a patient record with no token at all.
+     */
     public function archive($id)
     {
+        if ($this->input->method() !== 'post') {
+            access_denied('se_patients');
+        }
+
         if (staff_cant('delete', 'se_patients')) {
             access_denied('se_patients');
         }
+
         $patient = se_patient_get($id);
         if (!$patient) {
             access_denied('se_patients');
         }
+
         se_patient_archive((int) $id, (int) $patient->brand_id);
         set_alert('success', _l('se_patient_archived'));
         redirect(admin_url('se_core/se_patients'));
+    }
+
+    /** Record a data-subject deletion request. POST-only + CSRF. */
+    public function request_deletion($id)
+    {
+        if ($this->input->method() !== 'post') {
+            access_denied('se_patients');
+        }
+
+        if (staff_cant('delete', 'se_patients')) {
+            access_denied('se_patients');
+        }
+
+        $patient = se_patient_get($id);
+        if (!$patient) {
+            access_denied('se_patients');
+        }
+
+        se_patient_request_deletion((int) $id, (int) $patient->brand_id);
+        set_alert('success', _l('se_patient_deletion_requested'));
+        redirect(admin_url('se_core/se_patients/view/' . (int) $id));
     }
 }

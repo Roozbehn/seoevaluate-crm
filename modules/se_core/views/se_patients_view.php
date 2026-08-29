@@ -10,7 +10,14 @@
   <hr />
   <p><strong><?php echo _l('se_patient_brand'); ?>:</strong> <?php echo (int) $patient->brand_id; ?>
    &middot; <strong><?php echo _l('se_patient_language'); ?>:</strong> <?php echo html_escape($patient->preferred_language); ?>
-   &middot; <strong><?php echo _l('se_patient_nationality'); ?>:</strong> <?php echo html_escape($patient->nationality); ?></p>
+   &middot; <strong><?php echo _l('se_patient_nationality'); ?>:</strong> <?php echo html_escape($patient->nationality); ?>
+   <?php /* Passport is never rendered in plaintext. When collection is off the
+            column is empty by policy; when on it is ciphertext, so only a mask
+            is shown and reading the real value is a deliberate, logged action. */ ?>
+   &middot; <strong><?php echo _l('se_patient_passport'); ?>:</strong>
+   <?php echo ($patient->passport_no === null || $patient->passport_no === '')
+        ? html_escape(_l('se_patient_passport_hidden'))
+        : html_escape(se_patient_mask_passport('stored')); ?></p>
   <h5><?php echo _l('se_patient_links'); ?></h5>
   <?php if (!empty($links['lead'])) { ?><p><?php echo _l('se_appt_lead'); ?>: <a href="<?php echo admin_url('leads/index/'.(int)$links['lead']->id); ?>"><?php echo html_escape($links['lead']->name); ?></a></p><?php } ?>
   <?php if (!empty($links['client'])) { ?><p>Customer: <a href="<?php echo admin_url('clients/client/'.(int)$links['client']->userid); ?>"><?php echo html_escape($links['client']->company); ?></a></p><?php } ?>

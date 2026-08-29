@@ -105,19 +105,75 @@ function se_leadgen_appsecret_proof($token, $app_secret)
     return hash_hmac('sha256', (string) $token, (string) $app_secret);
 }
 
-/** Map a page/form to its brand + field map. Null when unmapped. */
+/**
+ * Map a page+form pair to its brand and field map. Null when unmapped.
+ *
+ * BOTH ids are required. Matching on form_id alone trusted one attacker-chosen
+ * value from the webhook body to select a tenant, and Meta form ids are not
+ * globally unique across pages. The mapping must be active and must be unique
+ * for the pair; an ambiguous mapping is a configuration error and is refused
+ * rather than resolved arbitrarily.
+ *
+ * @return array{brand_id:int,field_map:array,form_row_id:int}|null
+ */
 function se_leadgen_route($page_id, $form_id)
 {
-    $CI = &get_instance();
-    $CI->db->where('form_id', (string) $form_id)->where('active', 1);
-    $form = $CI->db->get(db_prefix() . 'se_meta_forms')->row();
-    if (!$form) {
+    if ((string) $page_id === '' || (string) $form_id === '') {
         return null;
     }
+
+    $CI = &get_instance();
+
+    $CI->db->where('page_id', (string) $page_id)
+           ->where('form_id', (string) $form_id)
+           ->where('active', 1);
+
+    $forms = $CI->db->get(db_prefix() . 'se_meta_forms')->result();
+
+    if (count($forms) !== 1) {
+        return null;   // unmapped, or ambiguous -> park, never guess
+    }
+
+    $form = $forms[0];
+
     return [
-        'brand_id'  => (int) $form->brand_id,
-        'field_map' => json_decode((string) $form->field_map_json, true) ?: se_leadgen_default_field_map(),
+        'brand_id'    => (int) $form->brand_id,
+        'field_map'   => se_leadgen_sanitize_field_map(json_decode((string) $form->field_map_json, true)),
+        'form_row_id' => (int) $form->id,
     ];
+}
+
+/**
+ * CRM lead columns a Meta form is allowed to write.
+ *
+ * `field_map_json` is operator-supplied configuration, and the old code fed it
+ * straight into an UPDATE, so a mapping could target any column on tblleads —
+ * brand_id, consent_ads, the immutable first-touch attribution columns. Only
+ * these plain contact columns may ever be written from an ad form.
+ */
+function se_leadgen_allowed_lead_columns()
+{
+    return ['name', 'email', 'phonenumber', 'title', 'company', 'city',
+            'country', 'zip', 'address', 'state', 'description', 'website'];
+}
+
+/** Drop any mapping that targets a column outside the allowlist. */
+function se_leadgen_sanitize_field_map($map)
+{
+    if (!is_array($map) || !$map) {
+        return se_leadgen_default_field_map();
+    }
+
+    $allowed = se_leadgen_allowed_lead_columns();
+    $clean   = [];
+
+    foreach ($map as $metaField => $leadColumn) {
+        if (is_string($leadColumn) && in_array($leadColumn, $allowed, true)) {
+            $clean[strtolower((string) $metaField)] = $leadColumn;
+        }
+    }
+
+    return $clean ?: se_leadgen_default_field_map();
 }
 
 /** Default Meta field_data name -> CRM lead column. Overridable per form. */
@@ -169,23 +225,74 @@ function se_leadgen_fetch($leadgen_id, $brand_id)
     return ['ok' => true, 'gated' => false, 'field_data' => $decoded['field_data'] ?? []];
 }
 
-/** Convert Meta field_data [{name,values:[]}] into mapped lead columns. */
+/**
+ * Convert Meta field_data [{name,values:[]}] into mapped lead columns and a
+ * consent DECISION.
+ *
+ * The previous rule ended in `|| $val !== ''`, so every non-empty answer —
+ * including "no" and "hayır" — granted consent. The decision now comes solely
+ * from se_consent_decide()'s affirmative allowlist: a negative answer is
+ * recorded as an explicit withdrawal, and blank or unrecognised text is
+ * `unknown`, which is not consent.
+ *
+ * The question identifier and the raw answer are carried out so the ledger can
+ * record exactly what was asked and what was answered.
+ *
+ * @return array{lead:array,consent_state:string,consent_question:?string,consent_answer:?string}
+ */
 function se_leadgen_map_fields($field_data, $map)
 {
-    $out = [];
-    $consent = false;
+    $map = se_leadgen_sanitize_field_map($map);
+
+    $out             = [];
+    $consentState    = SE_CONSENT_UNKNOWN;
+    $consentQuestion = null;
+    $consentAnswer   = null;
+
     foreach (($field_data ?: []) as $f) {
-        $name = strtolower($f['name'] ?? '');
+        $name = strtolower((string) ($f['name'] ?? ''));
         $val  = isset($f['values'][0]) ? (string) $f['values'][0] : '';
+
         if (isset($map[$name])) {
             $out[$map[$name]] = mb_substr($val, 0, 191);
         }
-        // A consent/opt-in question maps to ad consent.
-        if (strpos($name, 'consent') !== false || strpos($name, 'opt_in') !== false || strpos($name, 'optin') !== false) {
-            $consent = in_array(strtolower($val), ['yes', 'true', '1', 'evet', 'onay'], true) || $val !== '';
+
+        if (!se_leadgen_is_consent_question($name)) {
+            continue;
+        }
+
+        $decision = se_consent_decide($val);
+
+        // First explicit answer wins; a later blank must not erase it, and a
+        // later "unknown" must not upgrade a recorded refusal.
+        if ($consentState === SE_CONSENT_UNKNOWN || $decision === SE_CONSENT_WITHDRAWN) {
+            $consentState    = $decision;
+            $consentQuestion = $name;
+            $consentAnswer   = $val;
         }
     }
-    return ['lead' => $out, 'consent_ads' => $consent];
+
+    return [
+        'lead'             => $out,
+        'consent_state'    => $consentState,
+        'consent_question' => $consentQuestion,
+        'consent_answer'   => $consentAnswer,
+        // Back-compat for any caller still reading a boolean. Only a real
+        // grant is true.
+        'consent_ads'      => $consentState === SE_CONSENT_GRANTED,
+    ];
+}
+
+/** Is this Meta field a consent/opt-in question? */
+function se_leadgen_is_consent_question($name)
+{
+    foreach (['consent', 'opt_in', 'opt-in', 'optin', 'permission', 'izin', 'onay', 'kvkk', 'gdpr'] as $needle) {
+        if (strpos($name, $needle) !== false) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /** Drain pending leadgen events. after_cron_run passes a bool; coerce the limit. */
@@ -208,7 +315,12 @@ function se_leadgen_process_pending($limit = 100)
                 $state = 'held';
             } elseif ($result === 'unmapped') {
                 $state = 'failed';
-                $error = 'no active form mapping';
+                $error = 'no active page+form mapping';
+            } elseif ($result === 'brand_mismatch') {
+                // Permanent configuration/tenancy problem, not a transient one:
+                // park it for an operator rather than retrying forever.
+                $state = 'failed';
+                $error = 'brand mismatch on existing meta_lead_id';
             }
         } catch (Exception $e) {
             $state = 'failed';
@@ -241,27 +353,68 @@ function se_leadgen_process_event($ev)
     }
 
     $mapped = se_leadgen_map_fields($fetch['field_data'], $route['field_map']);
+
     $lead_id = se_leadgen_upsert_lead($route['brand_id'], $ev['leadgen_id'], $mapped['lead']);
-    if ($lead_id && $mapped['consent_ads']) {
-        se_leadgen_capture_consent($route['brand_id'], $lead_id);
+
+    if ($lead_id === 'brand_mismatch') {
+        return 'brand_mismatch';   // parked + alerted; never silently re-tenanted
     }
-    // Queue the CAPI "Lead" conversion (respects per-brand toggle + consent gate downstream).
-    if ($lead_id && function_exists('se_outbox_queue') && $mapped['consent_ads']) {
+
+    if (!$lead_id) {
+        return 'processed';
+    }
+
+    // Record the consent DECISION, whichever way it went. An explicit refusal
+    // is a withdrawal row in the ledger, not an absence of data — that is what
+    // makes "we asked and they said no" provable later.
+    if ($mapped['consent_state'] === SE_CONSENT_GRANTED) {
+        se_consent_grant((int) $route['brand_id'], (int) $lead_id, 'ads', 'meta_lead_ads',
+            $mapped['consent_question'], $mapped['consent_answer']);
+    } elseif ($mapped['consent_state'] === SE_CONSENT_WITHDRAWN) {
+        se_consent_withdraw((int) $route['brand_id'], (int) $lead_id, 'ads', 'meta_lead_ads',
+            $mapped['consent_question'], $mapped['consent_answer']);
+    }
+    // SE_CONSENT_UNKNOWN (blank, missing question, unrecognised text): nothing
+    // is recorded as granted and nothing is queued.
+
+    // Queue the CAPI "Lead" conversion ONLY on an affirmative decision.
+    if (function_exists('se_outbox_queue') && $mapped['consent_state'] === SE_CONSENT_GRANTED) {
         foreach (se_outbox_destinations_for_brand($route['brand_id']) as $dest) {
             se_outbox_queue($route['brand_id'], $lead_id, $dest, 'Lead');
         }
     }
+
     return 'processed';
 }
 
-/** Upsert a lead, deduplicated on meta_lead_id. Stamps brand + meta_lead_id (string). */
+/**
+ * Upsert a lead, deduplicated on meta_lead_id.
+ *
+ * BRAND MOVES ARE REFUSED. Dedup on meta_lead_id is global, and the old code
+ * then wrote brand_id from the incoming route — so a webhook naming an id that
+ * already existed under Brand A silently moved that lead, and all of its
+ * history, into Brand B. A mismatch is now parked and alerted instead.
+ *
+ * @return int|string lead id, or the string 'brand_mismatch'
+ */
 function se_leadgen_upsert_lead($brand_id, $leadgen_id, $fields)
 {
     $CI = &get_instance();
     $table = db_prefix() . 'leads';
 
+    // Only allowlisted contact columns can ever be written from an ad form.
+    $fields = array_intersect_key($fields, array_flip(se_leadgen_allowed_lead_columns()));
+
     $CI->db->where('meta_lead_id', (string) $leadgen_id);
     $existing = $CI->db->get($table)->row();
+
+    if ($existing && (int) $existing->brand_id !== (int) $brand_id && (int) $existing->brand_id !== 0) {
+        update_option('se_meta_token_last_error_' . (int) $brand_id,
+            'leadgen brand mismatch on meta_lead_id (parked)');
+        log_activity('SE leadgen brand mismatch parked [lead ' . (int) $existing->id . ']');
+
+        return 'brand_mismatch';
+    }
 
     $data = array_merge($fields, [
         'brand_id'     => (int) $brand_id,
@@ -282,13 +435,15 @@ function se_leadgen_upsert_lead($brand_id, $leadgen_id, $fields)
     return (int) $CI->db->insert_id();
 }
 
-function se_leadgen_capture_consent($brand_id, $lead_id)
+/**
+ * Kept as a thin alias so nothing that still calls it bypasses the ledger.
+ * New code should call se_consent_grant() directly.
+ *
+ * @deprecated use se_consent_grant()
+ */
+function se_leadgen_capture_consent($brand_id, $lead_id, $question = null, $answer = null)
 {
-    $CI = &get_instance();
-    $CI->db->where('id', (int) $lead_id)->update(db_prefix() . 'leads', ['consent_ads' => 1]);
-    if (function_exists('se_consent_record')) {
-        se_consent_record((int) $brand_id, 'lead', (int) $lead_id, 'ads', 'granted', null, 'meta_lead_ads');
-    }
+    return se_consent_grant((int) $brand_id, (int) $lead_id, 'ads', 'meta_lead_ads', $question, $answer);
 }
 
 /** Reconciliation: records a heartbeat; a live fetch of missed leads is gated. */
@@ -303,10 +458,17 @@ function se_leadgen_reconcile($limit = 50)
 /* ------------------------------- controls + health ---------------------- */
 
 /** Per-brand CAPI on/off (default on). */
+/**
+ * Is live Meta CAPI transmission enabled for this brand?
+ *
+ * DEFAULTS TO DISABLED. It used to default to enabled when the option was
+ * unset, so configuring a dataset id was enough to start transmitting: the
+ * safe state was the one you had to remember to ask for. Turning a live ad
+ * integration on must be a deliberate act.
+ */
 function se_capi_enabled($brand_id)
 {
-    $v = get_option('se_capi_enabled_' . (int) $brand_id);
-    return $v === '' || $v === false ? true : (int) $v === 1;
+    return (int) get_option('se_capi_enabled_' . (int) $brand_id) === 1;
 }
 
 /** Per-brand Meta integration health snapshot (for the health interface). */

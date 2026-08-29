@@ -4,7 +4,7 @@
   $CI = &get_instance();
   $CI->load->model('staff_model');
   $staff  = $CI->staff_model->get('', ['active' => 1]);
-  $brands = function_exists('se_all_brands') ? se_all_brands(true) : [];
+  $brands = function_exists('se_all_brands') ? se_all_brands(true, true) : [];
   $statuses = ['scheduled', 'confirmed', 'held', 'completed', 'no_show', 'cancelled'];
 ?>
 <div id="wrapper">

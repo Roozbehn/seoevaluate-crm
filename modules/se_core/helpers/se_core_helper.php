@@ -3,38 +3,100 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 /**
- * Does the current staff member see every brand?
+ * Per-request memo for the capability lookups below.
  *
- * Agency admins and anyone holding the global leads view permission do.
- * Everyone else is limited to the brands mapped to them.
+ * A generation counter rather than function statics, so a test (or a job that
+ * legitimately switches acting staff) can invalidate every cached answer at
+ * once with se_authz_reset_cache(). Static locals cannot be cleared, which
+ * would make the tenancy rules untestable.
  */
-function se_staff_sees_all_brands()
+function &se_authz_cache()
 {
-    static $cache = null;
-
-    if ($cache !== null) {
-        return $cache;
-    }
-
-    $cache = is_admin() || staff_can('view', 'se_brands');
+    static $cache = [];
 
     return $cache;
 }
 
-/**
- * Brand ids the current staff member may see.
- *
- * Always contains 0 - the unassigned bucket - so a lead that arrives before
- * its brand is known stays visible rather than silently vanishing.
- */
-function se_staff_brand_ids()
+/** Drop every memoized capability answer. */
+function se_authz_reset_cache()
 {
-    static $cache = null;
+    $cache = &se_authz_cache();
+    $cache = [];
+}
 
-    if ($cache !== null) {
-        return $cache;
+function se_authz_memo($key, callable $resolver)
+{
+    $cache = &se_authz_cache();
+
+    $staff = (int) get_staff_user_id();
+    $slot  = $staff . ':' . $key;
+
+    if (!array_key_exists($slot, $cache)) {
+        $cache[$slot] = $resolver();
     }
 
+    return $cache[$slot];
+}
+
+/**
+ * Does the current staff member see EVERY brand?
+ *
+ * Only two things grant that: being a Perfex admin, or holding the explicit
+ * `se_tenancy.all_brands` capability. It is deliberately NOT implied by
+ * `se_brands.view` (brand configuration) or `se_reports.view` (reporting) —
+ * that conflation is exactly the defect this replaces, because gating the
+ * reports controller on `se_brands.view` promoted every reporting user to a
+ * global tenant user.
+ */
+function se_staff_sees_all_brands()
+{
+    return se_authz_memo('all_brands', function () {
+        return is_admin() || staff_can(SE_CAP_ALL_BRANDS, SE_FEATURE_TENANCY);
+    });
+}
+
+/**
+ * May the current staff member work the unassigned (brand 0) triage queue?
+ *
+ * Brand 0 is where a lead lands before its brand is known. It used to be
+ * appended to EVERY staff member's brand set, which quietly made all
+ * unassigned records — leads, patients, appointments, WhatsApp threads —
+ * globally visible. It is now its own capability.
+ */
+function se_staff_can_triage()
+{
+    return se_authz_memo('triage', function () {
+        return is_admin() || staff_can(SE_CAP_TRIAGE, SE_FEATURE_TENANCY);
+    });
+}
+
+/** May the current staff member open the reporting screens? */
+function se_staff_can_report()
+{
+    return is_admin()
+        || staff_can('view', SE_FEATURE_REPORTS)
+        || staff_can(SE_CAP_ALL_BRANDS, SE_FEATURE_TENANCY);
+}
+
+/** May the current staff member read/write brand CONFIGURATION? */
+function se_staff_can_configure_brands()
+{
+    return is_admin() || staff_can('view', SE_FEATURE_BRANDS);
+}
+
+/**
+ * The REAL brands mapped to the current staff member — never including the
+ * brand-0 triage bucket.
+ *
+ * Kept separate from se_staff_brand_ids() because "which brands do you work
+ * on" and "which rows may you see" are different questions. New-lead brand
+ * stamping needs the former: with brand 0 folded in, a staff member mapped to
+ * exactly one real brand looked like a two-brand user and their leads were
+ * never stamped.
+ */
+function se_staff_real_brand_ids()
+{
+    return se_authz_memo('real_brand_ids', function () {
     $CI = &get_instance();
 
     // Standalone query: a caller may invoke this mid-build (e.g. a brand-scoped
@@ -43,15 +105,36 @@ function se_staff_brand_ids()
     // both queries, so run raw SQL that leaves the shared builder untouched.
     $rows = $CI->db->query('SELECT brand_id FROM ' . db_prefix() . 'se_staff_brands WHERE staff_id = ' . (int) get_staff_user_id())->result_array();
 
-    $ids = array_map(function ($row) {
-        return (int) $row['brand_id'];
-    }, $rows);
+    $ids = [];
 
-    $ids[] = 0;
+    foreach ($rows as $row) {
+        $id = (int) $row['brand_id'];
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
 
-    $cache = array_values(array_unique($ids));
+    return array_values(array_unique($ids));
+    });
+}
 
-    return $cache;
+/**
+ * Brand ids whose ROWS the current staff member may see.
+ *
+ * The mapped real brands, plus the brand-0 triage bucket only when the
+ * triage capability is held.
+ */
+function se_staff_brand_ids()
+{
+    return se_authz_memo('brand_ids', function () {
+        $ids = se_staff_real_brand_ids();
+
+        if (se_staff_can_triage()) {
+            $ids[] = 0;
+        }
+
+        return array_values(array_unique($ids));
+    });
 }
 
 function se_can_access_brand($brand_id)
@@ -89,9 +172,14 @@ function se_scope_join_sql($table)
 }
 
 /**
- * All brands, for pickers and settings screens.
+ * Brands for pickers and settings screens.
+ *
+ * $accessible_only defaults to TRUE: an ordinary picker must never offer a
+ * brand the staff member cannot reach, because offering it invites a POST that
+ * the mutation guard then has to reject. Pass false only from a genuine
+ * configuration screen that the caller has already authorized.
  */
-function se_all_brands($active_only = true)
+function se_all_brands($active_only = true, $accessible_only = true)
 {
     $CI = &get_instance();
 
@@ -99,9 +187,39 @@ function se_all_brands($active_only = true)
         $CI->db->where('active', 1);
     }
 
+    if ($accessible_only && !se_staff_sees_all_brands()) {
+        $ids = array_values(array_filter(se_staff_brand_ids(), function ($id) {
+            return (int) $id > 0;
+        }));
+
+        if (!$ids) {
+            return [];
+        }
+
+        $CI->db->where_in('id', $ids);
+    }
+
     $CI->db->order_by('name', 'ASC');
 
     return $CI->db->get(db_prefix() . 'se_brands')->result_array();
+}
+
+/**
+ * The brand a screen should default to: the first brand this staff member can
+ * actually reach, never the first globally-existing brand.
+ */
+function se_default_brand_id()
+{
+    $brands = se_all_brands(true, true);
+
+    if ($brands) {
+        return (int) $brands[0]['id'];
+    }
+
+    // No reachable brand. 0 is the triage bucket; a staff member without the
+    // triage capability simply has nothing to show, and every downstream query
+    // is brand-filtered anyway.
+    return 0;
 }
 
 function se_brand_name($brand_id)
@@ -118,10 +236,11 @@ function se_brand_name($brand_id)
 }
 
 /**
- * Queues a conversion signal for a destination.
+ * Queues a conversion signal for a destination, WITH an immutable snapshot of
+ * the attribution and consent state that applied at event time.
  *
- * Nothing is sent inline with a web request - cron drains the outbox. The
- * dedup key keeps a repeated stage change from producing duplicate events.
+ * Nothing is sent inline with a web request - cron drains the outbox. The dedup
+ * key keeps a repeated stage change on the same day from producing duplicates.
  *
  * @param string $destination meta_capi|google_dm
  * @param string $event_name  pipeline stage name, treatment-agnostic
@@ -146,7 +265,13 @@ function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $
         return false;
     }
 
-    $CI->db->insert(db_prefix() . 'se_conversion_outbox', [
+    // Snapshot FIRST: it reads the lead row and the consent ledger, and doing
+    // that mid-INSERT would pollute the shared query builder.
+    $snapshot = function_exists('se_outbox_build_snapshot')
+        ? se_outbox_build_snapshot($brand_id, $lead_id, $event_name, $event_time)
+        : null;
+
+    $row = [
         'brand_id'    => (int) $brand_id,
         'lead_id'     => (int) $lead_id,
         'destination' => $destination,
@@ -156,8 +281,17 @@ function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $
         'status'      => 'pending',
         'attempts'    => 0,
         'dedup_key'   => $dedup,
-        'date_created'=> date('Y-m-d H:i:s'),
-    ]);
+        'date_created' => date('Y-m-d H:i:s'),
+        'next_attempt_at' => $event_time,
+    ];
+
+    if ($snapshot) {
+        $row['attribution_snapshot'] = json_encode($snapshot['attribution']);
+        $row['consent_snapshot']     = json_encode($snapshot['consent']);
+        $row['payload_version']      = SE_OUTBOX_PAYLOAD_VERSION;
+    }
+
+    $CI->db->insert(db_prefix() . 'se_conversion_outbox', $row);
 
     return $CI->db->insert_id();
 }

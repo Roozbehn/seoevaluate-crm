@@ -15,3 +15,4 @@ $lang['se_wa_window_closed']      = 'Reply window closed';
 $lang['se_wa_reply_freeform']     = 'You can send a free-form reply.';
 $lang['se_wa_reply_template_required'] = 'Outside the 24h window — a template message is required.';
 $lang['se_wa_sending_gated']      = 'Outbound sending is gated until Meta onboarding is complete.';
+$lang['se_wa_assign_denied'] = 'That staff member cannot be assigned to this conversation.';
