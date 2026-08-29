@@ -147,6 +147,45 @@ function se_can_access_brand($brand_id)
 }
 
 /**
+ * The DATABASE's clock, as a SQL datetime string.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * Queue rows are written with SQL `NOW()` (locked_at) but were compared
+ * against PHP's `date()` (next_attempt_at, lease cutoffs). On this host PHP
+ * runs in UTC and MariaDB runs on system time — a REAL two-hour offset,
+ * measured. Every such comparison was therefore wrong by that offset:
+ *
+ *   - a row the drainer rescheduled one hour ahead only became claimable
+ *     three hours later;
+ *   - a dead worker's 15-minute lease took 2h15m to recover.
+ *
+ * Both failures are silent and only appear under real timing, which is why no
+ * fake-database test could have caught them. Everything that compares against
+ * a stored timestamp now uses the same clock that wrote it.
+ *
+ * Memoised per request: one round trip, and a consistent instant for the whole
+ * request rather than a clock that drifts between statements.
+ */
+function se_db_now($offset_seconds = 0)
+{
+    static $base = null;
+    static $at   = null;
+
+    if ($base === null) {
+        $CI  = &get_instance();
+        $row = $CI->db->query('SELECT NOW() AS n')->row();
+
+        // Fall back to PHP time only if the server cannot answer.
+        $base = $row ? strtotime($row->n) : time();
+        $at   = time();
+    }
+
+    // Advance the memoised instant by however long this request has been running.
+    return date('Y-m-d H:i:s', $base + (time() - $at) + (int) $offset_seconds);
+}
+
+/**
  * Canonical brand-scope SQL for a column. THE fail-closed primitive.
  *
  * Returns '' for a caller who legitimately sees everything, and `1=0` for a
@@ -311,7 +350,7 @@ function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $
 {
     $CI = &get_instance();
 
-    $event_time = $event_time ?: date('Y-m-d H:i:s');
+    $event_time = $event_time ?: se_db_now();
 
     $dedup = implode(':', [
         (int) $brand_id,
@@ -343,7 +382,7 @@ function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $
         'status'      => 'pending',
         'attempts'    => 0,
         'dedup_key'   => $dedup,
-        'date_created' => date('Y-m-d H:i:s'),
+        'date_created' => se_db_now(),
         'next_attempt_at' => $event_time,
     ];
 

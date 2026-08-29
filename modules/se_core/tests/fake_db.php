@@ -282,6 +282,14 @@ class SeFakeDb
         if (preg_match('/^(ALTER|CREATE|DROP|INSERT INTO .* SELECT)/i', $sql)) {
             return new SeFakeResult([]);
         }
+        // SELECT NOW() — se_db_now() asks the server for its clock. The fake
+        // has no server, so it answers with PHP time; the REAL clock-offset
+        // behaviour is asserted in the real-MariaDB tier, which is the only
+        // place it can be.
+        if (preg_match('/^SELECT\s+NOW\(\)\s+AS\s+n$/i', $sql)) {
+            return new SeFakeResult([['n' => date('Y-m-d H:i:s')]]);
+        }
+
         if (preg_match('/GET_LOCK\(/i', $sql))     { return new SeFakeResult([['l' => 1]]); }
         if (preg_match('/RELEASE_LOCK\(/i', $sql)) { return new SeFakeResult([['l' => 1]]); }
 

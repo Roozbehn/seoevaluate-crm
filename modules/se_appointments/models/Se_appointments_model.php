@@ -51,6 +51,10 @@ class Se_appointments_model extends App_Model
             return false;
         }
 
+        if ($this->missing_required($data)) {
+            return false;
+        }
+
         if ($this->invalid_window($data)) {
             return false;
         }
@@ -63,6 +67,10 @@ class Se_appointments_model extends App_Model
         // the availability check and both inserted, producing a double booking
         // that neither request could see coming.
         $lock = $this->acquire_slot_lock($data);
+
+        if ($lock === false) {
+            return false;   // could not take the lock: refuse, do not guess
+        }
 
         try {
             if ($this->has_availability_conflict($data)) {
@@ -103,14 +111,34 @@ class Se_appointments_model extends App_Model
         // record keeps the brand it already has.
         unset($data['brand_id']);
 
-        if ($this->invalid_window($data)) {
+        /* ---- MERGE STORED STATE BEFORE VALIDATING ANYTHING ----------------
+         * Every rule below must see the record as it WILL BE, not the handful
+         * of fields this request happened to send. Validating $data alone gave
+         * two clean bypasses:
+         *
+         *   POST {rel_id: <foreign lead>}   - no rel_type in $data, so
+         *     invalid_links()'s `!empty($clean['rel_type'])` guard was false
+         *     and the entire link check was skipped.
+         *   POST {end_at: <before stored start>} - no start_at in $data, so
+         *     invalid_window() hit `empty($clean['start_at'])` and returned
+         *     "valid", writing an appointment that ends before it begins.
+         */
+        $merged = array_merge([
+            'brand_id' => (int) $before->brand_id,
+            'rel_type' => $before->rel_type,
+            'rel_id'   => (int) $before->rel_id,
+            'staff_id' => (int) $before->staff_id,
+            'start_at' => $before->start_at,
+            'end_at'   => $before->end_at,
+            'title'    => $before->title,
+            'status'   => $before->status,
+        ], $data);
+
+        if ($this->invalid_window($merged)) {
             return false;
         }
 
-        // Link/staff validation runs against the record's OWN brand.
-        $linkCheck = array_merge($data, ['brand_id' => (int) $before->brand_id]);
-
-        if ($this->invalid_links($linkCheck)) {
+        if ($this->invalid_links($merged)) {
             return false;
         }
 
@@ -120,14 +148,13 @@ class Se_appointments_model extends App_Model
         $slotChanged = isset($data['start_at']) || isset($data['end_at']) || isset($data['staff_id']);
 
         if ($slotChanged) {
-            $merged = array_merge([
-                'brand_id' => (int) $before->brand_id,
-                'staff_id' => (int) $before->staff_id,
-                'start_at' => $before->start_at,
-                'end_at'   => $before->end_at,
-            ], $data);
-
             $lock = $this->acquire_slot_lock($merged);
+
+            // A lock we could not take is not a lock. Refuse rather than run
+            // the check-then-write unprotected and risk a double booking.
+            if ($lock === false) {
+                return false;
+            }
 
             try {
                 if ($this->has_availability_conflict($merged, (int) $id)) {
@@ -346,6 +373,32 @@ class Se_appointments_model extends App_Model
     /** Maximum sensible appointment length; anything longer is a data-entry error. */
     const MAX_DURATION_SECONDS = 86400;
 
+    /**
+     * Fields a NEW appointment cannot be created without.
+     *
+     * add() previously accepted a payload with no title, no times and no
+     * brand: prepare() simply omitted them and the INSERT created a blank row
+     * that no screen could render meaningfully.
+     */
+    protected function missing_required($clean)
+    {
+        foreach (['title', 'start_at', 'end_at'] as $field) {
+            if (!isset($clean[$field]) || trim((string) $clean[$field]) === '') {
+                return true;
+            }
+        }
+
+        if ((int) ($clean['brand_id'] ?? 0) <= 0) {
+            return true;
+        }
+
+        if (!isset($clean['status']) || !in_array($clean['status'], self::STATUSES, true)) {
+            return true;
+        }
+
+        return false;
+    }
+
     protected function invalid_window($clean)
     {
         if (isset($clean['start_at']) && $clean['start_at'] !== '' && strtotime($clean['start_at']) === false) {
@@ -405,10 +458,15 @@ class Se_appointments_model extends App_Model
         )->result_array();
 
         if (!$rows) {
-            // Unmapped staff (e.g. an agency admin) are allowed; the tenancy
-            // model treats "no mapping" as "not brand-restricted", and refusing
-            // them here would make an admin unassignable.
-            return true;
+            /* An unmapped staff member is NOT implicitly unrestricted.
+             *
+             * This used to return true for anyone with no brand mapping, which
+             * is precisely an ordinary staff member who has not been assigned
+             * anywhere — the same "no mapping means no limits" inversion that
+             * the tenancy split removed elsewhere. Only a real admin, or the
+             * explicit all-brands capability, may be assigned to any brand. */
+            return is_admin($staff_id)
+                || (function_exists('staff_can') && staff_can(SE_CAP_ALL_BRANDS, SE_FEATURE_TENANCY, $staff_id));
         }
 
         foreach ($rows as $row) {
@@ -427,24 +485,42 @@ class Se_appointments_model extends App_Model
      * automatically if the request dies), which is what we want: a crashed
      * request must not hold a booking slot hostage.
      */
+    /**
+     * Take the per-(brand, staff) advisory lock.
+     *
+     * GET_LOCK returns 1 on success, 0 on timeout and NULL on error. The
+     * previous version ignored the result entirely and returned the lock name
+     * regardless, so a timed-out lock looked identical to a held one: the
+     * check-then-write then ran with no mutual exclusion at all and the
+     * double-booking guard silently disappeared under exactly the concurrency
+     * it exists to handle.
+     *
+     * @return string|null|false lock name when held, null when not needed,
+     *                           false when it could NOT be acquired
+     */
     protected function acquire_slot_lock($data)
     {
         $staff = (int) ($data['staff_id'] ?? 0);
 
         if ($staff <= 0) {
-            return null;
+            return null;   // no staff, no calendar to protect
         }
 
         $name = 'se_appt_slot_' . (int) ($data['brand_id'] ?? 0) . '_' . $staff;
 
-        $this->db->query('SELECT GET_LOCK(' . $this->db->escape($name) . ', 5) AS l');
+        $row = $this->db->query('SELECT GET_LOCK(' . $this->db->escape($name) . ', 5) AS l')->row();
+
+        if (!$row || (int) $row->l !== 1) {
+            return false;
+        }
 
         return $name;
     }
 
+    /** Release ONLY a lock this connection actually acquired. */
     protected function release_slot_lock($name)
     {
-        if ($name !== null) {
+        if (is_string($name) && $name !== '') {
             $this->db->query('SELECT RELEASE_LOCK(' . $this->db->escape($name) . ')');
         }
     }
