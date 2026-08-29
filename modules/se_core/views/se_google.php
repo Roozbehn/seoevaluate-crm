@@ -1,4 +1,10 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
+<?php
+// Deep credential-file facts come straight from the provider's status
+// accessor (se_google_auth.php) — booleans and timestamps only, never a
+// value derived from the key or a token.
+$seGdmAuth = function_exists('se_gdm_credential_status') ? se_gdm_credential_status((int) $brand) : [];
+?>
 <?php init_head(); ?>
 <div id="wrapper"><div class="content">
 
@@ -24,12 +30,14 @@
       _l('se_google_customer_id')    => html_escape((string) ($status['customer_id'] ?: '—')),
       _l('se_google_login_account')  => html_escape((string) ($status['login_account'] ?: '—')),
       _l('se_google_credential')     => $status['credential_ready'] ? se_ui_badge('ok', _l('se_credentials_installed')) : se_ui_badge('warning', _l('se_credentials_missing')),
+      _l('se_google_key_readable')   => !empty($seGdmAuth['file_readable']) ? se_ui_badge('ok', _l('se_yes')) : se_ui_badge('warning', _l('se_no')),
       _l('se_google_credential_valid') => $status['credential_valid'] ? se_ui_badge('ok', _l('se_yes')) : se_ui_badge('warning', _l('se_no')),
+      _l('se_google_key_document_valid') => !empty($seGdmAuth['key_document_valid']) ? se_ui_badge('ok', _l('se_yes')) : se_ui_badge('warning', _l('se_no')),
       _l('se_google_service_account') => html_escape((string) ($status['client_email'] ?: '—')),
       _l('se_google_project')        => html_escape((string) ($status['project_id'] ?: '—')),
       _l('se_google_token_state')    => $status['token_valid_now']
           ? se_ui_badge('ok', _l('se_google_token_valid') . ' (' . html_escape((string) $status['token_expires_at']) . ')')
-          : se_ui_badge('unknown', _l('se_google_token_none')),
+          : se_ui_badge('unknown', _l('se_google_token_not_minted')),
       _l('se_google_min_age')        => (int) $status['min_age_seconds'] === 0
           ? se_ui_badge('ok', _l('se_google_min_age_off'))
           : html_escape((int) $status['min_age_seconds'] . 's'),
@@ -51,6 +59,9 @@
 <div class="row"><div class="col-md-12"><div class="panel_s"><div class="panel-body">
   <h5><?php echo html_escape(_l('se_google_delivery')); ?></h5>
   <?php se_ui_counters($counters); ?>
+  <p class="mtop10"><strong><?php echo html_escape(_l('se_google_submitted_vs_confirmed')); ?>:</strong>
+    <?php echo (int) ($counters['submitted'] ?? 0); ?> <?php echo html_escape(_l('se_google_submitted_label')); ?>
+    / <?php echo (int) ($counters['confirmed'] ?? 0); ?> <?php echo html_escape(_l('se_google_confirmed_label')); ?></p>
 </div></div></div></div>
 
 <?php if ($brand > 0) { ?>

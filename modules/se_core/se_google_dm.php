@@ -10,11 +10,13 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * ConversionUploadService. Identifiers are SHA-256 hex (shared Se_hash
  * normalisation with Meta). Consent gates ad-user-data/ad-personalization.
  *
- * GATED: a live send needs a Google Cloud service-account access token (stored
- * in an option, never committed) plus a per-brand Google Ads customer id and a
- * conversion-action id. Without them, se_google_dm_send_event() returns a clear
- * non-fatal reason and the outbox row is held. A registered sender (tests) or a
- * real token drives the same payload path.
+ * GATED: a live send needs a service-account access token — minted on demand
+ * through the official google/auth library from a key document installed as a
+ * 0600 file outside the document root (see se_google_auth.php) — plus a
+ * per-brand Google Ads customer id and a conversion-action id. Without them,
+ * se_google_dm_send_event() returns a clear non-fatal reason and the outbox
+ * row is held. A registered sender (tests) or a real token drives the same
+ * payload path.
  *
  * POLICY: no clinical field (procedure/diagnosis/body area/photo/health) is ever
  * placed in a conversion — Google prohibits health-tied conversion data.
@@ -59,28 +61,26 @@ function se_google_dm_enabled($brand_id)
 /**
  * Obtain a Data Manager access token.
  *
- * ============================ NOT IMPLEMENTED ============================
- * The previous design read a STATIC bearer token from the option
- * `se_google_sa_token_<brand>` and sent it as `Authorization: Bearer`. Google
- * service-account access tokens expire in about one hour, so that design
- * breaks hourly and requires a human to paste a new token; it is not a viable
- * live integration and it is a plaintext secret in tbloptions.
- *
- * The replacement is a service-account / ADC flow that mints renewable
- * short-lived tokens (signed JWT -> token exchange, cached until shortly before
- * expiry), storing only a reference to a 0600 key file outside the document
- * root and outside Git:
+ * IMPLEMENTED via the official google/auth library (se_google_auth.php):
+ * a renewable short-lived token is minted from the per-brand service-account
+ * key document (a 0600 file outside the document root and outside Git, read
+ * through the secret provider), signed and exchanged by
+ * Google\Auth\Credentials\ServiceAccountCredentials, cached in memory for the
+ * request only, and refreshed shortly before expiry.
  *   https://developers.google.com/data-manager/api/devguides/quickstart/set-up-access
  *   https://developers.google.com/identity/protocols/oauth2/service-account
  *
- * That is NOT built here. Rather than leave the broken static-token path live,
- * this function now returns '' unconditionally, so every Google send is GATED
- * and holds its outbox row without consuming a retry attempt. A registered
- * fixture sender still drives the full payload/status path for tests.
+ * Returns '' whenever anything is missing or rejected — no key document, an
+ * unusable key, or a refused exchange — which the outbox treats as GATED: the
+ * row holds without consuming a retry attempt and resumes by itself once the
+ * owner fixes the credential. se_gdm_last_token_failure() carries the
+ * sanitized authentication/configuration classification.
  *
- * The existing option is deliberately NOT read, NOT migrated and NOT deleted:
- * removing a value the owner may have stored is their decision, not ours.
- * ======================================================================== */
+ * HISTORY: the original design read a STATIC bearer token from the option
+ * `se_google_sa_token_<brand>`. Such tokens expire hourly and sat in plaintext
+ * in tbloptions, so that path was removed. The old option is deliberately NOT
+ * read, NOT migrated and NOT deleted: removing a value the owner may have
+ * stored is their decision, not ours. */
 function se_gdm_access_token($brand_id)
 {
     // Renewable, short-lived, minted through the credential provider. Returns
@@ -261,7 +261,22 @@ function se_google_dm_send_event($row)
 
     $token = se_gdm_access_token($brand_id);
     if ($token === '' && !is_callable($GLOBALS['SE_GDM_SENDER'] ?? null)) {
-        // Renewable-credential flow not built; hold without burning an attempt.
+        /* No token and no fixture transport: hold without burning an attempt.
+         * The provider classified WHY (se_google_auth.php) — surface that as
+         * the gated code so the screen can distinguish an authentication
+         * refusal from an unusable key document, with sanitized text only. */
+        $why = function_exists('se_gdm_last_token_failure') ? se_gdm_last_token_failure($brand_id) : null;
+
+        if ($why !== null && $why['category'] === 'authentication') {
+            return ['ok' => false, 'error' => 'google authentication failed (gated): ' . $why['reason'],
+                    'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'auth_failed'];
+        }
+
+        if ($why !== null && in_array($why['code'], ['bad_key_document', 'key_rejected'], true)) {
+            return ['ok' => false, 'error' => 'google service-account key unusable (gated): ' . $why['reason'],
+                    'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'bad_credential'];
+        }
+
         return ['ok' => false, 'error' => 'google renewable credentials not configured (gated)',
                 'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'no_credentials'];
     }

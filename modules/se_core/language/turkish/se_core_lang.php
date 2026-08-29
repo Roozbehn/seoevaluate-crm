@@ -245,7 +245,7 @@ $lang['se_google_requests']      = 'Gönderim istekleri';
 $lang['se_google_no_requests']   = 'Henüz gönderim isteği yok';
 $lang['se_google_event_count']   = 'Olaylar';
 $lang['se_google_created']       = 'Oluşturulma';
-$lang['se_google_lifecycle_note'] = 'Kabul edildi, HTTP isteğinin başarılı olduğu anlamına gelir. Gönderildi, Data Manager’ın kuyruğa aldığı anlamına gelir. Onaylandı ise Google’ın olayları işlediğini bildirdiği anlamına gelir. Yenilenebilir kimlik bilgisi ve durum sorgulama uygulanmadığından henüz hiçbir kayıt onaylandı durumuna geçmez.';
+$lang['se_google_lifecycle_note'] = 'Kabul edildi, HTTP isteğinin başarılı olduğu anlamına gelir. Gönderildi, Data Manager’ın kuyruğa aldığı anlamına gelir. Onaylandı ise Google’ın olayları işlediğini bildirdiği anlamına gelir. Yenilenebilir servis hesabı jetonları, anahtar dosyası kurulduğunda resmi google/auth kütüphanesiyle üretilir; durum sorgulama, taşıyıcısı yapılandırıldığında gönderilen kayıtları sonuçlandırır.';
 $lang['se_google_external_setup'] = 'Harici kurulum gerekli';
 $lang['se_google_step_mcc']      = 'Google Ads müşteri kimliği kaydedildi';
 $lang['se_google_step_mcc_hint'] = 'Marka yapılandırma ekranından ayarlanır.';
@@ -267,3 +267,11 @@ $lang['se_google_min_age']          = 'Asgari olay yaşı';
 $lang['se_google_min_age_off']      = 'Kapalı (yapay gecikme yok)';
 $lang['se_google_max_age']          = 'Azami olay yaşı';
 $lang['se_google_partial']          = 'kısmi';
+
+// SE google status keys (workstream B)
+$lang['se_google_key_readable'] = 'Anahtar dosyası okunabilir';
+$lang['se_google_key_document_valid'] = 'Anahtar belgesi kullanılabilir (RSA anahtarı çözümleniyor)';
+$lang['se_google_token_not_minted'] = 'Bu istekte üretilmedi';
+$lang['se_google_submitted_vs_confirmed'] = 'Gönderilen / onaylanan';
+$lang['se_google_submitted_label'] = 'gönderildi';
+$lang['se_google_confirmed_label'] = 'onaylandı';
