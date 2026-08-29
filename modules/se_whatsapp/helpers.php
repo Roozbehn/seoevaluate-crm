@@ -16,6 +16,19 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 define('SE_WA_WINDOW_HOURS', 24);
 
+/* Bounds. Meta's own payloads are small; anything far larger is either a bug or
+ * an attempt to fill the table, and an unbounded LONGTEXT insert per webhook is
+ * a cheap way to exhaust the account's disk quota. */
+define('SE_WA_MAX_BODY_BYTES', 131072);      // 128 KB raw webhook body
+define('SE_WA_MAX_TEXT_LEN', 4096);          // WhatsApp text messages cap at 4096
+define('SE_WA_MAX_ID_LEN', 191);
+define('SE_WA_MAX_REFERRAL_BYTES', 8192);
+define('SE_WA_EVENT_RETENTION_DAYS', 30);    // raw payload retention
+define('SE_WA_LEASE_SECONDS', 900);
+define('SE_WA_MAX_ATTEMPTS', 5);
+define('SE_WA_BACKOFF_BASE', 300);
+define('SE_WA_BACKOFF_CAP', 21600);
+
 /* --------------------------- signature + storage ------------------------- */
 
 function se_wa_app_secret()
@@ -56,6 +69,11 @@ function se_wa_store_event($raw_body, $signature_valid)
     $CI = &get_instance();
     $table = db_prefix() . 'se_wa_webhook_events';
 
+    // Bounded: refuse an oversized body rather than writing it to the table.
+    if (strlen((string) $raw_body) > SE_WA_MAX_BODY_BYTES) {
+        return ['stored' => false, 'duplicate' => false, 'oversize' => true];
+    }
+
     $hash = hash('sha256', $raw_body);
 
     $CI->db->where('event_hash', $hash);
@@ -66,17 +84,99 @@ function se_wa_store_event($raw_body, $signature_valid)
     $decoded = json_decode($raw_body, true) ?: [];
     $routing = se_wa_extract_routing($decoded);
 
-    $CI->db->insert($table, [
-        'event_hash'      => $hash,
-        'phone_number_id' => $routing['phone_number_id'],
-        'waba_id'         => $routing['waba_id'],
-        'payload'         => $raw_body,
-        'signature_valid' => $signature_valid ? 1 : 0,
-        'state'           => 'pending',
-        'received_at'     => date('Y-m-d H:i:s'),
-    ]);
+    // The check above narrows the race; the unique key on event_hash closes it.
+    // A duplicate insert is an expected outcome of concurrent redelivery, not an
+    // error, so it is caught and reported as a duplicate.
+    try {
+        $CI->db->insert($table, [
+            'event_hash'      => $hash,
+            'phone_number_id' => mb_substr((string) $routing['phone_number_id'], 0, SE_WA_MAX_ID_LEN),
+            'waba_id'         => mb_substr((string) $routing['waba_id'], 0, SE_WA_MAX_ID_LEN),
+            'payload'         => $raw_body,
+            'signature_valid' => $signature_valid ? 1 : 0,
+            'state'           => 'pending',
+            'next_attempt_at' => date('Y-m-d H:i:s'),
+            'received_at'     => date('Y-m-d H:i:s'),
+        ]);
+    } catch (Exception $e) {
+        return ['stored' => false, 'duplicate' => true];
+    }
 
     return ['stored' => true, 'duplicate' => false];
+}
+
+/** Exponential backoff with full jitter for webhook reprocessing. */
+function se_wa_backoff_seconds($attempts)
+{
+    $exp = SE_WA_BACKOFF_BASE * (2 ** max(0, (int) $attempts - 1));
+    $exp = min($exp, SE_WA_BACKOFF_CAP);
+
+    return random_int((int) ($exp / 2), (int) $exp);
+}
+
+/**
+ * Purge the raw payload of processed events past the retention window.
+ *
+ * The row (and its hash, which is what dedup needs) is kept; only the message
+ * bodies, referral data and media references inside the stored payload are
+ * dropped. Keeping every raw webhook body forever is an unnecessary copy of
+ * message content with no retention story.
+ */
+function se_wa_purge_old_payloads()
+{
+    $CI = &get_instance();
+    $cutoff = date('Y-m-d H:i:s', strtotime('-' . SE_WA_EVENT_RETENTION_DAYS . ' days'));
+
+    $CI->db->where('state', 'processed')
+           ->where('received_at <', $cutoff)
+           ->where('payload IS NOT NULL', null, false)
+           ->update(db_prefix() . 'se_wa_webhook_events', ['payload' => null]);
+
+    return (int) $CI->db->affected_rows();
+}
+
+/** Return webhook events whose processing lease has expired. */
+function se_wa_recover_stale()
+{
+    $CI = &get_instance();
+    $cutoff = date('Y-m-d H:i:s', time() - SE_WA_LEASE_SECONDS);
+
+    $CI->db->where('state', 'processing')
+           ->where('locked_at <', $cutoff)
+           ->update(db_prefix() . 'se_wa_webhook_events', [
+               'state'     => 'pending',
+               'locked_at' => null,
+               'locked_by' => null,
+           ]);
+
+    return (int) $CI->db->affected_rows();
+}
+
+/**
+ * Atomically claim webhook events that are DUE.
+ *
+ * The old drainer SELECTed pending rows and processed them with no claim at
+ * all, so two overlapping cron runs both processed the same event.
+ */
+function se_wa_claim_batch($worker, $limit = 100)
+{
+    $CI = &get_instance();
+    $table = db_prefix() . 'se_wa_webhook_events';
+    $limit = max(1, (int) $limit);
+    $now   = date('Y-m-d H:i:s');
+
+    $CI->db->query(
+        'UPDATE `' . $table . "` SET state='processing', locked_at=NOW()"
+        . ', locked_by=' . $CI->db->escape($worker)
+        . ', fence = fence + 1'
+        . " WHERE state='pending' AND signature_valid=1 AND attempts < " . (int) SE_WA_MAX_ATTEMPTS
+        . ' AND (next_attempt_at IS NULL OR next_attempt_at <= ' . $CI->db->escape($now) . ')'
+        . ' ORDER BY id ASC LIMIT ' . $limit
+    );
+
+    $CI->db->where('state', 'processing')->where('locked_by', $worker)->order_by('id', 'ASC');
+
+    return $CI->db->get($table)->result_array();
 }
 
 /* ------------------------------- processing ------------------------------ */
@@ -94,35 +194,66 @@ function se_wa_route_to_brand($phone_number_id)
     return $row ? (int) $row->brand_id : null;
 }
 
-/** Drain pending webhook events. Bounded; safe to call from cron. */
+/**
+ * Drain webhook events. Bounded, claimed, retried with backoff.
+ *
+ * A permanent routing failure (unknown phone_number_id) is parked immediately
+ * rather than retried five times: no amount of waiting maps an unknown number.
+ */
 function se_wa_process_pending($limit = 100)
 {
     // after_cron_run passes a bool ($manually) as the first arg; ignore non-positive limits.
     $limit = (int) $limit; if ($limit < 1) { $limit = 100; }
+
     $CI = &get_instance();
     $table = db_prefix() . 'se_wa_webhook_events';
 
-    $CI->db->where('state', 'pending')->where('signature_valid', 1)
-           ->order_by('id', 'ASC')->limit((int) $limit);
-    $events = $CI->db->get($table)->result_array();
+    se_wa_recover_stale();
+
+    $worker = substr(md5(uniqid((string) getmypid(), true)), 0, 24);
+    $events = se_wa_claim_batch($worker, $limit);
 
     foreach ($events as $ev) {
-        $error = '';
+        $error     = '';
+        $permanent = false;
+
         try {
             se_wa_process_event($ev);
+        } catch (SeWaPermanentError $e) {
+            $error     = 'routing failure';
+            $permanent = true;
         } catch (Exception $e) {
             $error = 'processing error';
         }
-        $CI->db->where('id', $ev['id'])->update($table, [
-            'state'        => $error ? 'failed' : 'processed',
-            'attempts'     => (int) $ev['attempts'] + 1,
-            'last_error'   => $error ?: null,
-            'processed_at' => date('Y-m-d H:i:s'),
-        ]);
+
+        $attempts = (int) $ev['attempts'] + 1;
+
+        if ($error === '') {
+            $update = ['state' => 'processed', 'attempts' => $attempts, 'last_error' => null,
+                       'processed_at' => date('Y-m-d H:i:s'), 'locked_at' => null, 'locked_by' => null];
+        } elseif ($permanent || $attempts >= SE_WA_MAX_ATTEMPTS) {
+            $update = ['state' => 'failed', 'attempts' => $attempts, 'last_error' => $error,
+                       'processed_at' => date('Y-m-d H:i:s'), 'locked_at' => null, 'locked_by' => null];
+        } else {
+            $update = ['state' => 'pending', 'attempts' => $attempts, 'last_error' => $error,
+                       'next_attempt_at' => date('Y-m-d H:i:s', time() + se_wa_backoff_seconds($attempts)),
+                       'locked_at' => null, 'locked_by' => null];
+        }
+
+        // Fenced: a worker whose lease expired cannot overwrite a newer result.
+        $CI->db->where('id', $ev['id'])
+               ->where('locked_by', $worker)
+               ->where('fence', (int) $ev['fence'])
+               ->update($table, $update);
     }
+
+    se_wa_purge_old_payloads();
 
     return count($events);
 }
+
+/** A failure that retrying cannot fix. */
+class SeWaPermanentError extends Exception {}
 
 function se_wa_process_event($ev)
 {
@@ -130,7 +261,8 @@ function se_wa_process_event($ev)
     $routing = se_wa_extract_routing($payload);
     $brand_id = se_wa_route_to_brand($routing['phone_number_id']);
     if ($brand_id === null) {
-        throw new Exception('unknown phone_number_id'); // parked as failed, not applied
+        // No mapping will appear by waiting; park it for an operator.
+        throw new SeWaPermanentError('unknown phone_number_id');
     }
 
     $value = $payload['entry'][0]['changes'][0]['value'] ?? [];
@@ -153,10 +285,21 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
         return;
     }
 
+    $wamid = mb_substr($wamid, 0, SE_WA_MAX_ID_LEN);
+    $from  = mb_substr($from, 0, SE_WA_MAX_ID_LEN);
+
     // Conversation (dedup by number+user).
     $convTable = db_prefix() . 'se_wa_conversations';
     $CI->db->where('phone_number_id', $phone_number_id)->where('wa_user_id', $from);
     $conv = $CI->db->get($convTable)->row();
+
+    // An existing conversation's brand must still match the brand the routed
+    // number maps to. If a number is re-pointed at a different brand, silently
+    // continuing to append another tenant's messages to the old thread would
+    // merge two tenants' conversation history.
+    if ($conv && (int) $conv->brand_id !== (int) $brand_id) {
+        throw new SeWaPermanentError('conversation brand mismatch');
+    }
 
     $ts = isset($msg['timestamp']) ? date('Y-m-d H:i:s', (int) $msg['timestamp']) : date('Y-m-d H:i:s');
     $window = date('Y-m-d H:i:s', strtotime($ts) + SE_WA_WINDOW_HOURS * 3600);
@@ -170,8 +313,10 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
             'window_expires_at' => $window,
             'unread_count'      => 1,
             // ctwa_clid captured on the FIRST inbound only.
-            'ctwa_clid'         => $msg['referral']['ctwa_clid'] ?? null,
-            'referral_json'     => isset($msg['referral']) ? json_encode($msg['referral']) : null,
+            'ctwa_clid'         => isset($msg['referral']['ctwa_clid'])
+                ? mb_substr((string) $msg['referral']['ctwa_clid'], 0, SE_WA_MAX_ID_LEN) : null,
+            'referral_json'     => isset($msg['referral'])
+                ? mb_substr((string) json_encode($msg['referral']), 0, SE_WA_MAX_REFERRAL_BYTES) : null,
             'state'             => 'open',
             'date_created'      => date('Y-m-d H:i:s'),
         ]);
@@ -193,8 +338,8 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
         return; // duplicate delivery
     }
 
-    $type = $msg['type'] ?? 'text';
-    $body = $type === 'text' ? ($msg['text']['body'] ?? '') : null;
+    $type = mb_substr((string) ($msg['type'] ?? 'text'), 0, 32);
+    $body = $type === 'text' ? mb_substr((string) ($msg['text']['body'] ?? ''), 0, SE_WA_MAX_TEXT_LEN) : null;
     $media_ref = null;
     if (in_array($type, ['image', 'document', 'audio', 'video'], true) && isset($msg[$type]['id'])) {
         $media_ref = 'media:' . $msg[$type]['id']; // controlled download happens later, post-validation
@@ -228,17 +373,23 @@ function se_wa_handle_status($brand_id, $status)
 
     $rank = ['sent' => 1, 'delivered' => 2, 'read' => 3];
     $msgTable = db_prefix() . 'se_wa_messages';
-    $CI->db->where('wamid', $wamid);
+
+    // The routed brand is part of BOTH the lookup and the update. A wamid is
+    // supplied by the webhook body, and without the brand a status callback
+    // routed to Brand A could read and overwrite Brand B's message row.
+    $CI->db->where('wamid', $wamid)->where('brand_id', (int) $brand_id);
     $msg = $CI->db->get($msgTable)->row();
     if (!$msg) {
         return;
     }
 
     if ($state === 'failed') {
-        $CI->db->where('id', $msg->id)->update($msgTable, ['delivery_state' => 'failed']);
+        $CI->db->where('id', $msg->id)->where('brand_id', (int) $brand_id)
+               ->update($msgTable, ['delivery_state' => 'failed']);
         return;
     }
 
+    // Out-of-order callbacks: only ever move the state forward.
     $current = $rank[$msg->delivery_state] ?? 0;
     $incoming = $rank[$state] ?? 0;
     if ($incoming > $current) {
@@ -249,7 +400,7 @@ function se_wa_handle_status($brand_id, $status)
             $update['billable'] = !empty($status['pricing']['billable']) ? 1 : 0;
             se_wa_meter((int) $brand_id, $status['pricing']['category'] ?? 'unknown', !empty($status['pricing']['billable']), 'px:' . $wamid);
         }
-        $CI->db->where('id', $msg->id)->update($msgTable, $update);
+        $CI->db->where('id', $msg->id)->where('brand_id', (int) $brand_id)->update($msgTable, $update);
     }
 }
 

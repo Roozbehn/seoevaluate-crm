@@ -64,7 +64,15 @@ function se_whatsapp_lead_tab($lead)
         return;
     }
     $CI = &get_instance();
-    $CI->db->where('lead_id', $lead_id)->order_by('last_inbound_at', 'DESC');
+    // Brand-scoped: the lead profile must not surface another tenant's thread
+    // just because a lead_id happens to match.
+    $CI->db->where('lead_id', $lead_id);
+
+    if (function_exists('se_brand_predicate') && ($pred = se_brand_predicate()) !== '') {
+        $CI->db->where($pred, null, false);
+    }
+
+    $CI->db->order_by('last_inbound_at', 'DESC');
     $convos = $CI->db->get(db_prefix() . 'se_wa_conversations')->result_array();
     if (empty($convos)) {
         return;

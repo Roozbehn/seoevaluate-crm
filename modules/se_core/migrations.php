@@ -262,7 +262,19 @@ function se_core_migration_statements()
      */
     $stmts[] = "ALTER TABLE `{$p}se_appointments` ADD COLUMN IF NOT EXISTS `gcal_sync_state` varchar(16) DEFAULT NULL";
 
-    /* --- v8.7: brand-scoping index coverage for tenant queries ------------- */
+    /* --- v8.7: WhatsApp webhook claim, lease, fencing and backoff ---------- *
+     * The drainer previously SELECTed pending rows with no claim, so two
+     * overlapping cron runs processed the same event twice.
+     */
+    $stmts[] = "ALTER TABLE `{$p}se_wa_webhook_events` ADD COLUMN IF NOT EXISTS `locked_at` datetime DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_webhook_events` ADD COLUMN IF NOT EXISTS `locked_by` varchar(64) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_webhook_events` ADD COLUMN IF NOT EXISTS `next_attempt_at` datetime DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_webhook_events` ADD COLUMN IF NOT EXISTS `fence` bigint(20) NOT NULL DEFAULT 0";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_webhook_events` ADD INDEX IF NOT EXISTS `claim` (`state`,`next_attempt_at`)";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_webhook_events` ADD UNIQUE INDEX IF NOT EXISTS `event_hash` (`event_hash`)";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_messages` ADD INDEX IF NOT EXISTS `brand_wamid` (`brand_id`,`wamid`)";
+
+    /* --- v8.8: brand-scoping index coverage for tenant queries ------------- */
     $stmts[] = "ALTER TABLE `{$p}se_staff_brands` ADD INDEX IF NOT EXISTS `staff_id` (`staff_id`)";
 
     return $stmts;
