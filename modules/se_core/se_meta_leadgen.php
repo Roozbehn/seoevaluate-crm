@@ -975,18 +975,28 @@ function se_capi_ready($brand_id)
  */
 function se_capi_dataset_conflict($brand_id)
 {
-    $auth = trim((string) get_option('se_meta_dataset_authoritative_' . (int) $brand_id));
+    // Single source of truth = the versioned asset registry, NOT a mutable
+    // option. (The old se_meta_dataset_authoritative_<brand> option is no longer
+    // read here; it survives only as a historical audit note.)
+    $auth = function_exists('se_asset_dataset')
+        ? (string) se_asset_dataset('web_capi', (int) $brand_id) : '';
 
     $CI = &get_instance();
     $CI->db->where('id', (int) $brand_id);
     $brand = $CI->db->get(db_prefix() . 'se_brands')->row();
     $dataset = $brand ? trim((string) ($brand->meta_dataset_id ?? '')) : '';
 
+    // A forbidden (superseded/misassigned) id ALWAYS conflicts, independent of
+    // the registry — it must never be transmittable for web CAPI.
+    if (function_exists('se_asset_is_forbidden_web_capi') && se_asset_is_forbidden_web_capi($dataset)) {
+        return $auth !== '' ? $auth : 'a valid web dataset';
+    }
+
     return se_capi_dataset_conflict_decide($dataset, $auth);
 }
 
 /**
- * Pure conflict decision (no DB/options), extracted for testing.
+ * Pure conflict decision (no DB/registry), extracted for testing.
  *   - returns null when there is nothing to enforce ($authoritative empty)
  *     or the dataset is unset (a separate "no dataset" blocker) or they agree;
  *   - returns the authoritative id when the two disagree.
@@ -1040,9 +1050,11 @@ function se_meta_health($brand_id)
         'capi_enabled'      => se_capi_enabled($brand_id),
         'capi_gated'        => !$capiToken,
         'last_capi_at'      => get_option('se_meta_last_capi_at') ?: null,
-        // Dataset-drift guard: the recorded authoritative dataset for this brand
-        // and, if they disagree, the id the brand is wrongly pointed at.
-        'dataset_authoritative' => (trim((string) get_option('se_meta_dataset_authoritative_' . $brand_id)) ?: null),
+        // Dataset-drift guard: the authoritative dataset for this brand comes
+        // from the versioned asset registry (single source of truth), and, if
+        // they disagree, the id the brand is wrongly pointed at.
+        'dataset_authoritative' => function_exists('se_asset_dataset') ? se_asset_dataset('web_capi', $brand_id) : null,
+        'dataset_mm_api'    => function_exists('se_asset_dataset') ? se_asset_dataset('mm_api', $brand_id) : null,
         'dataset_conflict'  => se_capi_dataset_conflict($brand_id),
 
         // --- Lead Ads leg (independent of CAPI) ---

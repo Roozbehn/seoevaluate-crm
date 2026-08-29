@@ -84,6 +84,20 @@ se_eq('4515580372030489', se_capi_dataset_conflict_decide('4266388243621345', '4
 se_eq('4515580372030489', se_capi_dataset_conflict_decide(' 4266388243621345 ', ' 4515580372030489 '),
     'whitespace is trimmed before comparison');
 
+/* ---- single source of truth: the asset registry -------------------------- */
+se_group('dataset asset registry is the single source of truth');
+
+require_once __DIR__ . '/../se_asset_registry.php';
+
+se_eq('4515580372030489', se_asset_dataset('web_capi', 22), 'registry gives the web CAPI dataset for brand 22');
+se_eq('2081936999059007', se_asset_dataset('mm_api', 22), 'registry keeps the MM API dataset separate for brand 22');
+se_ok(se_asset_dataset('web_capi', 22) !== se_asset_dataset('mm_api', 22), 'web and MM datasets are never the same asset');
+se_ok(se_asset_dataset('web_capi', 999) === null, 'an unregistered brand has no enforced dataset (no false conflict)');
+
+se_ok(se_asset_is_forbidden_web_capi('4266388243621345'), 'the superseded/misassigned dataset is forbidden for web CAPI');
+se_ok(!se_asset_is_forbidden_web_capi('4515580372030489'), 'the correct web dataset is not forbidden');
+se_ok(se_asset_is_forbidden_web_capi(' 4266388243621345 '), 'forbidden check trims whitespace');
+
 /* ---- evidence-based six-state webhook model ------------------------------ */
 se_group('a verify-token file is NOT webhook verification');
 

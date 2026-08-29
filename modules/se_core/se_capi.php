@@ -41,8 +41,18 @@ function se_capi_send_event($row)
                 'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'no_dataset'];
     }
 
+    // Hard stop: a superseded/misassigned dataset id is NEVER transmittable for
+    // web CAPI, regardless of any other configuration.
+    if (function_exists('se_asset_is_forbidden_web_capi')
+        && se_asset_is_forbidden_web_capi($brand->meta_dataset_id)) {
+        return ['ok' => false,
+                'error' => 'dataset id ' . $brand->meta_dataset_id
+                         . ' is on the forbidden-for-web-CAPI list (superseded/misassigned) — transmission blocked',
+                'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'dataset_forbidden'];
+    }
+
     // Dataset-drift guard: refuse to transmit when the brand's dataset id does
-    // not match the recorded authoritative id for this brand. Sending web
+    // not match the registry's authoritative id for this brand. Sending web
     // conversions to the wrong dataset (e.g. the WhatsApp MM dataset) corrupts
     // optimisation and attribution, so block loudly and hold — the row is not
     // lost, and the error names the correct id to restore.
