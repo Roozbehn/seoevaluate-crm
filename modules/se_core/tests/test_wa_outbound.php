@@ -10,36 +10,6 @@
 
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
-/**
- * A REAL temporary secret store, so the actual se_secret_provider is exercised
- * rather than stubbed: directory 700, file 600, outside any document root.
- * The value is a throwaway fixture string, never a credential.
- */
-function se_test_secret_store()
-{
-    static $dir = null;
-
-    if ($dir !== null) { return $dir; }
-
-    $dir = sys_get_temp_dir() . '/se_test_secrets_' . getmypid();
-    @mkdir($dir, 0700, true);
-    @chmod($dir, 0700);
-
-    file_put_contents($dir . '/wa_app', 'fixture-not-a-real-secret');
-    @chmod($dir . '/wa_app', 0600);
-
-    if (!defined('SE_SECRET_DIR')) { define('SE_SECRET_DIR', $dir); }
-
-    return $dir;
-}
-
-function se_test_secret_store_cleanup()
-{
-    $dir = sys_get_temp_dir() . '/se_test_secrets_' . getmypid();
-    foreach (glob($dir . '/*') as $f) { @unlink($f); }
-    @rmdir($dir);
-}
-
 function se_test_seed_wa_out()
 {
     $db = se_test_db();
@@ -91,7 +61,7 @@ se_ok(se_wa_send_blocked_reason(1) !== '', 'sending is blocked before anything i
 
 /* Install a REAL fixture secret in a REAL 0700 store, so the actual provider
  * is exercised. The value is a throwaway string, never a credential. */
-$store = se_test_secret_store();
+se_test_install_secret('wa_app', 'fixture-not-a-real-secret');
 se_eq(true, se_secret_configured('wa_app', 0), 'the fixture secret is readable through the real provider');
 
 $status = se_secret_status('wa_app', 0);
@@ -306,4 +276,5 @@ foreach (['image', 'document', 'audio', 'video'] as $k) {
 }
 se_eq(false, isset($allow['application/x-executable']), 'no executable type is allowlisted');
 
-se_test_secret_store_cleanup();
+// Leave the shared store clean for the next suite.
+se_test_remove_secret('wa_app');

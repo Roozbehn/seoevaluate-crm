@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 10);
+define('SE_CORE_SCHEMA_VERSION', 11);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -325,6 +325,17 @@ function se_core_migration_statements()
         KEY `conversation_id` (`conversation_id`),
         KEY `claim` (`status`,`next_attempt_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    /* --- v11: Google Data Manager asynchronous request outcomes ----------- *
+     * Until these existed a submitted request had nowhere to record what
+     * Google eventually said, so no conversion could legitimately reach
+     * `confirmed`.
+     */
+    $stmts[] = "ALTER TABLE `{$p}se_gdm_requests` ADD COLUMN IF NOT EXISTS `succeeded` int(11) NOT NULL DEFAULT 0";
+    $stmts[] = "ALTER TABLE `{$p}se_gdm_requests` ADD COLUMN IF NOT EXISTS `failed` int(11) NOT NULL DEFAULT 0";
+    $stmts[] = "ALTER TABLE `{$p}se_gdm_requests` ADD COLUMN IF NOT EXISTS `diagnostics` text DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_gdm_requests` ADD COLUMN IF NOT EXISTS `polled_at` datetime DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_gdm_requests` ADD INDEX IF NOT EXISTS `status` (`status`)";
 
     return $stmts;
 }

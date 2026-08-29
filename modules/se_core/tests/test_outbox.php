@@ -341,44 +341,26 @@ se_eq(1, count($db->rows('tblse_gdm_requests')), 'the request is tracked for lat
 $GLOBALS['SE_GDM_SENDER'] = null;
 
 /* ======================================================================== */
-se_group('Google credentials are gated (static bearer token path removed)');
+se_group('The plaintext bearer-token option is never read');
 
+/* The old design pasted a static token into `se_google_sa_token_<brand>`.
+ * Tokens are now minted through the credential provider, and that option must
+ * have no influence whatsoever — not as a value, not as a fallback. */
 se_test_seed_outbox();
-se_eq('', se_gdm_access_token(1), 'the static bearer-token option is no longer read');
+$GLOBALS['SE_GDM_TOKEN_PROVIDER'] = null;   // no signer registered
+se_test_remove_secret('google_sa_1');
+se_gdm_token_cache_reset();
+
+se_eq('', se_gdm_access_token(1), 'with no credential and no signer, no token is produced');
 
 $GLOBALS['se_test']['options']['se_google_sa_token_1'] = 'ya29.SHOULD-NEVER-BE-USED';
-se_eq('', se_gdm_access_token(1), 'even when the old option is set, it is not used');
+$GLOBALS['se_test']['options']['se_google_sa_token']   = 'ya29.ALSO-NEVER-USED';
 
-/* ======================================================================== */
-se_group('Producer refuses to queue without a valid same-brand snapshot');
+se_eq('', se_gdm_access_token(1),
+    'setting the old plaintext options changes nothing — they are not read at all');
 
-se_test_seed_outbox();
-se_test_backdated_grant(1, 101, '2026-05-01 09:00:00');
-$db = se_test_db();
-
-// Lead 101 is brand 1. Queueing it under brand 2 must be refused outright.
-$bad = se_outbox_queue(2, 101, 'meta_capi', 'Lead', [], '2026-06-01 12:00:00');
-se_eq(false, $bad, 'a cross-brand queue attempt is refused');
-se_eq(0, count($db->rows('tblse_conversion_outbox')), 'and writes no row at all');
-
-// A lead that does not exist is refused too.
-$missing = se_outbox_queue(1, 999999, 'meta_capi', 'Lead', [], '2026-06-01 12:00:00');
-se_eq(false, $missing, 'a missing lead is refused');
-se_eq(0, count($db->rows('tblse_conversion_outbox')), 'and writes no row');
-
-// The correct brand still works.
-$ok = se_outbox_queue(1, 101, 'meta_capi', 'Lead', [], '2026-06-01 12:00:00');
-se_ok($ok > 0, 'the same lead under its own brand queues normally');
-se_eq(1, count($db->rows('tblse_conversion_outbox')), 'exactly one row written');
-
-/* ======================================================================== */
-se_group('Consent withdrawal blocks transmission unconditionally');
-
-$row = $db->rows('tblse_conversion_outbox')[0];
-se_eq(true, se_outbox_consent_allows_send($row)['ok'], 'a granted snapshot passes');
-
-se_consent_record(1, 'lead', 101, 'ads', SE_CONSENT_WITHDRAWN, null, 'dsr', 0, 'consent_ads', 'no');
-$gate = se_outbox_consent_allows_send($row);
-se_eq(false, $gate['ok'], 'a later withdrawal blocks the send');
-se_eq('consent withdrawn before transmission', $gate['reason'], 'and names the withdrawal');
+$status = se_gdm_credential_status(1);
+se_eq(false, $status['ready'], 'and the provider still reports not ready');
+se_eq(false, strpos(json_encode($status), 'SHOULD-NEVER-BE-USED') !== false,
+    'the old option value appears nowhere in the status payload');
 

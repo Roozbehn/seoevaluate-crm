@@ -20,7 +20,19 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * placed in a conversion — Google prohibits health-tied conversion data.
  */
 
-define('SE_GDM_MIN_AGE_SECONDS', 21600);   // >= 6h after the click
+/* AGE WINDOW — reviewed, and the six-hour minimum is now OFF by default.
+ *
+ * The hard-coded 21600s minimum came from older Google Ads offline-conversion
+ * guidance about CLICK time, and this code applies it to EVENT time, which is
+ * not the same quantity. No current Data Manager requirement was found that
+ * mandates it, and an unverified delay silently holds every conversion for six
+ * hours — invisible, and indistinguishable from a broken queue.
+ *
+ * It is therefore disabled unless the owner deliberately configures it, and the
+ * maximum age is configurable too rather than assumed. Both are recorded in the
+ * Google screen so the active policy is visible rather than buried in a
+ * constant. */
+define('SE_GDM_DEFAULT_MIN_AGE_SECONDS', 0);
 define('SE_GDM_MAX_AGE_DAYS', 90);         // <= 90 days
 define('SE_GDM_MAX_EVENTS', 2000);         // Data Manager per-request cap
 
@@ -71,7 +83,9 @@ function se_google_dm_enabled($brand_id)
  * ======================================================================== */
 function se_gdm_access_token($brand_id)
 {
-    return '';
+    // Renewable, short-lived, minted through the credential provider. Returns
+    // '' whenever anything is missing, which the outbox treats as GATED.
+    return se_gdm_fetch_access_token($brand_id);
 }
 
 /** Conversion-action id for a brand + event name (stage). Option-mapped. */
@@ -83,15 +97,44 @@ function se_gdm_conversion_action($brand_id, $event_name)
 }
 
 /** Is the click old enough and not too old? Returns '' if OK, else a reason. */
-function se_gdm_age_check($event_time)
+/** The configured minimum event age, in seconds. 0 = no minimum (default). */
+function se_gdm_min_age_seconds($brand_id = 0)
+{
+    $v = get_option('se_google_min_age_seconds_' . (int) $brand_id);
+
+    if ($v === '' || $v === null) {
+        $v = get_option('se_google_min_age_seconds');
+    }
+
+    return $v === '' || $v === null ? SE_GDM_DEFAULT_MIN_AGE_SECONDS : max(0, (int) $v);
+}
+
+/** The configured maximum event age, in days. */
+function se_gdm_max_age_days($brand_id = 0)
+{
+    $v = get_option('se_google_max_age_days_' . (int) $brand_id);
+
+    if ($v === '' || $v === null) {
+        $v = get_option('se_google_max_age_days');
+    }
+
+    return $v === '' || $v === null ? SE_GDM_MAX_AGE_DAYS : max(1, (int) $v);
+}
+
+/** '' when the event is inside the configured window, else a reason. */
+function se_gdm_age_check($event_time, $brand_id = 0)
 {
     $age = time() - strtotime($event_time);
-    if ($age < SE_GDM_MIN_AGE_SECONDS) {
-        return 'click younger than 6h';
+    $min = se_gdm_min_age_seconds($brand_id);
+
+    if ($min > 0 && $age < $min) {
+        return 'event younger than the configured minimum age';
     }
-    if ($age > SE_GDM_MAX_AGE_DAYS * 86400) {
-        return 'click older than 90 days';
+
+    if ($age > se_gdm_max_age_days($brand_id) * 86400) {
+        return 'event older than the configured maximum age';
     }
+
     return '';
 }
 
@@ -223,9 +266,10 @@ function se_google_dm_send_event($row)
                 'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'no_credentials'];
     }
 
-    if ($age = se_gdm_age_check($row['event_time'])) {
+    if ($age = se_gdm_age_check($row['event_time'], $brand_id)) {
         // An age window that has not opened yet is a schedule, not a failure.
-        $class = $age === 'click younger than 6h' ? SE_OUTBOX_FAIL_GATED : SE_OUTBOX_FAIL_PERMANENT;
+        // "too young" is a schedule, not a failure; "too old" can never improve.
+        $class = strpos($age, 'younger') !== false ? SE_OUTBOX_FAIL_GATED : SE_OUTBOX_FAIL_PERMANENT;
 
         return ['ok' => false, 'error' => $age, 'class' => $class, 'code' => 'age_window'];
     }
@@ -338,19 +382,165 @@ function se_gdm_track_request($brand_id, $request_id, $event_count)
         'request_id'   => (string) $request_id,
         'event_count'  => (int) $event_count,
         'status'       => 'submitted',
-        'created_at'   => date('Y-m-d H:i:s'),
+        'created_at'   => se_db_now(),
     ]);
 }
 
-/** Poll pending ingest requests via requestStatus.retrieve (gated on token). */
+/* ---------------------------------------------------------------------------
+ * Asynchronous request status.
+ *
+ * An accepted ingest is SUBMITTED, not delivered. Data Manager processes
+ * asynchronously and only requestStatus.retrieve can say whether the events
+ * were ingested, partially ingested, or rejected. Until this ran, no row could
+ * ever legitimately reach `confirmed`.
+ * ------------------------------------------------------------------------- */
+
+$GLOBALS['SE_GDM_STATUS_POLLER'] = null;
+
+/** Register a status transport: callable(string $requestId, string $token): array. */
+function se_gdm_register_status_poller(callable $p)
+{
+    $GLOBALS['SE_GDM_STATUS_POLLER'] = $p;
+}
+
+function se_gdm_status_poller_available()
+{
+    return is_callable($GLOBALS['SE_GDM_STATUS_POLLER'] ?? null);
+}
+
+/**
+ * Normalise a requestStatus response into one of four outcomes.
+ *
+ * @return array{state:string,succeeded:int,failed:int,diagnostics:array}
+ */
+function se_gdm_interpret_status(array $response)
+{
+    $raw = strtoupper((string) ($response['requestStatus'] ?? $response['status'] ?? ''));
+
+    $succeeded = (int) ($response['successCount'] ?? 0);
+    $failed    = (int) ($response['failureCount'] ?? 0);
+
+    $diagnostics = [];
+
+    foreach (($response['errorInfo'] ?? $response['diagnostics'] ?? []) as $d) {
+        // Sanitized: a code and a short reason, never an echoed payload.
+        $diagnostics[] = [
+            'code'   => mb_substr((string) ($d['errorCode'] ?? $d['code'] ?? 'unknown'), 0, 64),
+            'reason' => mb_substr(preg_replace('/[A-Za-z0-9_\-]{24,}/', '[redacted]',
+                            (string) ($d['errorMessage'] ?? $d['reason'] ?? '')), 0, 200),
+            'count'  => (int) ($d['count'] ?? 0),
+        ];
+    }
+
+    if (in_array($raw, ['PROCESSING', 'PENDING', 'RUNNING', ''], true)) {
+        $state = 'submitted';
+    } elseif ($failed > 0 && $succeeded > 0) {
+        $state = 'partial';
+    } elseif ($failed > 0 || in_array($raw, ['FAILED', 'ERROR'], true)) {
+        $state = 'failed';
+    } else {
+        $state = 'confirmed';
+    }
+
+    return ['state' => $state, 'succeeded' => $succeeded, 'failed' => $failed,
+            'diagnostics' => $diagnostics];
+}
+
+/**
+ * Poll in-flight ingest requests and settle the outbox rows behind them.
+ *
+ * Gated without a poller: rows stay `submitted` rather than being invented as
+ * confirmed.
+ */
 function se_gdm_poll_pending($limit = 50)
 {
     $limit = (int) $limit; if ($limit < 1) { $limit = 50; }
-    $CI = &get_instance();
+
+    $CI    = &get_instance();
+    $table = db_prefix() . 'se_gdm_requests';
+
     $CI->db->where('status', 'submitted')->order_by('id', 'ASC')->limit($limit);
-    $rows = $CI->db->get(db_prefix() . 'se_gdm_requests')->result_array();
-    // Live polling activates with a token; without one there is nothing in flight.
-    return count($rows);
+    $rows = $CI->db->get($table)->result_array();
+
+    if (!$rows || !se_gdm_status_poller_available()) {
+        return 0;   // nothing in flight, or polling not configured
+    }
+
+    $settled = 0;
+
+    foreach ($rows as $req) {
+        $token = se_gdm_access_token((int) $req['brand_id']);
+
+        if ($token === '') {
+            continue;   // gated; try again next cycle
+        }
+
+        try {
+            $response = call_user_func($GLOBALS['SE_GDM_STATUS_POLLER'], $req['request_id'], $token);
+        } catch (Exception $e) {
+            continue;   // transient; leave submitted
+        }
+
+        $result = se_gdm_interpret_status(is_array($response) ? $response : []);
+
+        if ($result['state'] === 'submitted') {
+            continue;   // still processing
+        }
+
+        $CI->db->where('id', (int) $req['id'])->update($table, [
+            'status'      => $result['state'],
+            'succeeded'   => $result['succeeded'],
+            'failed'      => $result['failed'],
+            'diagnostics' => json_encode($result['diagnostics']),
+            'polled_at'   => se_db_now(),
+        ]);
+
+        se_gdm_settle_outbox_for_request($req['request_id'], $result);
+        $settled++;
+    }
+
+    return $settled;
+}
+
+/**
+ * Apply a settled request outcome to the outbox rows it carried.
+ *
+ * PARTIAL is the interesting case: some events were ingested and some were
+ * not, and Data Manager reports counts rather than per-event verdicts. We
+ * cannot tell which row failed, so marking them all confirmed would be a
+ * fabrication and marking them all failed would re-send events Google already
+ * has. They are marked `partial` and surfaced for an operator, with the
+ * diagnostics attached.
+ */
+function se_gdm_settle_outbox_for_request($request_id, array $result)
+{
+    $CI = &get_instance();
+
+    $status = $result['state'] === 'confirmed' ? 'confirmed'
+        : ($result['state'] === 'partial' ? 'partial' : 'failed');
+
+    $update = [
+        'status'     => $status,
+        'error_code' => $result['state'] === 'confirmed' ? null : 'gdm_' . $result['state'],
+    ];
+
+    if ($result['state'] !== 'confirmed') {
+        $first = $result['diagnostics'][0] ?? null;
+        $update['failure_class'] = $result['state'] === 'partial' ? 'permanent' : 'permanent';
+        $update['last_error']    = $first
+            ? mb_substr($first['code'] . ': ' . $first['reason'], 0, 300)
+            : 'reported ' . $result['state'] . ' by the platform';
+    } else {
+        $update['failure_class'] = null;
+        $update['last_error']    = null;
+        $update['sent_at']       = se_db_now();
+    }
+
+    $CI->db->where('request_id', (string) $request_id)
+           ->where('status', 'submitted')
+           ->update(db_prefix() . 'se_conversion_outbox', $update);
+
+    return (int) $CI->db->affected_rows();
 }
 
 /* --------------------------------------------------------------------------
@@ -368,16 +558,25 @@ function se_landing_secret()
 }
 
 /** Create a signed token embedding click ids. TTL default 30 days (click window). */
-function se_landing_token_create(array $click, $ttl_days = 30, $secret = null)
+function se_landing_token_create(array $click, $ttl_days = 30, $secret = null, $brand_id = 0)
 {
     $secret = $secret !== null ? $secret : se_landing_secret();
     if ($secret === '') {
         return '';
     }
+    /* Bound to a BRAND, a PURPOSE and an issue time.
+     *
+     * The token used to carry click ids and an expiry only, so one minted for
+     * any brand could be applied to a lead in any other, and it had no version
+     * or audience to check. */
     $payload = [
+        'v'   => 1,
+        'aud' => 'se_landing',
+        'b'   => (int) $brand_id,
         'g'   => $click['gclid'] ?? null,
         'gb'  => $click['gbraid'] ?? null,
         'wb'  => $click['wbraid'] ?? null,
+        'iat' => time(),
         'exp' => time() + (int) $ttl_days * 86400,
     ];
     $body = rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=');
@@ -386,42 +585,97 @@ function se_landing_token_create(array $click, $ttl_days = 30, $secret = null)
 }
 
 /** Verify + decode a landing token. Returns click ids or null (invalid/expired). */
-function se_landing_token_verify($token, $secret = null)
+function se_landing_token_verify($token, $secret = null, $expected_brand = null)
 {
     $secret = $secret !== null ? $secret : se_landing_secret();
+
     if ($secret === '' || !is_string($token) || strpos($token, '.') === false) {
         return null;
     }
+
+    // Bounded: a token is short. Refuse anything absurd before decoding it.
+    if (strlen($token) > 2048) {
+        return null;
+    }
+
     [$body, $sig] = explode('.', $token, 2);
+
     $expected = rtrim(strtr(base64_encode(hash_hmac('sha256', $body, $secret, true)), '+/', '-_'), '=');
+
     if (!hash_equals($expected, $sig)) {
         return null;
     }
-    $payload = json_decode(base64_decode(strtr($body, '-_', '+/')), true);
-    if (!is_array($payload) || ($payload['exp'] ?? 0) < time()) {
+
+    $decoded = base64_decode(strtr($body, '-_', '+/'), true);
+
+    if ($decoded === false || strlen($decoded) > 4096) {
         return null;
     }
-    return ['gclid' => $payload['g'] ?? null, 'gbraid' => $payload['gb'] ?? null, 'wbraid' => $payload['wb'] ?? null];
+
+    $payload = json_decode($decoded, true);
+
+    if (!is_array($payload)) {
+        return null;
+    }
+
+    // Version + audience: a signed blob from elsewhere is not a landing token.
+    if ((int) ($payload['v'] ?? 0) !== 1 || ($payload['aud'] ?? '') !== 'se_landing') {
+        return null;
+    }
+
+    // Expiry, and a sane issued-at: a token from the future is forged or the
+    // clock is wrong, and either way it must not be trusted.
+    if (($payload['exp'] ?? 0) < time() || ($payload['iat'] ?? 0) > time() + 300) {
+        return null;
+    }
+
+    if ($expected_brand !== null && (int) ($payload['b'] ?? 0) !== (int) $expected_brand) {
+        return null;
+    }
+
+    return [
+        'gclid'    => $payload['g'] ?? null,
+        'gbraid'   => $payload['gb'] ?? null,
+        'wbraid'   => $payload['wb'] ?? null,
+        'brand_id' => (int) ($payload['b'] ?? 0),
+    ];
 }
 
 /** Stamp a lead with the click ids recovered from a landing token (first-touch). */
 function se_landing_apply_to_lead($lead_id, $token)
 {
-    $click = se_landing_token_verify($token);
-    if (!$click) {
+    $CI = &get_instance();
+
+    // The lead decides the brand; the token must match it.
+    $lead = $CI->db->query('SELECT `brand_id`, `gclid`, `gbraid`, `wbraid` FROM `'
+        . db_prefix() . 'leads` WHERE `id` = ' . (int) $lead_id . ' LIMIT 1')->row();
+
+    if (!$lead) {
         return false;
     }
-    $CI = &get_instance();
+
+    $click = se_landing_token_verify($token, null, (int) $lead->brand_id);
+
+    if (!$click) {
+        return false;   // bad signature, expired, wrong audience, or wrong brand
+    }
+
     $update = [];
+
     foreach (['gclid', 'gbraid', 'wbraid'] as $k) {
-        if (!empty($click[$k])) {
+        // FIRST-TOUCH ONLY. This wrote unconditionally, so a second landing
+        // token overwrote the click id that actually started the journey.
+        if (!empty($click[$k]) && empty($lead->$k)) {
             $update[$k] = $click[$k];
         }
     }
+
     if (!$update) {
         return false;
     }
+
     $CI->db->where('id', (int) $lead_id)->update(db_prefix() . 'leads', $update);
+
     return true;
 }
 

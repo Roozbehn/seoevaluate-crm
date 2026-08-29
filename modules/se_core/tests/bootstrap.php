@@ -291,6 +291,7 @@ require_once $SE_MODULES . '/se_core/libraries/Se_hash.php';
 require_once $SE_MODULES . '/se_core/se_outbox_snapshot.php';
 require_once $SE_MODULES . '/se_core/se_outbox.php';
 require_once $SE_MODULES . '/se_core/se_capi.php';
+require_once $SE_MODULES . '/se_core/se_google_auth.php';
 require_once $SE_MODULES . '/se_core/se_google_dm.php';
 require_once $SE_MODULES . '/se_core/se_meta_leadgen.php';
 
@@ -301,6 +302,44 @@ require_once $SE_MODULES . '/se_appointments/gcal.php';
 require_once $SE_MODULES . '/se_core/se_secret_provider.php';
 require_once $SE_MODULES . '/se_whatsapp/helpers.php';
 require_once $SE_MODULES . '/se_whatsapp/outbound.php';
+
+/* ---------------------------------------------------------------------------
+ * ONE shared temporary secret store for the whole run.
+ *
+ * SE_SECRET_DIR is a constant, so the first suite to define it wins and every
+ * later suite silently writes fixtures somewhere the provider is not looking.
+ * Defining it once here, before any suite runs, removes that ordering trap.
+ * The directory is 0700 and every file 0600, exercising the real provider.
+ * ------------------------------------------------------------------------- */
+if (!defined('SE_SECRET_DIR')) {
+    $seSecretDir = sys_get_temp_dir() . '/se_test_secrets_' . getmypid();
+    @mkdir($seSecretDir, 0700, true);
+    @chmod($seSecretDir, 0700);
+    define('SE_SECRET_DIR', $seSecretDir);
+}
+
+/** Install a fixture secret. The value is a throwaway string, never a credential. */
+function se_test_install_secret($name, $value)
+{
+    $path = rtrim(SE_SECRET_DIR, '/') . '/' . $name;
+    file_put_contents($path, $value);
+    @chmod($path, 0600);
+
+    return $path;
+}
+
+/** Remove a fixture secret so a later suite starts from a known state. */
+function se_test_remove_secret($name)
+{
+    @unlink(rtrim(SE_SECRET_DIR, '/') . '/' . $name);
+}
+
+/** Remove every fixture secret and the store itself. */
+function se_test_purge_secrets()
+{
+    foreach (glob(rtrim(SE_SECRET_DIR, '/') . '/*') as $f) { @unlink($f); }
+    @rmdir(SE_SECRET_DIR);
+}
 
 /** se_core_deny() lives in se_core.php, which we cannot load (it self-executes). */
 if (!function_exists('se_core_deny')) {
