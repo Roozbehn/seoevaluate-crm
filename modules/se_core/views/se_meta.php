@@ -46,6 +46,38 @@
   <p class="text-muted"><small><i class="fa fa-shield"></i> <?php echo html_escape(_l('se_credentials_no_values_note')); ?></small></p>
 </div></div></div></div>
 
+<?php if ($brand > 0) {
+    // Diagnostic controls. Safe actions run now; gated actions are DISABLED and
+    // state their exact prerequisite instead of failing silently.
+    $seHasPage = !empty($status['page_token']);
+    $seHasCapi = se_secret_configured('meta_capi', (int) $brand) || se_secret_configured('meta_capi', 0);
+    $seDiagBtn = function ($action, $label, $enabled, $prereq) use ($brand) {
+        if ($enabled) {
+            echo form_open(admin_url('se_core/se_meta/diag/' . $action), ['style' => 'display:inline-block;margin:2px']);
+            echo '<input type="hidden" name="brand" value="' . (int) $brand . '" />';
+            echo '<button type="submit" class="btn btn-default btn-sm">' . html_escape($label) . '</button>';
+            echo form_close();
+        } else {
+            echo '<button type="button" class="btn btn-default btn-sm" disabled style="margin:2px" '
+               . 'title="' . html_escape('Prerequisite: ' . $prereq) . '">' . html_escape($label)
+               . ' <i class="fa fa-lock"></i></button>';
+        }
+    };
+?>
+<div class="row"><div class="col-md-12"><div class="panel_s"><div class="panel-body">
+  <h5><?php echo html_escape(_l('se_diag_actions')); ?></h5>
+  <p class="text-muted"><small><?php echo html_escape(_l('se_diag_actions_hint')); ?></small></p>
+  <?php
+    $seDiagBtn('recheck', _l('se_diag_recheck'), true, '');
+    $seDiagBtn('credential', _l('se_diag_test_credential'), true, '');
+    $seDiagBtn('verify_readiness', _l('se_diag_test_verification'), true, '');
+    $seDiagBtn('reconcile', _l('se_diag_run_reconcile'), true, '');
+    $seDiagBtn('refresh_forms', _l('se_diag_refresh_forms'), $seHasPage, 'Meta Page access token missing');
+    $seDiagBtn('send_test_event', _l('se_diag_send_test_event'), $seHasCapi, 'Meta Conversions API token missing');
+  ?>
+</div></div></div></div>
+<?php } ?>
+
 <?php if ($brand > 0) { ?>
 <div class="row"><div class="col-md-6"><div class="panel_s"><div class="panel-body">
   <h5><?php echo html_escape(_l('se_meta_defaults')); ?></h5>

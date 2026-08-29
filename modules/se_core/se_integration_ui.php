@@ -119,6 +119,82 @@ function se_integration_provider_progress($brand_id, $store)
     return $rows;
 }
 
+/**
+ * Safe, provider-specific diagnostic actions for the Meta screen. Each returns
+ * ['ok'=>bool, 'message'=>string]. None reveals a secret; each names its own
+ * prerequisite when it cannot run.
+ *
+ *   recheck          : re-evaluate health (no side effects).
+ *   credential       : re-test credential readability (booleans only).
+ *   verify_readiness : probe the public webhook (wrong token) to confirm the
+ *                      route is reachable and record route_ok. No secret sent.
+ *   reconcile        : run reconciliation now — it records Skipped + reason if
+ *                      the Page token/mapping are missing (an honest skip).
+ */
+function se_meta_ui_diag($action, $brand_id)
+{
+    $brand_id = (int) $brand_id;
+
+    switch ($action) {
+        case 'recheck':
+            return ['ok' => true, 'message' => 'Health rechecked.'];
+
+        case 'credential':
+            $parts = [];
+            foreach (['meta_app' => 0, 'meta_verify' => 0, 'meta_page' => $brand_id, 'meta_capi' => $brand_id] as $prov => $bid) {
+                $parts[] = $prov . ': ' . (se_secret_configured($prov, $bid) ? 'readable' : 'missing');
+            }
+            return ['ok' => true, 'message' => 'Credential readability — ' . implode('; ', $parts)];
+
+        case 'verify_readiness':
+            $res = se_webhook_probe_route(site_url('se_core/leadgen'), 'leadgen');
+            if ($res['reached'] && function_exists('se_webhook_record')) {
+                se_webhook_record('meta', 'route_ok');
+            }
+            return $res['reached']
+                ? ['ok' => true, 'message' => 'Verification readiness: route reachable (HTTP ' . $res['status'] . ', controller reached). Verify token ' . (se_secret_configured('meta_verify', 0) ? 'installed' : 'MISSING') . '. challenge_verified still requires Meta\'s real callback.']
+                : ['ok' => false, 'message' => 'Verification readiness: the public route did not reach the controller (no X-SE-Webhook marker). Check Cloudflare/routing.'];
+
+        case 'reconcile':
+            if (function_exists('se_leadgen_reconcile')) {
+                $n = (int) se_leadgen_reconcile();
+                $result = get_option('se_meta_last_reconcile_result') ?: 'unknown';
+                $reason = get_option('se_meta_last_reconcile_reason') ?: '';
+                return ['ok' => $result === 'Reconciled',
+                        'message' => 'Reconciliation ' . $result . ($reason ? ' — ' . $reason : '') . ' (upserted ' . $n . ').'];
+            }
+            return ['ok' => false, 'message' => 'Reconciliation is unavailable.'];
+    }
+
+    return ['ok' => false, 'message' => 'Unknown diagnostic action.'];
+}
+
+/**
+ * Probe a public webhook route with a deliberately WRONG verify token. A 403
+ * carrying the X-SE-Webhook marker proves the route is reachable and our
+ * controller handled it — without ever sending a real secret.
+ */
+function se_webhook_probe_route($url, $marker)
+{
+    $ch = curl_init($url . '?hub_mode=subscribe&hub_verify_token=diagnostic-wrong-token&hub_challenge=SE_DIAG');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER         => true,
+        CURLOPT_NOBODY         => false,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_FOLLOWLOCATION => false,
+    ]);
+    $resp   = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $reached = $resp !== false
+        && stripos((string) $resp, 'X-SE-Webhook: ' . $marker) !== false
+        && $status === 403;
+
+    return ['reached' => $reached, 'status' => $status];
+}
+
 /* ============================ META LEAD ADS ============================= */
 
 function se_meta_ui_status($brand_id = 0)

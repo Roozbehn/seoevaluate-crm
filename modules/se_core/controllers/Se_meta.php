@@ -56,6 +56,26 @@ class Se_meta extends AdminController
         redirect(admin_url('se_core/se_meta'));
     }
 
+    /** Run a safe diagnostic action. POST-only + CSRF + configure-gated. */
+    public function diag($action = '')
+    {
+        if ($this->input->method() !== 'post' || !se_staff_can_configure_brands()) {
+            access_denied('se_meta');
+        }
+
+        $brand = se_requested_brand_or_default($this->input->post('brand'));
+        $safe  = ['recheck', 'credential', 'verify_readiness', 'reconcile'];
+
+        if (!in_array($action, $safe, true)) {
+            access_denied('se_meta');
+        }
+
+        $result = se_meta_ui_diag($action, (int) $brand);
+        set_alert($result['ok'] ? 'success' : 'warning', $result['message']);
+
+        redirect(admin_url('se_core/se_meta' . ((int) $brand > 0 ? '?brand=' . (int) $brand : '')));
+    }
+
     /** Save the per-brand defaults (lead status/source). POST-only + CSRF. */
     public function save_defaults()
     {
