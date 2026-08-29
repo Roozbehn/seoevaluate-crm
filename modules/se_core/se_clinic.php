@@ -261,6 +261,30 @@ function se_clinic_show_setup_menu($show)
 }
 
 /* ---------------------------------------------------------------------------
+ * Admin header logo
+ * ------------------------------------------------------------------------- */
+
+/**
+ * The Perfex admin chrome (perfex_dark_theme) is dark, but the login screen
+ * sits on a light background and shares the same `company_logo_dark` option.
+ * One stored value cannot suit both. So `company_logo_dark` keeps the
+ * dark-ink lockup that reads on the light login, and the DARK admin header is
+ * overridden here with a light-ink lockup when one is named in the
+ * `se_clinic_header_logo` option (a file under uploads/company/). Data-driven:
+ * no filename is hard-coded, and clearing the option restores stock behaviour.
+ */
+function se_clinic_admin_header_logo_url($url)
+{
+    $file = (string) get_option('se_clinic_header_logo');
+
+    if ($file !== '' && is_file(FCPATH . 'uploads/company/' . $file)) {
+        return base_url('uploads/company/' . $file);
+    }
+
+    return $url;
+}
+
+/* ---------------------------------------------------------------------------
  * Dashboard redirect
  * ------------------------------------------------------------------------- */
 

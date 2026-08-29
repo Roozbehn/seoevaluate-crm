@@ -43,6 +43,7 @@ hooks()->add_action('admin_init', 'se_authz_request_guard');
 hooks()->add_filter('sidebar_menu_items', 'se_clinic_filter_sidebar', 1000);
 hooks()->add_filter('quick_actions_links', 'se_clinic_filter_quick_actions', 1000);
 hooks()->add_filter('show_setup_menu', 'se_clinic_show_setup_menu');
+hooks()->add_filter('admin_header_logo_url', 'se_clinic_admin_header_logo_url');
 
 // Brand scoping. See docs/SCOPING.md in the fork for why each seam is used.
 hooks()->add_filter('leads_table_sql_join', 'se_core_scope_leads_table');

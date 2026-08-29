@@ -425,3 +425,28 @@ $records = se_clinic_backfill_brand_records();
 se_eq(0, $records['se_wa_conversations'], 'a table whose module is not activated is skipped, not queried');
 se_eq(0, $records['se_appointments'], '...for every optional module table');
 se_eq(1, $records['leads'], '...while present tables are still folded');
+
+/* ---------------------------------------------------------------------------
+ * 10. Admin header logo override (dark chrome vs light login)
+ * ------------------------------------------------------------------------- */
+se_group('Clinic: admin header logo override');
+
+if (!defined('FCPATH')) {
+    define('FCPATH', rtrim(sys_get_temp_dir(), '/') . '/se_clinic_test_' . getmypid() . '/');
+}
+@mkdir(FCPATH . 'uploads/company', 0777, true);
+file_put_contents(FCPATH . 'uploads/company/alabaster.png', 'x');
+
+$GLOBALS['se_test']['options']['se_clinic_header_logo'] = 'alabaster.png';
+se_eq('/uploads/company/alabaster.png', se_clinic_admin_header_logo_url('/stock'),
+    'a named, existing header logo overrides the stock admin header URL');
+
+$GLOBALS['se_test']['options']['se_clinic_header_logo'] = 'missing.png';
+se_eq('/stock', se_clinic_admin_header_logo_url('/stock'),
+    'a named but ABSENT file falls back to the stock URL (never a broken image)');
+
+$GLOBALS['se_test']['options']['se_clinic_header_logo'] = '';
+se_eq('/stock', se_clinic_admin_header_logo_url('/stock'),
+    'with no option set the stock admin header URL passes through unchanged');
+
+@unlink(FCPATH . 'uploads/company/alabaster.png');

@@ -245,6 +245,7 @@ function register_language_files($m, $f) {}
 function register_activation_hook($m, $f) {}
 function admin_url($p = '') { return '/admin/' . $p; }
 function site_url($p = '') { return '/' . $p; }
+function base_url($p = '') { return '/' . $p; }
 function _dt($d) { return (string) $d; }
 function html_escape($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
 
