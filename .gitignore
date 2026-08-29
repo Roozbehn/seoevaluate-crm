@@ -18,3 +18,7 @@ Thumbs.db
 
 # Vendor plugin (CodeCanyon) - deployed to staging, git storage decision pending
 modules/perfex_dark_theme/
+
+# PHP error logs (runtime; incl. Claude php83-lint noise) - never commit
+error_log
+error_log.*

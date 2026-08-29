@@ -1,5 +1,30 @@
 # Backup & Restore Runbook
 
+> **AUTHORITATIVE DEPLOYMENT DECISION (supersedes earlier VPS/PHP-upgrade framing):** The CRM remains
+> on the **current cPanel hosting with PHP 8.1.34**, serving **2–3 internal users** initially. VPS migration,
+> PHP 8.3/8.4 adoption, DNS migration, load balancing, containers, and Redis are **NOT required for go-live**
+> and are moved to an **Optional future roadmap**. Immediate operational priorities: disk-capacity monitoring,
+> reliable backups + encrypted off-server copies, restore readiness, cron monitoring, HTTPS renewal,
+> permissions/secret protection, SSH-key security, error monitoring, health checks — plus completing the
+> externally gated integrations. Async cron processing is retained because it protects web requests
+> (not for user volume).
+>
+> **Disk:** the 95% figure is the **shared 5.2 TB server array** (283 GB free, inodes 37%), not this account.
+> This account uses **16 GB** total; the CRM **222 MB**; our backup artifacts **3.3 MB**. The latest backup
+> `~/_deploy_artifacts/backups/db_predeploy_20260829_070412.sql` (**833,143 bytes**, sha256 `c28487c6…`) added
+> ~833 KB — negligible. Not a go-live blocker for this account; monitor the shared array via the host.
+>
+> **PHP:** 8.1.34 is the **selected and approved** runtime. PHP **8.3.33 + 8.4 syntax lint passed** for all 64
+> module files. PHP **8.3 application runtime was NOT verified**; the php83 CLI emits an `nd_mysqli.so`
+> undefined-symbol **startup warning** (CLI extension-config artifact, not an app error) — **not an immediate
+> blocker** since PHP 8.1 remains the runtime. Do not switch PHP until a future isolated compatibility test succeeds.
+>
+> **Error logs:** the earlier truncation removed only Claude-generated php83-CLI warnings, **not application
+> errors**. Logs are no longer truncated; test noise is **rotated** (timestamped + checksummed) and gitignored;
+> the application itself produces **zero** errors.
+
+
+
 ## Scope
 Database, application code, uploaded files, environment configuration, and secrets. Staging backups live
 **outside the public document root** in `~/_deploy_artifacts/backups/` (dir perms `700`). **No database dump
