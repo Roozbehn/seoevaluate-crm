@@ -1,5 +1,11 @@
 # DNS, TLS & Cutover Runbook (PREPARED — NOT EXECUTED)
 
+
+> **Terminology note.** Where this document says "staging", it means **pre-live internal use on the
+> current cPanel installation** — the approved environment (PHP 8.1.34) that becomes the home for
+> limited internal production use once the privacy/KVKK gate and manual UI QA clear. There is no
+> planned host change; VPS / PHP 8.3 / DNS migration are optional future work.
+
 > **Optional future infrastructure migration — NOT required for the current cPanel deployment.**
 > The CRM stays on cPanel + PHP 8.1.34 for the initial 2–3 users. Keep this only as a future reference.
 

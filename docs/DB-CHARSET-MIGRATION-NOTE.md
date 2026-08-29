@@ -1,5 +1,11 @@
 # Database Character-Set Migration Note
 
+
+> **Terminology note.** Where this document says "staging", it means **pre-live internal use on the
+> current cPanel installation** — the approved environment (PHP 8.1.34) that becomes the home for
+> limited internal production use once the privacy/KVKK gate and manual UI QA clear. There is no
+> planned host change; VPS / PHP 8.3 / DNS migration are optional future work.
+
 **Scope:** the CRM database only (`APP_DB_NAME` on staging). Do not alter other databases.
 
 ## Current staging state (verified 2026-08-29)

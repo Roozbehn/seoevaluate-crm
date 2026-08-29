@@ -1,5 +1,11 @@
 # SEO Evaluate CRM — Phases 1–3 Completion Report
 
+
+> **Terminology note.** Where this document says "staging", it means **pre-live internal use on the
+> current cPanel installation** — the approved environment (PHP 8.1.34) that becomes the home for
+> limited internal production use once the privacy/KVKK gate and manual UI QA clear. There is no
+> planned host change; VPS / PHP 8.3 / DNS migration are optional future work.
+
 Staging: `https://crm.roozbeh.com.tr` · Perfex 3.4.1 / CI3 / PHP 8.1.34 · MariaDB 10.11.18 · branch `main`.
 Synthetic data only. No real patient data used. This report covers the immediate corrections plus
 Phases 1 (foundation), 2 (appointments) and 3 (WhatsApp inbox).

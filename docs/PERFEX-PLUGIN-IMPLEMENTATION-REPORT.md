@@ -1,5 +1,11 @@
 # Perfex Plugin Implementation Report
 
+
+> **Terminology note.** Where this document says "staging", it means **pre-live internal use on the
+> current cPanel installation** — the approved environment (PHP 8.1.34) that becomes the home for
+> limited internal production use once the privacy/KVKK gate and manual UI QA clear. There is no
+> planned host change; VPS / PHP 8.3 / DNS migration are optional future work.
+
 Follows `docs/PERFEX-PLUGIN-AUDIT.md`. Owner selected **Dark Theme only**; all other plugins are
 **Awaiting owner confirmation** (commercial CodeCanyon licenses) and were **not installed**. WhatsBot and
 PRChat were additionally rejected as duplicative of the completed `se_whatsapp` module.

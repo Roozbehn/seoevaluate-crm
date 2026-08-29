@@ -1,7 +1,25 @@
 # Manual UI Checklist (owner — after a normal login)
 
-Log in normally at `https://crm.roozbeh.com.tr/admin` (no session was forged during QA). Verify each item.
-Use **authorized test brands** (create synthetic ZZ brands/leads, remove afterward) — never real patient data.
+Log in normally at `https://crm.roozbeh.com.tr/admin`. Verify each item. Use **authorized test brands**
+(create synthetic ZZ brands/leads, remove afterward) — **never real patient data**.
+
+> **Why this checklist gates two classifications.** Earlier phases drove authenticated HTTP using
+> *temporary synthetic database sessions* (rows inserted into `tblsessions`, then deleted); Phases 8 and 9
+> fabricated no sessions at all. **No human has ever performed an authenticated browser check.** Until this
+> checklist is complete:
+> - **Patient CRUD UI** stays at *Functional with fixtures — automated model/DB tests passed; authenticated
+>   UI and permission QA pending*.
+> - **Dark Theme** stays at *Installed and functionally activated — visual/responsive QA pending*.
+>
+> Neither may be described as end-to-end verified before then.
+
+## Authorization QA (required — not just visual)
+- [ ] A staff member **without** the `se_patients` view capability is denied `/admin/se_core/se_patients`.
+- [ ] A staff member without create/edit/delete capability cannot reach those actions (no hidden-button-only gating).
+- [ ] A staff member scoped to **Brand A** cannot open, edit or archive a **Brand B** patient **by id in the URL**.
+- [ ] The same cross-brand id denial for appointments and for the WhatsApp inbox.
+- [ ] A POST without a CSRF token is rejected (403) on patient create/edit/archive.
+- [ ] Sensitive patient reads appear in `tblse_record_access_log`.
 
 ## Reporting & health
 - [ ] Reporting dashboard: `/admin/se_core/se_reports/index` — cards, funnel, by-source, WhatsApp, spend/outcome load.
@@ -33,3 +51,13 @@ Use **authorized test brands** (create synthetic ZZ brands/leads, remove afterwa
 
 ## Responsive
 - [ ] Desktop layout OK.  - [ ] Mobile-width (≤ 480px) layout OK for dashboard, patient list, inbox.
+
+## Dark Theme visual / responsive QA
+- [ ] Dark mode renders correctly on: dashboard, leads list, lead profile, patients list/view/edit,
+      appointments calendar + manage, WhatsApp inbox + conversation, reporting dashboard, integration health.
+- [ ] Responsive/mobile widths: no overflow, no unreadable contrast, no clipped controls.
+- [ ] Toggling the theme off restores the default appearance with no residue.
+
+## After completing this checklist
+Update the classification rows in `docs/FINAL-QA-MATRIX.md` and `docs/CRM-A-Z-FINAL-REPORT.md` §1/§6/§11.
+Remove every synthetic ZZ brand, lead, patient and appointment created for these checks.
