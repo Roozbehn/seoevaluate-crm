@@ -615,3 +615,66 @@ transport is registered). These screens say *Not implemented*; none of them impl
 - No session was forged and no browser cookie was exported.
 - Environment unchanged: cPanel, PHP 8.1.34, MariaDB 10.11. No VPS, no PHP upgrade, no DNS/TLS change, no
   Redis, no container, no external queue.
+
+---
+
+# Phase 14 — Webhook truth, google/auth, genuine browser evidence
+
+Branch `feature/webhook-browser-evidence-closure` (base `52417d6`). Three code commits
+(`48d0ea8` webhooks/authz, `512f557` google/auth, `bf2d233` test-hardening) plus a docs commit.
+
+## 23. The webhook-evidence correction (the reason this phase exists)
+The Phase-13 HTTP tier proved nothing about the webhooks: every POST was answered by
+Perfex's CSRF filter with a **403 before either controller ran**, and the tests accepted
+that 403 as a pass. A signed, cookieless server-to-server webhook cannot carry a browser
+CSRF token, so the fix is a **narrow, exact-route CSRF exemption** plus provider-signature
+verification as the real authentication — not a global relaxation.
+
+- Two module config files exclude exactly `se_core/leadgen` and `se_whatsapp/webhook`
+  (anchored regexes on the full URI). Every other route — the `/admin` router aliases, the
+  `/index` variants, and every ordinary CRM form — stays CSRF-protected, proven on every
+  HTTP-tier run. Sanctioned Perfex mechanism; no core file touched. **After this phase,
+  activation needs no further security patch.**
+- Both controllers are a thin method gate over one testable outcome function with a fixed
+  order: method (405) → size (413) → signature over exact raw bytes (401) → JSON
+  well-formedness (400) → durable dedup store (200, else 500). Every response carries an
+  `X-SE-Webhook` marker, so a markerless 403 provably means the controller never ran.
+- Rebuilt HTTP tier: **146/0**, Meta and WhatsApp reported separately, each required case
+  proven against the deployed controller (see `HTTP-RESULT-MATRIX.md`), including a
+  reversible-RENAME storage-failure → 500 and cross-brand callbacks that write nothing.
+
+## 24. Secret source unified
+Webhook signature secrets and verify tokens now read the **file secret provider**
+(fail-closed), matching the status UI. `tbloptions` holds no integration secret; the legacy
+option rows are preserved but never read. See `SECRET-PROVIDER-STATUS.md`.
+
+## 25. Authorization gaps closed
+Unscoped Meta requeue; brand=0 event leak to any `se_brands.view` holder; unmapped staff
+defaulting to brand-0 triage aggregates; the health nav item shown to staff the controller
+bounces; an unscoped appointments lead-tab query; and WhatsApp assignment treating a
+zero-brand staff member as admin-like. Each is fixed and tested; see `PERMISSION-MATRIX.md`.
+
+## 26. Google authentication — decided and built
+Adopted the **official `google/auth` v1.53.0** (Apache-2.0, PHP ^8.1, zero change to the 70
+locked packages, no new advisory, ~660 KB). Renewable service-account auth through the
+library; offline-proven with a synthetic keypair, an injected handler and an RS256 assertion
+verified via firebase/php-jwt; no bespoke cryptography. See `GOOGLE-DEPENDENCY-DECISION.md`.
+Still gated on a real key file.
+
+## 27. Genuine browser evidence
+19 CDP-emulated top-level viewport captures at **390 / 768 / 1728 px** across the six required
+screens, in an authenticated admin session (a Cloudflare managed-challenge auto-clears on
+navigation). Console clean; AJAX `/se_reports/data?brand=22` → 200. `ROUTE-UI-EVIDENCE-MATRIX.md`.
+The restricted-role rendered-UI pass remains an owner action (a restricted staff account was
+out of scope); route/model authorization is already proven at the HTTP and real-MariaDB tiers.
+
+## 28. Cron and logs
+Triggered cron run: 200, `last_cron_run` and the reconcile heartbeat advanced, every outbound
+sentinel unchanged (zero external calls); `CRON-EXECUTION-EVIDENCE.md`. No new application
+errors in the CI, cPanel or docroot logs.
+
+## 29. Corrected totals
+Fake-DB **1310/0**, real-DB **86/0** (rollback clean, outbound 0), HTTP **146/0**, lint
+102/102. Schema unchanged at **v11** (no migration this phase). No integration was activated:
+no token, webhook subscription, message, conversion or App Review. Real data preserved.
+

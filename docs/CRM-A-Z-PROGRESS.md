@@ -342,3 +342,23 @@ Branch `feature/final-integration-test-closure`. Schema **v11**.
 (needs `google/auth`); WhatsApp live transport. All three are surfaced in the UI
 as "Not implemented" rather than implied to work.
 
+---
+
+## Phase 14 — Webhook truth, google/auth, and genuine browser evidence — **COMPLETE**
+
+Branch `feature/webhook-browser-evidence-closure`. Three code commits + docs.
+
+| Task | Outcome |
+|------|---------|
+| Webhook HTTP evidence was invalid | The prior HTTP tier accepted a Perfex **CSRF 403** as a webhook pass — the controller never ran. Fixed with two exact-route `csrf_exclude_uris.php` files (`se_core/leadgen`, `se_whatsapp/webhook`), a marker header on every webhook response, and a rebuilt **146-assertion** HTTP tier that fails on a markerless 403. Provider signature is the auth; CSRF stays on for everything else including the `/admin` aliases. |
+| Webhook pipeline hardened | method→405, size→413, signature→401, malformed JSON→400, store→200/500, all proven over HTTP incl. a reversible-RENAME storage-failure→500. |
+| Secret source unified | signature secrets + verify tokens now read the **file provider** (fail-closed); UI and enforcement agree; activation = drop a 600 file. |
+| Six authorization gaps closed | unscoped Meta requeue; brand=0 event leak; unmapped-staff→triage aggregates; nav/health mismatch; unscoped lead-tab; unmapped-staff→admin assign. Each tested. |
+| google/auth decided + built | Evaluated and adopted **official `google/auth` v1.53.0** (Apache-2.0, PHP ^8.1, zero change to the 70 locked packages, no new advisory). Renewable service-account auth via the library; offline-proven with a synthetic keypair and injected handler; no bespoke crypto. |
+| Real-DB tier hardened | clock check made host-agnostic (was `$skew>60`, would fail on a synced host); purge net widened to every module table. |
+| Cron proven | triggered run: 200, `last_cron_run` + reconcile heartbeat advanced, every outbound sentinel unchanged (zero external calls). |
+| Genuine browser evidence | 19 CDP-emulated viewport captures at 390 / 768 / 1728 px across the six required screens (admin session). |
+
+**Tiers:** fake-DB **1310/0** · real-DB **86/0** · HTTP **146/0** · lint 102/102.
+**Still owner-gated:** restricted-role rendered-UI pass; real Meta/WhatsApp/Google credentials; restore drill.
+

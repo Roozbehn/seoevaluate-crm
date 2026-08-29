@@ -2,7 +2,7 @@
 
 Generated from source at schema **v11**. Every route below was requested in a
 real authenticated browser session and returned HTTP 200 unless marked
-otherwise; every unauthenticated request returned 307 to login (HTTP tier).
+otherwise; every unauthenticated admin request returns **302** to `/admin/authentication` (verified over HTTP; the earlier "307" was wrong).
 
 ## Status vocabulary
 
@@ -55,9 +55,9 @@ otherwise; every unauthenticated request returned 307 to login (HTTP tier).
 | Endpoint | Method | Current state |
 |----------|--------|---------------|
 | `/se_whatsapp/webhook` | GET | Verification; refuses wrong/missing/empty token (403) |
-| `/se_whatsapp/webhook` | POST | **CSRF-gated (403)** — cannot receive until the owner adds the narrow `csrf_exclude_uris` entry |
+| `/se_whatsapp/webhook` | POST | **Live, HTTP-tested.** The exact-route `csrf_exclude_uris` entry is deployed; the controller runs signature→size→JSON→store with an `X-SE-Webhook: whatsapp` marker. 401/413/400/405/200/500 all proven (see `HTTP-RESULT-MATRIX.md`). The `/admin/se_whatsapp/webhook` alias stays CSRF-protected. |
 | `/se_core/leadgen` | GET | Verification; refuses wrong token (403) |
-| `/se_core/leadgen` | POST | **CSRF-gated (403)** — same |
+| `/se_core/leadgen` | POST | **Live, HTTP-tested** with an `X-SE-Webhook: leadgen` marker; same case matrix. The `/admin/se_core/leadgen` alias stays CSRF-protected. |
 
 ## Permission matrix
 

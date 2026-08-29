@@ -126,7 +126,7 @@ must not be called end-to-end verified.**
 ## Phase 9 additions
 | Component | Status | Evidence |
 |-----------|--------|----------|
-| Patient CRUD UI (list/search/pagination/create/view/edit/archive) | **Functional with fixtures — automated model/DB tests passed; authenticated UI and permission QA pending** | unit 19/0 + DB 7/0 (brand isolation, cross-brand ID denial, archive, linkage, consent/audit). **No authenticated browser check of the UI or of the Perfex capability gates has been performed.** |
+| Patient CRUD UI (list/search/pagination/create/view/edit/archive) | **Admin browser-verified; restricted-role permission QA still owner-gated** | list + detail view browser-verified in an authenticated admin session at genuine 390/768/1728 px (synthetic patient #950001; the detail view logs each read to the access log). Authorization proven at the HTTP (146) and real-MariaDB (86) tiers. The **restricted-user rendered-UI pass** (one-brand / unmapped staff) remains an owner action — `MANUAL-UI-CHECKLIST.md`. |
 | Patient conversion-data prohibition | Live and end-to-end verified | CAPI + Google DM payloads carry no patient/clinical field; builders are lead-only |
 | Infrastructure (cPanel + PHP 8.1.34) | **Approved environment — production runtime** | Suitable for 2–3 internal users. PHP 8.1.34 is the production runtime; there is **no PHP 8.3 production target**. |
 | VPS / PHP 8.3 / DNS migration | **Optional future work — not a go-live requirement** | Removed from the immediate owner checklist. 8.3/8.4 **static lint only**; 8.3 runtime never verified. |
@@ -134,6 +134,17 @@ must not be called end-to-end verified.**
 | This account's usage vs quota | **Ample headroom** | **16,362 / 51,200 MB (~32%)**, **295,019 / 500,000 inodes (~59%)** — cPanel `Quota::get_quota_info`, 2026-08-29. |
 | Backup verification | **Dump integrity evidence only — restore NOT proven** | Completion marker present; 138 `CREATE TABLE` == 138 live base tables; header parses. **No restore has ever been performed and application recovery is unproven.** |
 | Privacy / KVKK launch gate | **Open — required before any real patient data** | Owner + qualified Turkish privacy counsel; see `docs/CRM-A-Z-FINAL-REPORT.md` §15. No compliance is claimed. |
+
+### Phase-14 additions (webhooks, google/auth, browser)
+| Component | Status | Evidence |
+|-----------|--------|----------|
+| Meta + WhatsApp webhook receivers | **Live, HTTP-verified (marker-proven controller execution)** | 146-assertion HTTP tier; per-case matrix in `HTTP-RESULT-MATRIX.md`; a markerless CSRF 403 is a FAIL |
+| Exact-route CSRF exclusion (webhooks only) | **Deployed** | `['se_core/leadgen']`, `['se_whatsapp/webhook']`; every other route incl. the `/admin` aliases still CSRF-protected |
+| Webhook secret source | **Unified on the file provider (fail-closed)** | signature secrets + verify tokens read via `se_secret_read`; UI and enforcement now agree |
+| Google renewable service-account auth | **Implemented (official `google/auth` v1.53.0)** | offline: synthetic keypair, injected handler, RS256 JWT verified via firebase/php-jwt; still gated on a real key file |
+| Six authorization gaps (requeue/brand-0/reports/nav/lead-tab/assign) | **Closed, tested** | fake-DB + real-DB; see `PERMISSION-MATRIX.md` |
+| Genuine responsive UI (390/768/1728) | **Admin browser-verified** | 19 CDP-emulated viewport captures; `ROUTE-UI-EVIDENCE-MATRIX.md` |
+| Restricted-role rendered-UI pass | **Owner action (not yet browser-verified)** | proven at model + HTTP tiers; needs a restricted staff account |
 
 ## Classification enum used across all docs
 
