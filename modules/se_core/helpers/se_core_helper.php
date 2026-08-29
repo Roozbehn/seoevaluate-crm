@@ -236,10 +236,11 @@ function se_brand_name($brand_id)
 }
 
 /**
- * Queues a conversion signal for a destination.
+ * Queues a conversion signal for a destination, WITH an immutable snapshot of
+ * the attribution and consent state that applied at event time.
  *
- * Nothing is sent inline with a web request - cron drains the outbox. The
- * dedup key keeps a repeated stage change from producing duplicate events.
+ * Nothing is sent inline with a web request - cron drains the outbox. The dedup
+ * key keeps a repeated stage change on the same day from producing duplicates.
  *
  * @param string $destination meta_capi|google_dm
  * @param string $event_name  pipeline stage name, treatment-agnostic
@@ -264,7 +265,13 @@ function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $
         return false;
     }
 
-    $CI->db->insert(db_prefix() . 'se_conversion_outbox', [
+    // Snapshot FIRST: it reads the lead row and the consent ledger, and doing
+    // that mid-INSERT would pollute the shared query builder.
+    $snapshot = function_exists('se_outbox_build_snapshot')
+        ? se_outbox_build_snapshot($brand_id, $lead_id, $event_name, $event_time)
+        : null;
+
+    $row = [
         'brand_id'    => (int) $brand_id,
         'lead_id'     => (int) $lead_id,
         'destination' => $destination,
@@ -274,8 +281,17 @@ function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $
         'status'      => 'pending',
         'attempts'    => 0,
         'dedup_key'   => $dedup,
-        'date_created'=> date('Y-m-d H:i:s'),
-    ]);
+        'date_created' => date('Y-m-d H:i:s'),
+        'next_attempt_at' => $event_time,
+    ];
+
+    if ($snapshot) {
+        $row['attribution_snapshot'] = json_encode($snapshot['attribution']);
+        $row['consent_snapshot']     = json_encode($snapshot['consent']);
+        $row['payload_version']      = SE_OUTBOX_PAYLOAD_VERSION;
+    }
+
+    $CI->db->insert(db_prefix() . 'se_conversion_outbox', $row);
 
     return $CI->db->insert_id();
 }

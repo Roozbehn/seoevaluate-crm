@@ -458,10 +458,17 @@ function se_leadgen_reconcile($limit = 50)
 /* ------------------------------- controls + health ---------------------- */
 
 /** Per-brand CAPI on/off (default on). */
+/**
+ * Is live Meta CAPI transmission enabled for this brand?
+ *
+ * DEFAULTS TO DISABLED. It used to default to enabled when the option was
+ * unset, so configuring a dataset id was enough to start transmitting: the
+ * safe state was the one you had to remember to ask for. Turning a live ad
+ * integration on must be a deliberate act.
+ */
 function se_capi_enabled($brand_id)
 {
-    $v = get_option('se_capi_enabled_' . (int) $brand_id);
-    return $v === '' || $v === false ? true : (int) $v === 1;
+    return (int) get_option('se_capi_enabled_' . (int) $brand_id) === 1;
 }
 
 /** Per-brand Meta integration health snapshot (for the health interface). */

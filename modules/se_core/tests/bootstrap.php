@@ -287,7 +287,11 @@ require_once $SE_MODULES . '/se_core/migrations.php';
 require_once $SE_MODULES . '/se_core/pipeline.php';
 require_once $SE_MODULES . '/se_core/se_consent.php';
 require_once $SE_MODULES . '/se_core/se_patients.php';
+require_once $SE_MODULES . '/se_core/libraries/Se_hash.php';
+require_once $SE_MODULES . '/se_core/se_outbox_snapshot.php';
 require_once $SE_MODULES . '/se_core/se_outbox.php';
+require_once $SE_MODULES . '/se_core/se_capi.php';
+require_once $SE_MODULES . '/se_core/se_google_dm.php';
 require_once $SE_MODULES . '/se_core/se_meta_leadgen.php';
 
 /** se_core_deny() lives in se_core.php, which we cannot load (it self-executes). */

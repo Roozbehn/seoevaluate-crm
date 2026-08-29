@@ -338,7 +338,16 @@ class SeFakeDb
             foreach ($this->tables[$table] ?? [] as $i => $r) {
                 if ($n >= $limit) { break; }
                 if ($this->rawWhereMatches($r, $m[3])) {
-                    $this->tables[$table][$i] = array_merge($r, $sets);
+                    $merged = $r;
+                    foreach ($sets as $k => $v) {
+                        if (strpos($k, '__incr__') === 0) {
+                            $col = substr($k, 8);
+                            $merged[$col] = (int) ($r[$col] ?? 0) + (int) $v;
+                        } else {
+                            $merged[$k] = $v;
+                        }
+                    }
+                    $this->tables[$table][$i] = $merged;
                     $n++;
                 }
             }
@@ -359,7 +368,10 @@ class SeFakeDb
             if (strcasecmp($v, 'NOW()') === 0)      { $v = date('Y-m-d H:i:s'); }
             elseif (strcasecmp($v, 'NULL') === 0)   { $v = null; }
             elseif (preg_match("/^'(.*)'$/s", $v, $q)) { $v = str_replace("''", "'", $q[1]); }
-            elseif (preg_match('/^`?([A-Za-z0-9_]+)`?\s*\+\s*1$/', $v)) { $v = '__INCR__' . $m[1]; }
+            elseif (preg_match('/^`?([A-Za-z0-9_]+)`?\s*\+\s*(\d+)$/', $v, $inc)) {
+                $out['__incr__' . $m[1]] = (int) $inc[2];
+                continue;
+            }
             $out[$m[1]] = $v;
         }
         return $out;
@@ -367,9 +379,24 @@ class SeFakeDb
 
     private function rawWhereMatches(array $row, $where)
     {
-        foreach (preg_split('/\s+AND\s+/i', $where) as $cond) {
+        // Split on AND, but not inside parentheses.
+        foreach (preg_split('/\s+AND\s+(?![^(]*\))/i', $where) as $cond) {
             $cond = trim($cond);
             if ($cond === '' ) { continue; }
+
+            // "(col IS NULL OR col <= 'value')" — the drain due-time predicate.
+            if (preg_match('/^\(\s*`?([A-Za-z0-9_]+)`?\s+IS\s+NULL\s+OR\s+`?([A-Za-z0-9_]+)`?\s*(<=|<|>=|>)\s*\'([^\']*)\'\s*\)$/i', $cond, $m)) {
+                $actual = $row[$m[1]] ?? null;
+                if ($actual === null || $actual === '') { continue; }   // IS NULL branch
+                $v = $m[4];
+                switch ($m[3]) {
+                    case '<=': if (!($actual <= $v)) { return false; } break;
+                    case '<':  if (!($actual < $v))  { return false; } break;
+                    case '>=': if (!($actual >= $v)) { return false; } break;
+                    case '>':  if (!($actual > $v))  { return false; } break;
+                }
+                continue;
+            }
             if (preg_match('/^`?([A-Za-z0-9_]+)`?\s*(=|<=|>=|!=|<>|<|>)\s*(.+)$/s', $cond, $m)) {
                 $col = $m[1]; $op = $m[2]; $v = trim($m[3]);
                 if (preg_match("/^'(.*)'$/s", $v, $q)) { $v = str_replace("''", "'", $q[1]); }

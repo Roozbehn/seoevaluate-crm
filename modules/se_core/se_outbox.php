@@ -94,20 +94,68 @@ function se_outbox_destinations_for_brand($brand_id)
     }
 
     $out = [];
-    if (!empty($brand->meta_dataset_id)) {
+
+    // A destination is queued only when it is EXPLICITLY enabled and its
+    // non-secret configuration is complete. Presence of an id alone used to be
+    // enough, which queued events for brands nobody had turned on yet.
+    if (!empty($brand->meta_dataset_id) && se_capi_enabled($brand_id)) {
         $out[] = 'meta_capi';
     }
-    if (!empty($brand->google_ads_customer_id)) {
+
+    if (!empty($brand->google_ads_customer_id) && se_google_dm_enabled($brand_id)) {
         $out[] = 'google_dm';
     }
 
     return $out;
 }
 
+/* ---------------------------------------------------------------------------
+ * Delivery state machine.
+ *
+ * DELIVERY SEMANTICS: at-least-once, with destination-side idempotency.
+ * A worker can die after the platform accepted an event but before we record
+ * success, so the row is retried and the event is sent again. That is safe
+ * because event_id / transactionId are derived from immutable primary keys and
+ * never change across retries, so Meta and Google de-duplicate on their side.
+ * It is NOT at-most-once and must not be documented as such.
+ *
+ * FAILURE CLASSES
+ *   gated      no credential / integration disabled / age window not open yet.
+ *              Does NOT consume an attempt - an external gate is not a delivery
+ *              failure, and burning the retry budget while waiting for App
+ *              Review is how a queue silently dies.
+ *   retryable  transport or 5xx. Consumes an attempt, backs off exponentially.
+ *   permanent  malformed, unknown destination, past the platform's age limit.
+ *              Parked immediately; retrying cannot help.
+ * ------------------------------------------------------------------------- */
+
+define('SE_OUTBOX_FAIL_GATED', 'gated');
+define('SE_OUTBOX_FAIL_RETRYABLE', 'retryable');
+define('SE_OUTBOX_FAIL_PERMANENT', 'permanent');
+
+define('SE_OUTBOX_BACKOFF_BASE', 300);      // 5 min
+define('SE_OUTBOX_BACKOFF_CAP', 21600);     // 6 h
+define('SE_OUTBOX_GATED_RECHECK', 3600);    // re-look at a gated row hourly
+
 /** A per-run worker identity. Not security-sensitive; just needs to be unique. */
 function se_outbox_worker_id()
 {
     return substr(md5(uniqid((string) getmypid(), true)), 0, 24);
+}
+
+/**
+ * Exponential backoff with full jitter.
+ *
+ * Jitter matters: without it every row queued by the same cron tick retries on
+ * exactly the same second, which is a self-inflicted thundering herd against
+ * the platform that just rate-limited us.
+ */
+function se_outbox_backoff_seconds($attempts)
+{
+    $exp = SE_OUTBOX_BACKOFF_BASE * (2 ** max(0, (int) $attempts - 1));
+    $exp = min($exp, SE_OUTBOX_BACKOFF_CAP);
+
+    return random_int((int) ($exp / 2), (int) $exp);
 }
 
 /**
@@ -136,26 +184,34 @@ function se_outbox_park_stale_pending()
            ->where('destination', 'meta_capi')
            ->where('event_time <', date('Y-m-d H:i:s', strtotime('-' . SE_META_MAX_AGE_DAYS . ' days')))
            ->update(db_prefix() . 'se_conversion_outbox', [
-               'status'     => 'skipped',
-               'last_error' => 'event older than ' . SE_META_MAX_AGE_DAYS . ' days',
+               'status'        => 'skipped',
+               'failure_class' => SE_OUTBOX_FAIL_PERMANENT,
+               'error_code'    => 'event_too_old',
+               'last_error'    => 'event older than ' . SE_META_MAX_AGE_DAYS . ' days',
            ]);
 }
 
 /**
- * Atomically claim up to $limit pending rows for this worker. The UPDATE takes
- * InnoDB row locks, so a concurrent worker's identical UPDATE only sees rows
- * still 'pending' after this one commits — claims are disjoint. Returns the
- * claimed rows.
+ * Atomically claim up to $limit pending rows that are DUE.
+ *
+ * Each claim also bumps `fence`. The fence is what stops a worker whose lease
+ * expired mid-flight from later overwriting the result of the worker that took
+ * over: every terminal write below is conditioned on the fence it claimed with,
+ * so a stale worker's UPDATE matches zero rows.
  */
 function se_outbox_claim_batch($worker, $limit = SE_OUTBOX_BATCH)
 {
     $CI = &get_instance();
     $table = db_prefix() . 'se_conversion_outbox';
     $limit = max(1, (int) $limit);
+    $now   = date('Y-m-d H:i:s');
 
     $CI->db->query(
-        'UPDATE `' . $table . "` SET status='processing', locked_at=" . 'NOW()' . ', locked_by=' . $CI->db->escape($worker)
+        'UPDATE `' . $table . "` SET status='processing', locked_at=NOW()"
+        . ', locked_by=' . $CI->db->escape($worker)
+        . ', fence = fence + 1'
         . " WHERE status='pending' AND attempts < " . (int) SE_OUTBOX_MAX_ATTEMPTS
+        . ' AND (next_attempt_at IS NULL OR next_attempt_at <= ' . $CI->db->escape($now) . ')'
         . ' ORDER BY id ASC LIMIT ' . $limit
     );
 
@@ -179,73 +235,187 @@ function se_outbox_drain()
     $claimed = se_outbox_claim_batch($worker, SE_OUTBOX_BATCH);
 
     foreach ($claimed as $row) {
-        se_outbox_process_row($row);
+        se_outbox_process_row($row, $worker);
     }
+
+    return count($claimed);
+}
+
+/**
+ * Write a terminal/next state for a claimed row.
+ *
+ * FENCED: the UPDATE names the id, the processing state, the claiming worker
+ * AND the fence value the worker saw. A worker whose lease expired and whose
+ * row was re-claimed by someone else will therefore update nothing, instead of
+ * stamping a stale result over a newer one.
+ *
+ * @return int rows written (0 means this worker was fenced out)
+ */
+function se_outbox_finalize($row, $worker, array $data)
+{
+    $CI = &get_instance();
+
+    $CI->db->where('id', (int) $row['id'])
+           ->where('status', 'processing')
+           ->where('locked_by', $worker)
+           ->where('fence', (int) $row['fence'])
+           ->update(db_prefix() . 'se_conversion_outbox', $data);
+
+    return (int) $CI->db->affected_rows();
+}
+
+/**
+ * Normalise a provider error into a code + category + short message.
+ *
+ * Never stores the echoed payload or anything token-shaped: a provider's error
+ * body routinely quotes the request back, which would put the access token into
+ * a database column that every dump then copies.
+ */
+function se_outbox_sanitize_error($class, $code, $message)
+{
+    $message = (string) $message;
+    $message = preg_replace('/[A-Za-z0-9_\-]{24,}/', '[redacted]', $message);
+    $message = preg_replace('/\s+/', ' ', $message);
+
+    return [
+        'failure_class' => $class,
+        'error_code'    => mb_substr((string) $code, 0, 64),
+        'last_error'    => mb_substr(trim($message), 0, 300),
+    ];
 }
 
 /** Send one claimed row, then record the outcome and release the lease. */
-function se_outbox_process_row($row)
+function se_outbox_process_row($row, $worker = null)
 {
-    $CI = &get_instance();
-    $table = db_prefix() . 'se_conversion_outbox';
+    $worker = $worker ?: ($row['locked_by'] ?? '');
 
-    $ok = false;
-    $error = '';
-    $permanent = false;
+    $ok        = false;
+    $class     = SE_OUTBOX_FAIL_RETRYABLE;
+    $code      = 'unknown';
+    $error     = '';
+    $submitted = false;
+    $requestId = null;
+
+    // Consent gate, evaluated from the snapshot plus any later withdrawal.
+    $consent = se_outbox_consent_allows_send($row);
+
+    if (!$consent['ok']) {
+        se_outbox_finalize($row, $worker, array_merge(
+            se_outbox_sanitize_error(SE_OUTBOX_FAIL_PERMANENT, 'consent_blocked', $consent['reason']),
+            ['status' => 'skipped', 'locked_at' => null, 'locked_by' => null]
+        ));
+
+        return 'skipped';
+    }
 
     try {
         switch ($row['destination']) {
             case 'meta_capi':
-                $result = se_capi_send_event($row);
-                $ok     = (bool) $result['ok'];
-                $error  = (string) $result['error'];
+                $result    = se_capi_send_event($row);
+                $ok        = (bool) $result['ok'];
+                $class     = $result['class'] ?? SE_OUTBOX_FAIL_RETRYABLE;
+                $code      = $result['code'] ?? 'meta_error';
+                $error     = (string) $result['error'];
                 break;
 
             case 'google_dm':
-                $age = time() - strtotime($row['event_time']);
-                if ($age < SE_GOOGLE_MIN_AGE_SECONDS) {
-                    $error = 'google click younger than 6h; holding';
-                } elseif ($age > SE_GOOGLE_MAX_AGE_DAYS * 86400) {
-                    $permanent = true;
-                    $error = 'google click older than 90 days';
-                } elseif (function_exists('se_google_dm_send_event')) {
-                    $result = se_google_dm_send_event($row);
-                    $ok     = (bool) $result['ok'];
-                    $error  = (string) $result['error'];
-                } else {
-                    $error = 'google_dm sender not configured';
-                }
+                $result    = function_exists('se_google_dm_send_event')
+                    ? se_google_dm_send_event($row)
+                    : ['ok' => false, 'error' => 'google_dm sender not configured',
+                       'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'not_configured'];
+                $ok        = (bool) $result['ok'];
+                $class     = $result['class'] ?? SE_OUTBOX_FAIL_RETRYABLE;
+                $code      = $result['code'] ?? 'google_error';
+                $error     = (string) $result['error'];
+                $submitted = !empty($result['submitted']);
+                $requestId = $result['request_id'] ?? null;
                 break;
 
             default:
-                $permanent = true;
-                $error = 'unknown destination ' . $row['destination'];
+                $class = SE_OUTBOX_FAIL_PERMANENT;
+                $code  = 'unknown_destination';
+                $error = 'unknown destination';
         }
     } catch (Exception $e) {
+        $class = SE_OUTBOX_FAIL_RETRYABLE;
+        $code  = 'exception';
         $error = 'exception during send';   // never leak internals into the row
     }
 
-    if ($ok) {
-        $CI->db->where('id', $row['id'])->update($table, [
-            'status'    => 'sent',
-            'sent_at'   => date('Y-m-d H:i:s'),
-            'locked_at' => null,
-            'locked_by' => null,
+    /* --- accepted-for-processing (Google): submitted, not yet confirmed --- */
+    if ($submitted) {
+        se_outbox_finalize($row, $worker, [
+            'status'        => 'submitted',
+            'submitted_at'  => date('Y-m-d H:i:s'),
+            'request_id'    => $requestId,
+            'failure_class' => null,
+            'error_code'    => null,
+            'last_error'    => null,
+            'locked_at'     => null,
+            'locked_by'     => null,
         ]);
 
-        return;
+        return 'submitted';
     }
 
-    $attempts = (int) $row['attempts'] + 1;
-    $status = ($permanent || $attempts >= SE_OUTBOX_MAX_ATTEMPTS) ? 'failed' : 'pending';
+    /* --- success ------------------------------------------------------- */
+    if ($ok) {
+        se_outbox_finalize($row, $worker, [
+            'status'        => 'sent',
+            'sent_at'       => date('Y-m-d H:i:s'),
+            'failure_class' => null,
+            'error_code'    => null,
+            'last_error'    => null,
+            'locked_at'     => null,
+            'locked_by'     => null,
+        ]);
 
-    $CI->db->where('id', $row['id'])->update($table, [
-        'status'     => $status,
-        'attempts'   => $attempts,
-        'last_error' => mb_substr($error, 0, 500),   // redacted, no payload/token
-        'locked_at'  => null,
-        'locked_by'  => null,
-    ]);
+        return 'sent';
+    }
+
+    /* --- gated: hold WITHOUT consuming an attempt ----------------------- */
+    if ($class === SE_OUTBOX_FAIL_GATED) {
+        se_outbox_finalize($row, $worker, array_merge(
+            se_outbox_sanitize_error($class, $code, $error),
+            [
+                'status'          => 'pending',
+                'attempts'        => (int) $row['attempts'],   // unchanged, deliberately
+                'next_attempt_at' => date('Y-m-d H:i:s', time() + SE_OUTBOX_GATED_RECHECK),
+                'locked_at'       => null,
+                'locked_by'       => null,
+            ]
+        ));
+
+        return 'gated';
+    }
+
+    /* --- permanent ------------------------------------------------------ */
+    if ($class === SE_OUTBOX_FAIL_PERMANENT) {
+        se_outbox_finalize($row, $worker, array_merge(
+            se_outbox_sanitize_error($class, $code, $error),
+            ['status' => 'failed', 'attempts' => (int) $row['attempts'] + 1,
+             'locked_at' => null, 'locked_by' => null]
+        ));
+
+        return 'failed';
+    }
+
+    /* --- retryable: exponential backoff with jitter --------------------- */
+    $attempts = (int) $row['attempts'] + 1;
+    $status   = $attempts >= SE_OUTBOX_MAX_ATTEMPTS ? 'failed' : 'pending';
+
+    se_outbox_finalize($row, $worker, array_merge(
+        se_outbox_sanitize_error($class, $code, $error),
+        [
+            'status'          => $status,
+            'attempts'        => $attempts,
+            'next_attempt_at' => date('Y-m-d H:i:s', time() + se_outbox_backoff_seconds($attempts)),
+            'locked_at'       => null,
+            'locked_by'       => null,
+        ]
+    ));
+
+    return $status;
 }
 
 /**
