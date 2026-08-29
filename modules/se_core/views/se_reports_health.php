@@ -65,15 +65,23 @@
        ['Outbox sent / dead', esc(o.sent)+' / '+esc(o.dead)]
      ]);
 
-     // Meta CAPI (independent of Lead Ads)
-     var capiState=m.capi_ready?(m.capi_enabled?'ready':'disabled'):(m.capi_token?'warning':'blocked');
-     var capi=card('Meta Conversions API',capiState,[
+     // Meta CAPI (independent of Lead Ads). A dataset conflict is the most
+     // severe CAPI state: configured, but pointed at the wrong dataset.
+     var capiState=m.dataset_conflict?'blocked':(m.capi_ready?(m.capi_enabled?'ready':'disabled'):(m.capi_token?'warning':'blocked'));
+     var capiRows=[
        ['Credential', yn(m.capi_token)],
-       ['Dataset id', esc(m.dataset_id||'—')],
-       ['Ready', yn(m.capi_ready)],
-       ['Transmission', m.capi_enabled?'Enabled':'Disabled'],
-       ['Last event', ts(m.last_capi_at)]
-     ]);
+       ['Dataset id', esc(m.dataset_id||'—')]
+     ];
+     if(m.dataset_conflict){
+       capiRows.push(['Dataset conflict','<span class="se-badge se-blocked">Wrong dataset</span>']);
+       capiRows.push(['Authoritative id', esc(m.dataset_conflict)]);
+     } else if(m.dataset_authoritative){
+       capiRows.push(['Dataset verified','<span class="se-badge se-ready">Matches authoritative</span>']);
+     }
+     capiRows.push(['Ready', yn(m.capi_ready)]);
+     capiRows.push(['Transmission', m.capi_enabled?'Enabled':'Disabled']);
+     capiRows.push(['Last event', ts(m.last_capi_at)]);
+     var capi=card('Meta Conversions API',capiState,capiRows);
 
      // Meta Lead Ads (independent of CAPI)
      var laState=!m.webhook_ready?'blocked':(m.leadgen_gated?'warning':(m.leadgen_test_ready?'ready':'warning'));

@@ -41,6 +41,22 @@ function se_capi_send_event($row)
                 'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'no_dataset'];
     }
 
+    // Dataset-drift guard: refuse to transmit when the brand's dataset id does
+    // not match the recorded authoritative id for this brand. Sending web
+    // conversions to the wrong dataset (e.g. the WhatsApp MM dataset) corrupts
+    // optimisation and attribution, so block loudly and hold — the row is not
+    // lost, and the error names the correct id to restore.
+    if (function_exists('se_capi_dataset_conflict')) {
+        $expected = se_capi_dataset_conflict($brand_id);
+        if ($expected !== null) {
+            return ['ok' => false,
+                    'error' => 'dataset id conflict: brand is set to ' . $brand->meta_dataset_id
+                             . ' but the authoritative dataset for this brand is ' . $expected
+                             . ' — transmission blocked until reconciled',
+                    'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'dataset_conflict'];
+        }
+    }
+
     if (function_exists('se_capi_enabled') && !se_capi_enabled($brand_id)) {
         return ['ok' => false, 'error' => 'meta capi disabled for brand',
                 'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'disabled'];

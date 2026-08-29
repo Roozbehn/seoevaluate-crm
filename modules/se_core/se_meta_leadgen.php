@@ -904,7 +904,51 @@ function se_capi_ready($brand_id)
     $brand = $CI->db->get(db_prefix() . 'se_brands')->row();
     $dataset = $brand ? ($brand->meta_dataset_id ?? null) : null;
 
+    // A configured-but-conflicting dataset id is NOT ready: transmitting to the
+    // wrong dataset is worse than not transmitting. The guard below turns a
+    // silent mis-route into an explicit blocker.
+    if (se_capi_dataset_conflict((int) $brand_id) !== null) { return false; }
+
     return se_secret_configured('meta_capi', (int) $brand_id) && !empty($dataset);
+}
+
+/**
+ * Dataset-drift guard.
+ *
+ * When an authoritative dataset id is recorded for the brand
+ * (option se_meta_dataset_authoritative_<brand>) and the brand's stored
+ * meta_dataset_id does NOT match it, this returns the authoritative id so the
+ * caller can block transmission and show an explicit error. Returns null when
+ * no authoritative value is recorded or when the two agree.
+ *
+ * This exists because the CAPI dataset (website Pixel/Dataset) and the
+ * WhatsApp Marketing-Messages dataset are different Meta assets that are easy
+ * to cross-wire; a wrong id silently sends web conversions to the wrong place.
+ */
+function se_capi_dataset_conflict($brand_id)
+{
+    $auth = trim((string) get_option('se_meta_dataset_authoritative_' . (int) $brand_id));
+
+    $CI = &get_instance();
+    $CI->db->where('id', (int) $brand_id);
+    $brand = $CI->db->get(db_prefix() . 'se_brands')->row();
+    $dataset = $brand ? trim((string) ($brand->meta_dataset_id ?? '')) : '';
+
+    return se_capi_dataset_conflict_decide($dataset, $auth);
+}
+
+/**
+ * Pure conflict decision (no DB/options), extracted for testing.
+ *   - returns null when there is nothing to enforce ($authoritative empty)
+ *     or the dataset is unset (a separate "no dataset" blocker) or they agree;
+ *   - returns the authoritative id when the two disagree.
+ */
+function se_capi_dataset_conflict_decide($dataset, $authoritative)
+{
+    $dataset = trim((string) $dataset);
+    $authoritative = trim((string) $authoritative);
+    if ($authoritative === '' || $dataset === '') { return null; }
+    return $dataset === $authoritative ? null : $authoritative;
 }
 
 /** Per-brand Meta integration health snapshot (for the health interface). */
@@ -948,6 +992,10 @@ function se_meta_health($brand_id)
         'capi_enabled'      => se_capi_enabled($brand_id),
         'capi_gated'        => !$capiToken,
         'last_capi_at'      => get_option('se_meta_last_capi_at') ?: null,
+        // Dataset-drift guard: the recorded authoritative dataset for this brand
+        // and, if they disagree, the id the brand is wrongly pointed at.
+        'dataset_authoritative' => (trim((string) get_option('se_meta_dataset_authoritative_' . $brand_id)) ?: null),
+        'dataset_conflict'  => se_capi_dataset_conflict($brand_id),
 
         // --- Lead Ads leg (independent of CAPI) ---
         'page_token'        => $token !== '',

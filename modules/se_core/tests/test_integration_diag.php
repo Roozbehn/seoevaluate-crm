@@ -68,6 +68,22 @@ se_ok(se_gdm_event_uploadable('Converted Lead'), 'Converted Lead is a generic, u
 se_ok(!se_gdm_event_uploadable('Treated'), 'a clinical stage is never an uploadable event');
 se_ok(!se_gdm_event_uploadable('Photos Received'), 'Photos Received is never an uploadable event');
 
+/* ---- CAPI dataset-drift guard (pure decision) ---------------------------- */
+se_group('CAPI dataset-drift guard blocks the wrong dataset');
+
+require_once __DIR__ . '/../se_meta_leadgen.php';
+
+se_ok(se_capi_dataset_conflict_decide('4515580372030489', '') === null,
+    'no authoritative id recorded => nothing to enforce (no conflict)');
+se_ok(se_capi_dataset_conflict_decide('', '4515580372030489') === null,
+    'unset brand dataset is a separate "no dataset" blocker, not a conflict');
+se_ok(se_capi_dataset_conflict_decide('4515580372030489', '4515580372030489') === null,
+    'matching dataset and authoritative id => no conflict');
+se_eq('4515580372030489', se_capi_dataset_conflict_decide('4266388243621345', '4515580372030489'),
+    'wrong dataset (WhatsApp MM id) conflicts; guard returns the authoritative id to restore');
+se_eq('4515580372030489', se_capi_dataset_conflict_decide(' 4266388243621345 ', ' 4515580372030489 '),
+    'whitespace is trimmed before comparison');
+
 /* ---- the Google status poller is genuinely registered -------------------- */
 se_group('Google request-status polling is implemented');
 

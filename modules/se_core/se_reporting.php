@@ -326,6 +326,13 @@ function se_integration_health($brand_id)
                        'action' => $action, 'link' => $link, 'checked_at' => $now];
     };
 
+    if (!empty($meta['dataset_conflict'])) {
+        $blk('meta_capi_dataset_conflict',
+             'Configured dataset id conflicts with the authoritative dataset for this brand',
+             'CAPI transmission is BLOCKED — server events would go to the wrong dataset (misattributed conversions)',
+             'Reconcile the brand dataset id to ' . $meta['dataset_conflict'] . ' on the Meta integration screen',
+             se_health_link('se_core/se_meta'));
+    }
     if (!empty($meta['capi_gated'])) {
         $blk('meta_capi', 'No Conversions API token installed for this brand',
              'Server-side conversions are not transmitted; browser Pixel is unaffected',
