@@ -13,12 +13,16 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 function se_meta_ui_status($brand_id = 0)
 {
-    $webhookUrl = site_url('se_whatsapp/webhook');   // shared receiver base
-    $leadgenUrl = admin_url('se_core/leadgen');
+    // The CANONICAL public webhook URI — the one the CSRF exclusion covers and
+    // the one to register with Meta. The /admin/... router alias stays
+    // CSRF-protected and must never be handed out.
+    $leadgenUrl = site_url('se_core/leadgen');
 
     $tokenConfigured  = se_secret_configured('meta_page', $brand_id);
     $appSecretPresent = se_secret_configured('meta_app', 0);
-    $verifyPresent    = se_secret_configured('wa_verify', 0);
+    // The META verify token (provider meta_verify) — the same source
+    // Leadgen::verify() enforces, not the WhatsApp one.
+    $verifyPresent    = se_secret_configured('meta_verify', 0);
 
     return [
         'enabled'            => $brand_id > 0 ? se_capi_enabled($brand_id) : false,
@@ -36,17 +40,95 @@ function se_meta_ui_status($brand_id = 0)
     ];
 }
 
+/**
+ * Visibility predicate for leadgen-event queries.
+ *
+ * Events carry NO brand column before routing, so brand membership is derived
+ * from the (page_id, form_id) mapping in tblse_meta_forms. The old code only
+ * filtered when brand > 0, so the default brand=0 screen listed EVERY brand's
+ * event metadata to any se_brands.view holder.
+ *
+ * Rules:
+ *   - explicit brand  -> that brand's mapped pairs (after se_can_access_brand);
+ *   - brand 0, staff with cross-brand reach (admin / se_tenancy.all_brands)
+ *     -> everything, INCLUDING still-unrouted events;
+ *   - brand 0, limited staff -> only events whose pair maps to one of THEIR
+ *     real brands; unrouted events are excluded (no brand can be asserted).
+ *
+ * @return string '' = unrestricted, '1=0' = nothing, else a pair predicate.
+ */
+function se_meta_event_scope_predicate($brand_id = 0)
+{
+    $brand_id = (int) $brand_id;
+
+    if ($brand_id > 0) {
+        if (!se_can_access_brand($brand_id)) {
+            return '1=0';
+        }
+
+        return se_meta_form_pair_predicate([$brand_id]);
+    }
+
+    if (se_staff_sees_all_brands()) {
+        return '';
+    }
+
+    $ids = se_staff_real_brand_ids();
+
+    if (!$ids) {
+        return '1=0';   // fail closed: no brands, no events
+    }
+
+    return se_meta_form_pair_predicate($ids);
+}
+
+/**
+ * OR-of-(page_id AND form_id) predicate for these brands' form mappings.
+ * Resolved as a STANDALONE query first, so callers can then build their own
+ * query without builder pollution. '1=0' when the brands map no forms.
+ */
+function se_meta_form_pair_predicate(array $brand_ids)
+{
+    $brand_ids = array_values(array_filter(array_map('intval', $brand_ids), function ($id) {
+        return $id > 0;
+    }));
+
+    if (!$brand_ids) {
+        return '1=0';
+    }
+
+    $CI = &get_instance();
+
+    $CI->db->select('page_id, form_id');
+    $CI->db->where_in('brand_id', $brand_ids);
+    $rows = $CI->db->get(db_prefix() . 'se_meta_forms')->result_array();
+
+    if (!$rows) {
+        return '1=0';
+    }
+
+    $parts = [];
+
+    foreach ($rows as $r) {
+        $parts[] = '(page_id = ' . $CI->db->escape((string) $r['page_id'])
+                 . ' AND form_id = ' . $CI->db->escape((string) $r['form_id']) . ')';
+    }
+
+    return '(' . implode(' OR ', array_unique($parts)) . ')';
+}
+
 function se_meta_ui_counters($brand_id = 0)
 {
     $CI = &get_instance();
 
+    // Resolve the visibility predicate BEFORE building the aggregate query —
+    // the resolver runs its own query and would pollute a half-built one.
+    $scope = se_meta_event_scope_predicate($brand_id);
+
     $CI->db->select('state, COUNT(*) AS c')->group_by('state');
 
-    if ($brand_id > 0 && se_can_access_brand($brand_id)) {
-        // leadgen events carry no brand column until they are routed, so the
-        // brand filter is applied through the form mapping.
-        $CI->db->where('form_id IN (SELECT form_id FROM ' . db_prefix()
-            . 'se_meta_forms WHERE brand_id = ' . (int) $brand_id . ')', null, false);
+    if ($scope !== '') {
+        $CI->db->where($scope, null, false);
     }
 
     $rows = $CI->db->get(db_prefix() . 'se_meta_leadgen_events')->result_array();
@@ -79,13 +161,15 @@ function se_meta_ui_events($brand_id = 0, $state = '', $limit = 50)
 {
     $CI = &get_instance();
 
+    // Resolve first — see se_meta_event_scope_predicate().
+    $scope = se_meta_event_scope_predicate($brand_id);
+
     if ($state !== '') {
         $CI->db->where('state', $state);
     }
 
-    if ($brand_id > 0 && se_can_access_brand($brand_id)) {
-        $CI->db->where('form_id IN (SELECT form_id FROM ' . db_prefix()
-            . 'se_meta_forms WHERE brand_id = ' . (int) $brand_id . ')', null, false);
+    if ($scope !== '') {
+        $CI->db->where($scope, null, false);
     }
 
     $CI->db->order_by('id', 'DESC')->limit((int) $limit);
@@ -127,6 +211,17 @@ function se_meta_ui_save_defaults($brand_id, $status_id, $source_id)
     return true;
 }
 
+/**
+ * The brand a leadgen event is routed to via its ACTIVE, unique page+form
+ * mapping, or null when the event is (still) unrouted/ambiguous.
+ */
+function se_meta_event_brand(array $event)
+{
+    $route = se_leadgen_route((string) ($event['page_id'] ?? ''), (string) ($event['form_id'] ?? ''));
+
+    return $route ? (int) $route['brand_id'] : null;
+}
+
 /** Requeue a held/failed leadgen event so a configuration fix can take effect. */
 function se_meta_ui_requeue($id)
 {
@@ -136,6 +231,18 @@ function se_meta_ui_requeue($id)
     $row = $CI->db->get(db_prefix() . 'se_meta_leadgen_events')->row_array();
 
     if (!$row) {
+        return ['ok' => false, 'message' => _l('se_meta_requeue_denied')];
+    }
+
+    /* BRAND GUARD (mirrors Se_outbox::requeue's scoped pattern). The event is
+     * loaded by bare id, so without this a configure-capable staff member
+     * mapped to ONE brand could reset another brand's event. The brand comes
+     * from the routed page+form mapping; an event with no (unique, active)
+     * mapping has no assertable brand and may only be touched by staff with
+     * cross-brand reach (admin / se_tenancy.all_brands). */
+    $brand = se_meta_event_brand($row);
+
+    if ($brand === null ? !se_staff_sees_all_brands() : !se_can_access_brand($brand)) {
         return ['ok' => false, 'message' => _l('se_meta_requeue_denied')];
     }
 

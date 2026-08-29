@@ -132,6 +132,14 @@ class SeFakeDb
             }
             if ($v === null && is_string($k) && trim($k) === '1=0') { return false; }
 
+            // OR-of-(col = 'x' AND col = 'y') pair predicate, as produced by
+            // se_meta_form_pair_predicate(): ((a = 'v' AND b = 'w') OR (...)).
+            if ($v === null && is_string($k) && preg_match('/^\(\s*\(.+\)\s*\)$/s', trim($k))
+                && stripos($k, ' AND ') !== false) {
+                if (!$this->orPairMatches($row, trim($k))) { return false; }
+                continue;
+            }
+
             $col = $k; $op = '=';
             if (preg_match('/^(.*?)\s*(>=|<=|!=|<>|>|<)$/', trim($k), $m)) {
                 $col = trim($m[1]); $op = $m[2];
@@ -159,6 +167,35 @@ class SeFakeDb
         }
 
         return true;
+    }
+
+    /**
+     * Evaluate ((colA = 'v1' AND colB = 'v2') OR (colA = 'v3' AND ...)).
+     * Only equality over quoted/plain scalars — exactly the shape
+     * se_meta_form_pair_predicate() emits. Anything else throws, so the fake
+     * can never silently mis-evaluate a predicate.
+     */
+    private function orPairMatches(array $row, $predicate)
+    {
+        $inner = trim(substr(trim($predicate), 1, -1));   // strip the outer ( )
+
+        foreach (preg_split('/\)\s+OR\s+\(/i', trim($inner, '() ')) as $group) {
+            $groupOk = true;
+
+            foreach (preg_split('/\s+AND\s+/i', $group) as $cond) {
+                if (!preg_match("/^\s*`?([A-Za-z0-9_.]+)`?\s*=\s*(?:'((?:[^']|'')*)'|([A-Za-z0-9_.\-]+))\s*$/", $cond, $m)) {
+                    throw new RuntimeException('SeFakeDb: unhandled OR-pair fragment: ' . $cond);
+                }
+                $col = $m[1];
+                if (strpos($col, '.') !== false) { $col = substr($col, strrpos($col, '.') + 1); }
+                $val = isset($m[3]) && $m[3] !== '' ? $m[3] : str_replace("''", "'", $m[2] ?? '');
+                if ((string) ($row[$col] ?? '') !== (string) $val) { $groupOk = false; break; }
+            }
+
+            if ($groupOk) { return true; }
+        }
+
+        return false;
     }
 
     private function select_rows($table)

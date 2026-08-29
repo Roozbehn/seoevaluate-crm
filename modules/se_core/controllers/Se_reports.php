@@ -27,6 +27,14 @@ class Se_reports extends AdminController
      * Defaults to the first brand THIS staff member can reach, not the first
      * brand that exists globally — the old default handed a restricted user a
      * foreign brand id and then relied on the access check to bounce them.
+     *
+     * An UNMAPPED ordinary staff member (no brand rows, not admin, no
+     * se_tenancy capability) resolves to SE_BRAND_NONE via
+     * se_default_brand_id(): a sentinel that matches no row, so data()/
+     * health_data() return an honestly EMPTY no-brand state instead of the
+     * brand-0 triage aggregates they used to leak. Staff who actually hold
+     * se_tenancy.triage_unassigned / all_brands keep their brand-0 triage
+     * default.
      */
     private function brand()
     {

@@ -36,13 +36,104 @@ hooks()->add_action('after_cron_run', 'se_leadgen_reconcile');
 
 /* ---------- receiver: see modules/se_core/controllers/Leadgen.php -------- */
 
+/* ONE secret source: the FILE secret provider (se_secret_read).
+ *
+ * Enforcement used to read tbloptions (se_meta_app_secret,
+ * se_meta_webhook_verify_token, se_meta_page_token_<brand>) while the
+ * credentials UI reported the file provider, so the UI could say "installed"
+ * while the webhook rejected everything — or the reverse. These accessors are
+ * now the ONLY way this module reads a Meta secret. The legacy option values
+ * are PRESERVED but never read again; activation is dropping a secret FILE
+ * (providers meta_app / meta_verify / meta_page), no code change. Absent file
+ * => '' => every check fails CLOSED. */
+
+/** Meta app secret (signature verification + appsecret_proof). File provider only. */
+function se_meta_app_secret()
+{
+    return se_secret_read('meta_app');
+}
+
+/** Meta webhook verify token. File provider only; '' fails verification closed. */
+function se_meta_verify_token()
+{
+    return se_secret_read('meta_verify');
+}
+
+/** Per-brand Meta Page token, falling back to the shared file. Never an option. */
+function se_meta_page_token($brand_id)
+{
+    $token = se_secret_read('meta_page', (int) $brand_id);
+
+    return $token !== '' ? $token : se_secret_read('meta_page', 0);
+}
+
 function se_leadgen_verify_signature($raw_body, $header, $app_secret = null)
 {
-    $secret = $app_secret !== null ? $app_secret : (string) get_option('se_meta_app_secret');
+    $secret = $app_secret !== null ? $app_secret : se_meta_app_secret();
     if ($secret === '' || !is_string($header) || strpos($header, 'sha256=') !== 0) {
         return false;
     }
     return hash_equals('sha256=' . hash_hmac('sha256', $raw_body, $secret), $header);
+}
+
+/** GET verification decision: subscribe mode + non-empty configured token + constant-time match. */
+function se_leadgen_verify_outcome($mode, $token)
+{
+    $expected = se_meta_verify_token();
+
+    return $mode === 'subscribe' && $expected !== '' && hash_equals($expected, (string) $token);
+}
+
+/**
+ * The POST pipeline over an already-read raw body, in the REQUIRED order:
+ *
+ *   1. 413  body-size limit — declared Content-Length AND actual bytes,
+ *           before any decode and before the HMAC is computed;
+ *   2. 401  X-Hub-Signature-256 over the EXACT raw bytes (missing/invalid);
+ *   3. 400  JSON well-formedness — a body that json_decode() cannot parse to
+ *           an array/object is refused WITHOUT touching storage. Well-formed
+ *           payloads are still stored raw and fully parsed async by cron
+ *           (durability first); this gate only rejects the un-parseable;
+ *   4. 200  only after the durable, deduplicated store (duplicate = held
+ *           already = accepted); anything else is an honest 500 so Meta
+ *           redelivers.
+ *
+ * @return array{status:int,ok:bool,reason:string}
+ */
+function se_leadgen_receive_outcome($declared_length, $raw, $signature_header)
+{
+    if ((int) $declared_length > SE_LEADGEN_MAX_BODY_BYTES
+        || ($raw !== false && strlen((string) $raw) > SE_LEADGEN_MAX_BODY_BYTES)) {
+        return ['status' => 413, 'ok' => false, 'reason' => 'payload_too_large'];
+    }
+
+    $raw = (string) $raw;
+
+    if (!se_leadgen_verify_signature($raw, $signature_header)) {
+        return ['status' => 401, 'ok' => false, 'reason' => 'bad_signature'];
+    }
+
+    $decoded = json_decode($raw);
+
+    if (json_last_error() !== JSON_ERROR_NONE || (!is_array($decoded) && !is_object($decoded))) {
+        return ['status' => 400, 'ok' => false, 'reason' => 'malformed_json'];
+    }
+
+    /* 200 means DURABLY ACCEPTED. A failed insert must return 500 so Meta
+     * redelivers; a duplicate is genuinely accepted (we already hold it). */
+    $stored = se_leadgen_store_event($raw, true);
+
+    if (!empty($stored['stored']) || !empty($stored['duplicate'])) {
+        update_option('se_meta_last_webhook_at', se_db_now());
+
+        return [
+            'status' => 200,
+            'ok'     => true,
+            'reason' => empty($stored['duplicate']) ? 'accepted' : 'duplicate',
+        ];
+    }
+
+    return ['status' => 500, 'ok' => false, 'reason' => 'not_stored'];
 }
 
 /** Big-integer-safe decode: keeps 16–17 digit ids as strings. */
@@ -208,8 +299,9 @@ function se_leadgen_fetch($leadgen_id, $brand_id)
         return ['ok' => is_array($data), 'gated' => false, 'field_data' => $data ?: []];
     }
 
-    $token = (string) (get_option('se_meta_page_token_' . (int) $brand_id) ?: get_option('se_meta_page_token'));
-    $secret = (string) get_option('se_meta_app_secret');
+    // File secret provider only (see the accessors above the receiver).
+    $token  = se_meta_page_token($brand_id);
+    $secret = se_meta_app_secret();
     if ($token === '') {
         return ['ok' => false, 'gated' => true, 'field_data' => []]; // App Review pending
     }
@@ -630,7 +722,7 @@ function se_meta_health($brand_id)
     $CI->db->where('brand_id', $brand_id);
     $forms = $CI->db->get(db_prefix() . 'se_meta_forms')->result_array();
 
-    $token = (string) (get_option('se_meta_page_token_' . $brand_id) ?: get_option('se_meta_page_token'));
+    $token = se_meta_page_token($brand_id);   // file provider — same source as enforcement
 
     $outbox = function_exists('se_outbox_health') ? se_outbox_health($brand_id) : [];
 

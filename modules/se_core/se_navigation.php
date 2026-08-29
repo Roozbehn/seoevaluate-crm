@@ -84,7 +84,10 @@ function se_nav_items()
             'label' => 'se_reports_health',
             'href'  => 'se_core/se_reports/health',
             'icon'  => 'fa fa-heartbeat',
-            'can'   => function () { return se_staff_can_report() || se_staff_can_configure_brands(); },
+            // EXACTLY the gate Se_reports::__construct enforces. The old
+            // `|| se_staff_can_configure_brands()` showed the item to
+            // configure-only staff who were then bounced on click.
+            'can'   => function () { return se_staff_can_report(); },
         ],
         [
             'slug'  => 'se-credentials',

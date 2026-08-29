@@ -37,6 +37,7 @@ function se_secret_providers()
         'meta_capi'     => ['label' => 'Meta Conversions API token', 'per_brand' => true],
         'meta_page'     => ['label' => 'Meta Page access token', 'per_brand' => true],
         'meta_app'      => ['label' => 'Meta app secret', 'per_brand' => false],
+        'meta_verify'   => ['label' => 'Meta webhook verify token', 'per_brand' => false],
         'wa_app'        => ['label' => 'WhatsApp app secret', 'per_brand' => false],
         'wa_verify'     => ['label' => 'WhatsApp webhook verify token', 'per_brand' => false],
         'google_sa'     => ['label' => 'Google service-account key', 'per_brand' => true],
