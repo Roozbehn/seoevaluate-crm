@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 6);
+define('SE_CORE_SCHEMA_VERSION', 7);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -178,6 +178,21 @@ function se_core_migration_statements()
         PRIMARY KEY (`id`),
         KEY `brand_id` (`brand_id`),
         KEY `status` (`status`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+
+    /* --- Phase 6: imported external report metrics (GA4/GSC/Ads) ---------- */
+    $stmts[] = "CREATE TABLE IF NOT EXISTS `{$p}se_ext_metrics` (
+        `id` bigint(20) NOT NULL AUTO_INCREMENT,
+        `brand_id` int(11) NOT NULL DEFAULT 0,
+        `source` varchar(32) NOT NULL,
+        `metric` varchar(64) NOT NULL,
+        `value` double NOT NULL DEFAULT 0,
+        `period_date` date NOT NULL,
+        `imported_at` datetime NOT NULL,
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `brand_source_metric_date` (`brand_id`,`source`,`metric`,`period_date`),
+        KEY `brand_id` (`brand_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     return $stmts;

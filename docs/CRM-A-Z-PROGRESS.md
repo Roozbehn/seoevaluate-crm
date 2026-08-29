@@ -204,3 +204,20 @@ Branch `feature/google-conversions` -> merged to `main`. se_core schema v6 (`tbl
 
 Rewritten `se_google_dm.php` (already wired in se_core batch-2 loader); migrations v6. No clinical data in conversions.
 **Externally gated (owner):** Cloud project + service account + credentials, Data Manager permissions, conversion actions, first live upload.
+
+---
+
+## Phase 6 — Reporting + integration health  — **COMPLETE (internal); external imports gated (merged)**
+
+Branch `feature/reporting-hardening` -> merged to `main`. se_core schema v7 (`tblse_ext_metrics`).
+Routes: `/admin/se_core/se_reports/index` (dashboard), `/health` (integration health), `/data` + `/health_data` (JSON).
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| Brand-scoped dashboards | complete (internal) | `se_report_totals/by_stage/by_source/appointments/whatsapp/spend_vs_outcome` — leads/converted/lost/junk + rates, funnel by stage, conversion by source/campaign, appts booked/held/no-show + no-show rate, WhatsApp volume + estimated billing (configurable rates), spend-vs-outcome (cost/lead, cost/treatment). HTTP 21/0. |
+| Scheduled external imports | framework done; gated | GA4 / Search Console / Google Ads spend imported ASYNC by cron into `tblse_ext_metrics` (upsert), read-only at render. Importer seam + `se_report_import_all` cron hook; gated (no client -> 0 imported) until credentials. Unit 7/0. **No external HTTP during dashboard render** (internal aggregates + stored metrics only). |
+| Integration-health page | complete | `se_integration_health` aggregates meta/google/outbox health + WhatsApp number quality + cron age/health + data-freshness timestamps + external blockers. Renders 200; blockers correctly list gated meta/google. |
+
+New: `se_reporting.php`, `controllers/Se_reports.php`, `views/se_reports_dashboard.php`, `views/se_reports_health.php`.
+Wired in se_core (require + sidebar menu + lang); migrations v7. Dashboard/health render 200; residue 0.
+**Gated (owner):** GA4 property, Search Console property, Google Ads API access for live spend/metric imports (see Google setup checklist).
