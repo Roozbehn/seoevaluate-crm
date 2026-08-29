@@ -1,117 +1,79 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
 <?php init_head(); ?>
-<?php
-  $CI = &get_instance();
-  $CI->load->model('staff_model');
-  $staff  = $CI->staff_model->get('', ['active' => 1]);
-  $brands = function_exists('se_all_brands') ? se_all_brands(true, true) : [];
-  $statuses = ['scheduled', 'confirmed', 'held', 'completed', 'no_show', 'cancelled'];
-?>
-<div id="wrapper">
-  <div class="content">
-    <div class="row">
-      <div class="col-md-12">
-        <div class="panel_s">
-          <div class="panel-body">
-            <div class="_buttons">
-              <a href="#" class="btn btn-primary pull-right" onclick="se_appt_new(); return false;">
-                <?php echo _l('se_appt_new'); ?>
-              </a>
-              <a href="<?php echo admin_url('se_appointments/index'); ?>" class="btn btn-default pull-right mright5">
-                <?php echo _l('se_appt_calendar'); ?>
-              </a>
-              <h4 class="no-margin"><?php echo _l('se_appointments'); ?></h4>
-            </div>
-            <hr class="hr-panel-heading" />
-            <table class="table dt-table">
-              <thead>
-                <tr>
-                  <th><?php echo _l('se_appt_title'); ?></th>
-                  <th><?php echo _l('se_appt_start'); ?></th>
-                  <th><?php echo _l('se_appt_staff'); ?></th>
-                  <th><?php echo _l('se_appt_status'); ?></th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <?php foreach ($appointments as $a) { ?>
-                  <tr>
-                    <td><?php echo html_escape($a['title']); ?></td>
-                    <td><?php echo _dt($a['start_at']); ?></td>
-                    <td><?php echo html_escape($a['staff_name']); ?></td>
-                    <td><span class="label label-default"><?php echo _l('se_appt_status_' . $a['status']); ?></span></td>
-                    <td class="text-right">
-                      <a href="<?php echo admin_url('se_appointments/view/' . $a['id']); ?>" class="btn btn-default btn-xs"><?php echo _l('view'); ?></a>
-                    </td>
-                  </tr>
-                <?php } ?>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
+<div id="wrapper"><div class="content">
 
-    <div class="panel_s">
-      <div class="panel-body">
-        <h4 id="se-appt-form-title"><?php echo _l('se_appt_new'); ?></h4>
-        <hr class="hr-panel-heading" />
-        <?php echo form_open(admin_url('se_appointments/save'), ['id' => 'se-appt-form']); ?>
-          <input type="hidden" name="id" id="se-appt-id" value="" />
-          <div class="row">
-            <div class="col-md-6"><?php echo render_input('title', 'se_appt_title'); ?></div>
-            <div class="col-md-3"><?php echo render_datetime_input('start_at', 'se_appt_start'); ?></div>
-            <div class="col-md-3"><?php echo render_datetime_input('end_at', 'se_appt_end'); ?></div>
-          </div>
-          <div class="row">
-            <div class="col-md-3">
-              <label><?php echo _l('se_brand'); ?></label>
-              <select name="brand_id" class="form-control selectpicker">
-                <option value="0"><?php echo _l('se_brand_unassigned'); ?></option>
-                <?php foreach ($brands as $b) { ?>
-                  <option value="<?php echo $b['id']; ?>"><?php echo html_escape($b['name']); ?></option>
-                <?php } ?>
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label><?php echo _l('se_appt_staff'); ?></label>
-              <select name="staff_id" class="form-control selectpicker">
-                <?php foreach ($staff as $s) { ?>
-                  <option value="<?php echo $s['staffid']; ?>"><?php echo html_escape($s['firstname'] . ' ' . $s['lastname']); ?></option>
-                <?php } ?>
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label><?php echo _l('se_appt_lead'); ?> (ID)</label>
-              <input type="hidden" name="rel_type" value="lead" />
-              <input type="number" name="rel_id" class="form-control" value="0" />
-            </div>
-            <div class="col-md-3">
-              <label><?php echo _l('se_appt_status'); ?></label>
-              <select name="status" class="form-control selectpicker">
-                <?php foreach ($statuses as $st) { ?>
-                  <option value="<?php echo $st; ?>"><?php echo _l('se_appt_status_' . $st); ?></option>
-                <?php } ?>
-              </select>
-            </div>
-          </div>
-          <div class="row">
-            <div class="col-md-6"><?php echo render_input('location', 'se_appt_location'); ?></div>
-          </div>
-          <?php echo render_textarea('notes', 'se_appt_notes'); ?>
-          <button type="submit" class="btn btn-primary"><?php echo _l('submit'); ?></button>
-        <?php echo form_close(); ?>
-      </div>
-    </div>
+<?php se_ui_header(_l('se_appointments'), [
+    ['href' => admin_url('se_appointments/se_appointments/create'), 'label' => _l('se_appt_new'), 'icon' => 'fa-plus', 'class' => 'btn-primary'],
+    ['href' => admin_url('se_appointments/se_appointments/index'),  'label' => _l('se_appt_calendar'), 'icon' => 'fa-calendar'],
+]); ?>
+
+<?php if (empty($has_brand)) { se_ui_no_brand_screen(); } else { ?>
+
+<div class="row"><div class="col-md-12"><div class="panel_s"><div class="panel-body">
+
+  <?php
+  $brandOpts = ['' => _l('se_appt_filter_all')];
+  foreach ($brands as $b) { $brandOpts[(int) $b['id']] = $b['name']; }
+
+  $staffOpts = ['' => _l('se_appt_filter_all')];
+  foreach ($staff as $s) { $staffOpts[(int) $s['staffid']] = trim($s['firstname'] . ' ' . $s['lastname']); }
+
+  $statusOpts = ['' => _l('se_appt_filter_all')];
+  foreach ($statuses as $st) { $statusOpts[$st] = _l('se_appt_status_' . $st); }
+
+  se_ui_filters(admin_url('se_appointments/se_appointments/manage'), [
+      'brand'  => ['label' => _l('se_appt_brand'),  'type' => 'select', 'options' => $brandOpts],
+      'staff'  => ['label' => _l('se_appt_staff'),  'type' => 'select', 'options' => $staffOpts],
+      'status' => ['label' => _l('se_appt_status'), 'type' => 'select', 'options' => $statusOpts],
+  ], $filters); ?>
+
+  <?php if (empty($appointments)) {
+      se_ui_empty(_l('se_appt_none'), [
+          'href'  => admin_url('se_appointments/se_appointments/create'),
+          'label' => _l('se_appt_new'),
+      ]);
+  } else { ?>
+  <div class="table-responsive">
+    <table class="table table-striped">
+      <thead><tr>
+        <th><?php echo html_escape(_l('se_appt_title')); ?></th>
+        <th><?php echo html_escape(_l('se_appt_brand')); ?></th>
+        <th><?php echo html_escape(_l('se_appt_start')); ?></th>
+        <th><?php echo html_escape(_l('se_appt_staff')); ?></th>
+        <th><?php echo html_escape(_l('se_appt_relation')); ?></th>
+        <th><?php echo html_escape(_l('se_appt_status')); ?></th>
+        <th></th>
+      </tr></thead>
+      <tbody>
+      <?php foreach ($appointments as $a) { ?>
+        <tr>
+          <td><a href="<?php echo admin_url('se_appointments/se_appointments/view/' . (int) $a['id']); ?>"><?php echo html_escape($a['title']); ?></a></td>
+          <td><?php echo se_ui_brand_badge((int) $a['brand_id']); ?></td>
+          <td><?php echo html_escape($a['start_at']); ?></td>
+          <td><?php echo html_escape((string) ($a['staff_name'] ?? '')); ?></td>
+          <td>
+            <?php if (!empty($a['rel_id']) && $a['rel_type'] === 'lead') { ?>
+              <a href="<?php echo admin_url('leads/index/' . (int) $a['rel_id']); ?>"><?php echo html_escape(_l('se_appt_lead')); ?> #<?php echo (int) $a['rel_id']; ?></a>
+            <?php } elseif (!empty($a['rel_id'])) { ?>
+              <a href="<?php echo admin_url('clients/client/' . (int) $a['rel_id']); ?>"><?php echo html_escape(_l('se_appt_customer')); ?> #<?php echo (int) $a['rel_id']; ?></a>
+            <?php } else { echo '<span class="text-muted">&mdash;</span>'; } ?>
+          </td>
+          <td><?php echo se_ui_badge($a['status'], _l('se_appt_status_' . $a['status'])); ?></td>
+          <td class="text-right">
+            <a href="<?php echo admin_url('se_appointments/se_appointments/view/' . (int) $a['id']); ?>" class="btn btn-default btn-sm"><?php echo html_escape(_l('view')); ?></a>
+            <?php if (staff_can('edit', 'se_appointments')) { ?>
+              <a href="<?php echo admin_url('se_appointments/se_appointments/edit/' . (int) $a['id']); ?>" class="btn btn-default btn-sm"><?php echo html_escape(_l('edit')); ?></a>
+            <?php } ?>
+          </td>
+        </tr>
+      <?php } ?>
+      </tbody>
+    </table>
   </div>
-</div>
-<?php init_tail(); ?>
-<script>
-function se_appt_new() {
-  $('#se-appt-id').val('');
-  $('#se-appt-form')[0].reset();
-  $('html,body').animate({ scrollTop: $('#se-appt-form').offset().top - 80 }, 300);
-}
-</script>
-</body>
-</html>
+  <?php } ?>
+
+</div></div></div></div>
+<?php } ?>
+
+</div></div>
+<?php init_tail(); ?></body></html>

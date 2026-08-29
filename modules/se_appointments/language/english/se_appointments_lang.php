@@ -40,3 +40,7 @@ $lang['se_appt_sync_state']          = 'Calendar sync';
 $lang['se_appt_filter_all']          = 'All';
 $lang['se_appt_detail']              = 'Appointment detail';
 
+$lang['se_appt_conflict_hint']  = 'Availability is re-checked whenever the start, end or assigned staff changes. A clash is refused and reported here.';
+$lang['se_appt_status_confirm'] = 'Change the status of this appointment?';
+$lang['se_appt_availability']   = 'Availability';
+$lang['se_appt_relation_type']  = 'Relation type';

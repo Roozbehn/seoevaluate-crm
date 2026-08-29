@@ -39,3 +39,7 @@ $lang['se_appt_reminder']           = 'Hatırlatma';
 $lang['se_appt_sync_state']         = 'Takvim eşitleme';
 $lang['se_appt_filter_all']         = 'Tümü';
 $lang['se_appt_detail']             = 'Randevu detayı';
+$lang['se_appt_conflict_hint']  = 'Başlangıç, bitiş veya atanan personel değiştiğinde uygunluk yeniden denetlenir. Çakışma reddedilir ve burada bildirilir.';
+$lang['se_appt_status_confirm'] = 'Bu randevunun durumu değiştirilsin mi?';
+$lang['se_appt_availability']   = 'Uygunluk';
+$lang['se_appt_relation_type']  = 'İlişki türü';

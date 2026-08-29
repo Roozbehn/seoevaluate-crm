@@ -12,7 +12,7 @@
     <label><input type="checkbox" name="archived" value="1" <?php echo $archived ? 'checked' : ''; ?> /> <?php echo _l('se_patient_show_archived'); ?></label>
     <button class="btn btn-default btn-sm"><?php echo _l('se_patient_search'); ?></button>
   </form>
-  <table class="table table-striped">
+  <div class="table-responsive"><table class="table table-striped">
     <thead><tr><th>#</th><th><?php echo _l('se_patient_brand'); ?></th><th><?php echo _l('se_patient_language'); ?></th><th><?php echo _l('se_patient_nationality'); ?></th><th><?php echo _l('se_patient_state'); ?></th><th></th></tr></thead>
     <tbody>
     <?php if (empty($patients)) { ?><tr><td colspan="6" class="text-muted"><?php echo _l('se_patient_none'); ?></td></tr><?php } ?>
@@ -27,7 +27,7 @@
       </tr>
     <?php } ?>
     </tbody>
-  </table>
+  </table></div>
   <p class="text-muted"><?php echo _l('se_patient_total'); ?>: <?php echo (int) $total; ?></p>
   <?php if ($pages > 1) { for ($i=1;$i<=$pages;$i++){ ?>
      <a class="btn btn-<?php echo $i===$page?'primary':'default'; ?> btn-sm" href="<?php echo admin_url('se_core/se_patients?page='.$i.'&search='.urlencode($search).($archived?'&archived=1':'')); ?>"><?php echo $i; ?></a>

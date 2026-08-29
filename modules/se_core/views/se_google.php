@@ -64,14 +64,14 @@
   <?php echo form_close(); ?>
 
   <hr />
-  <table class="table table-striped"><tbody>
+  <div class="table-responsive"><table class="table table-striped"><tbody>
   <?php foreach ($mappings as $stage => $action) { ?>
     <tr>
       <td><?php echo html_escape($stage); ?></td>
       <td><?php echo $action !== '' ? '<code>' . html_escape($action) . '</code>' : '<span class="text-muted">—</span>'; ?></td>
     </tr>
   <?php } ?>
-  </tbody></table>
+  </tbody></table></div>
 </div></div></div>
 
 <div class="col-md-6">

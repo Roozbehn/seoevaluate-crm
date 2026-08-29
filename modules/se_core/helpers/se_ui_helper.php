@@ -210,14 +210,17 @@ function se_ui_counters(array $counters, $base_href = null, $param = 'status')
  */
 function se_ui_kv(array $rows, $raw = false)
 {
-    echo '<table class="table table-striped"><tbody>';
+    // Wrapped for overflow: a key/value table with long values (a webhook URL,
+    // a request id) pushes past a phone viewport and takes the whole page with
+    // it. .table-responsive scrolls the table instead of the document.
+    echo '<div class="table-responsive"><table class="table table-striped"><tbody>';
 
     foreach ($rows as $k => $v) {
-        echo '<tr><td style="width:34%"><strong>' . html_escape($k) . '</strong></td><td>'
+        echo '<tr><td style="width:34%;min-width:140px"><strong>' . html_escape($k) . '</strong></td><td>'
            . ($raw ? $v : html_escape((string) $v)) . '</td></tr>';
     }
 
-    echo '</tbody></table>';
+    echo '</tbody></table></div>';
 }
 
 /** An "external setup required" checklist. Never contains a secret field. */
