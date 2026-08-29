@@ -22,6 +22,8 @@ register_language_files(SE_CORE_MODULE_NAME, [SE_CORE_MODULE_NAME]);
 register_activation_hook(SE_CORE_MODULE_NAME, 'se_core_activation_hook');
 
 hooks()->add_action('admin_init', 'se_core_migrate', 1);
+hooks()->add_action('admin_init', 'se_patient_permissions');
+hooks()->add_action('admin_init', 'se_patient_menu');
 hooks()->add_action('admin_init', 'se_core_permissions');
 hooks()->add_action('admin_init', 'se_core_menu_items');
 hooks()->add_action('admin_init', 'se_core_brand_guard');

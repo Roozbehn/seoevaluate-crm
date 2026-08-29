@@ -1,5 +1,9 @@
 # DNS, TLS & Cutover Runbook (PREPARED — NOT EXECUTED)
 
+> **Optional future infrastructure migration — NOT required for the current cPanel deployment.**
+> The CRM stays on cPanel + PHP 8.1.34 for the initial 2–3 users. Keep this only as a future reference.
+
+
 **No DNS, certificate, Cloudflare, host, or routing change has been made.** This is a plan only. Execute
 only with owner approval at the cutover gate.
 

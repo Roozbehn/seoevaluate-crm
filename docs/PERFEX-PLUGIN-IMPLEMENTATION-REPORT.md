@@ -47,3 +47,17 @@ use, we can later commit it and drop the ignore entry.
 - Confirm CodeCanyon license ownership + whether repo-storage is permitted, per plugin.
 - Confirm no real need for Service Management / Flutex before taking on their maintenance cost.
 - Decide whether to commit the dark-theme vendor source or keep it deploy-only (gitignored).
+
+## Dark Theme — deployment continuity (verified)
+- **Installed module path:** `modules/perfex_dark_theme/` (active, version **1.2.3**).
+- **Source archive (owner's machine):** `~/Downloads/perfex plugins/codecanyon-perfex-crm-dark-theme-v1.2.3.zip`
+  — outer SHA-256 `79953203c1b6c54354dd362693381f894b7debce88de9f36030104e9c6430afc`;
+  inner `perfex_dark_theme.zip` SHA-256 `8c05e294c31ec10199a7727077987aaefcf8f627474d226fbbd157e823555ef6`.
+- **Git tracking:** **0 vendor files tracked** (gitignored via `modules/perfex_dark_theme/`). Not committed.
+- **Copy to a replacement cPanel install:** extract the inner `perfex_dark_theme.zip`; upload the
+  `perfex_dark_theme/` folder into `modules/` (cPanel File Manager or scp). No git checkout brings it.
+- **Activation:** Admin → Setup → Modules → Activate `Perfex Dark Theme` (installer only adds 3 options).
+- **Version verification:** `tblmodules.perfex_dark_theme.installed_version = 1.2.3`, `active = 1`.
+- **Deactivation:** Admin → Modules → Deactivate. **Non-destructive** (no `uninstall.php`; no data removed).
+- **Rollback:** deactivate + delete `modules/perfex_dark_theme/`. No data loss.
+- **Other CodeCanyon plugins installed: none** (WhatsBot/PRChat rejected; Accounting/Service/Flutex awaiting license).

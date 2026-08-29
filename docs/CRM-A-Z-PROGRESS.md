@@ -249,3 +249,20 @@ brand isolation PASS; security scans PASS (0 secrets in tracked files, 0 synthet
 CSRF-gated, app-config 600, dark theme untracked, no unlicensed plugin); cron 200, app 200; error log 0 (php83-CLI
 lint artifacts cleared — app produces no errors). Reports: `docs/CRM-A-Z-FINAL-REPORT.md`, `docs/FINAL-QA-MATRIX.md`,
 `docs/OWNER-GO-LIVE-CHECKLIST.md`. All external ad-platform delivery classified Externally gated; nothing submitted.
+
+---
+
+## Phase 9 — Gap closure (cPanel decision + Patient UI)  — **COMPLETE (merged)**
+
+Branch `feature/patient-ui` -> merged to `main`. Infrastructure reconciled: **cPanel + PHP 8.1.34 approved
+for 2–3 internal users; VPS/PHP-upgrade moved to Optional future roadmap.** Disk 95% = shared array (this
+account 16 GB, CRM 222 MB, backups 3.3 MB — safe). PHP 8.3/8.4 syntax lint PASS; 8.3 runtime not verified
+(nd_mysqli CLI warning — non-blocker). Error logs rotated (not truncated) + gitignored; app produces 0 errors.
+
+**Patient CRUD UI** (`/admin/se_core/se_patients`): reuses `tblse_patients`/`se_consent_ledger`/
+`se_record_access_log` (no duplicate model, **no migration** — `retention_state` supports archive). Brand-scoped
+list+search+pagination, create/view/edit, **archive/soft-delete** (keeps consent+history), cross-brand ID denial,
+Perfex capabilities (view/create/edit/delete), CSRF, lead/client/appointment links, consent + audit history,
+server-side validation, Turkish/Unicode, minimal personal data. **Conversion-data prohibition proven** (patient/
+clinical data cannot enter CAPI/Google payloads — builders are lead-only). Tests: unit **19/0** + DB **7/0** = **26/0**.
+Authenticated visual CRUD = owner manual checklist (`docs/MANUAL-UI-CHECKLIST.md`).
