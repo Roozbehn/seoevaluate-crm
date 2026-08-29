@@ -61,7 +61,8 @@ elif [ "$prov" = "google_sa_22" ]; then
 else
     # Single-line secret: hidden, read from stdin into a variable (never argv).
     printf "Paste the value for %s (input hidden), then press Enter: " "$prov" >&2
-    IFS= read -rs value
+    value=""
+    IFS= read -rs value || true   # tolerate EOF; the empty-check below decides
     echo >&2
     [ -n "$value" ] || { echo "Refused: empty input." >&2; exit 1; }
     printf '%s' "$value" > "$tmp"
