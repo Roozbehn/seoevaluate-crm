@@ -60,3 +60,8 @@ $lang['se_perm_all_brands']       = 'Access ALL brands\' data (grant deliberatel
 $lang['se_perm_triage']           = 'Access unassigned records (triage queue)';
 $lang['se_brand_access_denied']   = 'You do not have access to this brand.';
 
+/* --- Phase 10: patient safety --------------------------------------------- */
+$lang['se_patient_link_conflict']     = 'Another patient is already linked to that lead or customer in this brand.';
+$lang['se_patient_deletion_requested'] = 'Deletion request recorded';
+$lang['se_patient_passport_hidden']   = 'Not collected';
+
