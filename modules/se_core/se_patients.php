@@ -12,69 +12,13 @@ defined('BASEPATH') or exit('No direct script access allowed');
  */
 
 /* --------------------------------------------------------------------------
- * Consent ledger — append-only. The current state of a purpose is the latest
- * row for that (brand, rel, purpose). Withdrawals are new rows, not deletes.
+ * Consent ledger lives in se_consent.php.
+ *
+ * It used to be defined here with a permissive decision rule and no record of
+ * WHICH question produced the answer. se_consent.php owns it now: strict
+ * affirmative allowlist, question/answer provenance, server-controlled
+ * consent-text version, point-in-time lookup, and withdrawal handling.
  * ------------------------------------------------------------------------ */
-
-/** Allowed consent purposes; anything else is rejected at the boundary. */
-function se_consent_purposes()
-{
-    return ['ads', 'marketing', 'whatsapp'];
-}
-
-/**
- * Append a consent event. Returns the new row id, or 0 when rejected.
- * $state is 'granted' or 'withdrawn'.
- */
-function se_consent_record($brand_id, $rel_type, $rel_id, $purpose, $state, $version = null, $source = null, $recorded_by = 0)
-{
-    if (!in_array($purpose, se_consent_purposes(), true)) {
-        return 0;
-    }
-    if (!in_array($state, ['granted', 'withdrawn'], true)) {
-        return 0;
-    }
-    $rel_id = (int) $rel_id;
-    if ($rel_id <= 0) {
-        return 0;
-    }
-
-    $CI = &get_instance();
-    $CI->db->insert(db_prefix() . 'se_consent_ledger', [
-        'brand_id'             => (int) $brand_id,
-        'rel_type'             => in_array($rel_type, ['lead', 'client'], true) ? $rel_type : 'lead',
-        'rel_id'               => $rel_id,
-        'purpose'              => $purpose,
-        'state'                => $state,
-        'consent_text_version' => $version !== null ? mb_substr((string) $version, 0, 32) : null,
-        'source'               => $source !== null ? mb_substr((string) $source, 0, 64) : null,
-        'consent_at'           => date('Y-m-d H:i:s'),
-        'recorded_by'          => (int) $recorded_by,
-    ]);
-
-    return (int) $CI->db->insert_id();
-}
-
-/** Latest consent state for a purpose, or null if never recorded. */
-function se_consent_current($brand_id, $rel_type, $rel_id, $purpose)
-{
-    $CI = &get_instance();
-    $CI->db->where('brand_id', (int) $brand_id)
-           ->where('rel_type', $rel_type)
-           ->where('rel_id', (int) $rel_id)
-           ->where('purpose', $purpose)
-           ->order_by('id', 'DESC')
-           ->limit(1);
-    $row = $CI->db->get(db_prefix() . 'se_consent_ledger')->row();
-
-    return $row ? $row->state : null;
-}
-
-/** True only if the latest state for the purpose is 'granted'. */
-function se_consent_granted($brand_id, $rel_type, $rel_id, $purpose)
-{
-    return se_consent_current($brand_id, $rel_type, $rel_id, $purpose) === 'granted';
-}
 
 /* --------------------------------------------------------------------------
  * Patient records — brand-scoped, with an access log for sensitive reads.

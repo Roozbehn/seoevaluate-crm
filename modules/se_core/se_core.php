@@ -16,6 +16,7 @@ $CI->load->helper(SE_CORE_MODULE_NAME . '/se_core');
 require_once __DIR__ . '/se_authz.php';
 require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/pipeline.php';
+require_once __DIR__ . '/se_consent.php';
 require_once __DIR__ . '/se_patients.php';
 require_once __DIR__ . '/se_attribution.php';
 

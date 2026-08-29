@@ -285,7 +285,10 @@ require_once $SE_MODULES . '/se_core/helpers/se_core_helper.php';
 require_once $SE_MODULES . '/se_core/se_authz.php';
 require_once $SE_MODULES . '/se_core/migrations.php';
 require_once $SE_MODULES . '/se_core/pipeline.php';
+require_once $SE_MODULES . '/se_core/se_consent.php';
 require_once $SE_MODULES . '/se_core/se_patients.php';
+require_once $SE_MODULES . '/se_core/se_outbox.php';
+require_once $SE_MODULES . '/se_core/se_meta_leadgen.php';
 
 /** se_core_deny() lives in se_core.php, which we cannot load (it self-executes). */
 if (!function_exists('se_core_deny')) {
