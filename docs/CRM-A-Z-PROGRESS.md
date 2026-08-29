@@ -221,3 +221,18 @@ Routes: `/admin/se_core/se_reports/index` (dashboard), `/health` (integration he
 New: `se_reporting.php`, `controllers/Se_reports.php`, `views/se_reports_dashboard.php`, `views/se_reports_health.php`.
 Wired in se_core (require + sidebar menu + lang); migrations v7. Dashboard/health render 200; residue 0.
 **Gated (owner):** GA4 property, Search Console property, Google Ads API access for live spend/metric imports (see Google setup checklist).
+
+---
+
+## Phase 7 — Production readiness  — **PREPARED (docs); nothing executed (merged)**
+
+Branch `feature/production-readiness` -> merged to `main`. Docs only; no code/schema change; no production
+mutation, PHP switch, DNS/TLS/host change.
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 7.1 Environment & PHP 8.3 compat | done (static); runtime pending | Env inventory captured. **PHP 8.3.33 + 8.4 static lint of all 64 module files: PASS**. Runtime-under-8.3 verification outstanding (no handler switch performed). |
+| 7.2 Deployment & rollback | runbook | `docs/PRODUCTION-READINESS-RUNBOOK.md` (preflight, migration order, module activation order, cache/restart, health verify, code/DB/external rollback). |
+| 7.3 Backup & restore | validated non-destructively; full drill pending | Fresh dump 138 tables == live 138; completion marker present; backups `700` off-docroot. Full restore drill pending an isolated DB (not created on shared account). rclone absent -> off-server copy not automated. `docs/BACKUP-RESTORE-RUNBOOK.md`. |
+| 7.4 DNS/TLS/cutover | plan only | `docs/DNS-TLS-CUTOVER-ROLLBACK.md` (TTL, cert, HSTS-after-verify, webhook TLS, rollback set). Nothing changed. |
+| 7.5 Monitoring & alerting | runbook | `docs/MONITORING-ALERTING-RUNBOOK.md` (13 signals + thresholds; uses existing health helpers; read-only). **Disk at 95% flagged.** |
