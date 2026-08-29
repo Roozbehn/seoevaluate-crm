@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 5);
+define('SE_CORE_SCHEMA_VERSION', 6);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -162,6 +162,22 @@ function se_core_migration_statements()
         UNIQUE KEY `form_id` (`form_id`),
         KEY `brand_id` (`brand_id`),
         KEY `page_id` (`page_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+
+    /* --- Phase 5: Google Data Manager ingest request tracking ------------- */
+    $stmts[] = "CREATE TABLE IF NOT EXISTS `{$p}se_gdm_requests` (
+        `id` bigint(20) NOT NULL AUTO_INCREMENT,
+        `brand_id` int(11) NOT NULL DEFAULT 0,
+        `request_id` varchar(191) NOT NULL,
+        `event_count` int(11) NOT NULL DEFAULT 0,
+        `status` varchar(16) NOT NULL DEFAULT 'submitted',
+        `last_error` varchar(255) DEFAULT NULL,
+        `created_at` datetime NOT NULL,
+        `polled_at` datetime DEFAULT NULL,
+        PRIMARY KEY (`id`),
+        KEY `brand_id` (`brand_id`),
+        KEY `status` (`status`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     return $stmts;
