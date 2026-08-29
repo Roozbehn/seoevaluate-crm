@@ -64,6 +64,13 @@ function se_core_menu_items()
             'href'     => admin_url('se_core/brands'),
             'position' => 31,
         ]);
+
+        $CI->app_menu->add_sidebar_menu_item('se-reports', [
+            'name'     => _l('se_reports'),
+            'href'     => admin_url('se_core/se_reports/index'),
+            'icon'     => 'fa fa-bar-chart',
+            'position' => 28,
+        ]);
     }
 }
 
@@ -220,7 +227,7 @@ function se_core_deny()
  * se_meta_leadgen.php is wired but its live Graph fetch/send stays gated on a
  * Meta Page token + App Review; se_whatsapp is now its own module.
  */
-foreach (['se_outbox.php', 'se_capi.php', 'se_google_dm.php', 'se_meta_leadgen.php'] as $__se_b2) {
+foreach (['se_outbox.php', 'se_capi.php', 'se_google_dm.php', 'se_meta_leadgen.php', 'se_reporting.php'] as $__se_b2) {
     $__se_b2_path = __DIR__ . '/' . $__se_b2;
     if (is_file($__se_b2_path)) {
         require_once $__se_b2_path;

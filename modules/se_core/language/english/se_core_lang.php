@@ -24,3 +24,6 @@ $lang['se_ga4_property_id']        = 'GA4 property ID';
 $lang['se_gsc_site_url']           = 'Search Console property';
 $lang['se_brand_added']            = 'Brand created';
 $lang['se_brand_updated']          = 'Brand updated';
+$lang['se_reports'] = 'SE Reports';
+$lang['se_reports_health'] = 'Integration Health';
+$lang['se_reports_loading'] = 'Loading…';
