@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 4);
+define('SE_CORE_SCHEMA_VERSION', 5);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -126,6 +126,43 @@ function se_core_migration_statements()
         KEY `brand_id` (`brand_id`),
         KEY `patient_id` (`patient_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET={$charset} COLLATE=utf8mb4_unicode_ci";
+
+
+    /* --- Phase 4: Meta Lead Ads (leadgen webhook queue + form mapping) ----- */
+    $stmts[] = "CREATE TABLE IF NOT EXISTS `{$p}se_meta_leadgen_events` (
+        `id` bigint(20) NOT NULL AUTO_INCREMENT,
+        `leadgen_id` varchar(32) NOT NULL,
+        `page_id` varchar(32) DEFAULT NULL,
+        `form_id` varchar(32) DEFAULT NULL,
+        `payload` longtext DEFAULT NULL,
+        `signature_valid` tinyint(1) NOT NULL DEFAULT 0,
+        `state` varchar(16) NOT NULL DEFAULT 'pending',
+        `attempts` int(11) NOT NULL DEFAULT 0,
+        `last_error` varchar(255) DEFAULT NULL,
+        `received_at` datetime NOT NULL,
+        `processed_at` datetime DEFAULT NULL,
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `leadgen_id` (`leadgen_id`),
+        KEY `state` (`state`),
+        KEY `form_id` (`form_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    $stmts[] = "CREATE TABLE IF NOT EXISTS `{$p}se_meta_forms` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `brand_id` int(11) NOT NULL DEFAULT 0,
+        `page_id` varchar(32) DEFAULT NULL,
+        `form_id` varchar(32) NOT NULL,
+        `form_name` varchar(191) DEFAULT NULL,
+        `field_map_json` text DEFAULT NULL,
+        `active` tinyint(1) NOT NULL DEFAULT 1,
+        `last_leadgen_at` datetime DEFAULT NULL,
+        `date_created` datetime NOT NULL,
+        `last_updated` datetime DEFAULT NULL,
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `form_id` (`form_id`),
+        KEY `brand_id` (`brand_id`),
+        KEY `page_id` (`page_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     return $stmts;
 }

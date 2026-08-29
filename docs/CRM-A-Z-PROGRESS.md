@@ -167,3 +167,23 @@ Branch `feature/whatsapp-inbox` -> merged to `main`. New dedicated module `modul
 ## Perfex plugin audit — inventory done; **Dark Theme installed (staging)**
 
 6 commercial CodeCanyon plugins inventoried (`docs/PERFEX-PLUGIN-AUDIT.md`). Owner approved **Dark Theme** only; installed v1.2.3 (clean review, non-destructive, idempotent, Phase 1-3 intact) — `docs/PERFEX-PLUGIN-IMPLEMENTATION-REPORT.md`. Vendor source deployed but gitignored (repo-storage decision pending per owner). WhatsBot/PRChat rejected (duplicate se_whatsapp). Accounting/Service-Management/Flutex: awaiting owner license confirmation.
+
+---
+
+## Phase 4 — Meta Lead Ads + CAPI  — **FUNCTIONAL (fixtures); live fetch/send externally gated (merged)**
+
+Branch `feature/meta-leads` -> merged to `main`. se_core schema v5 (leadgen tables). Existing `se_meta_leadgen.php`
+scaffold rebuilt into a functional pipeline; receiver moved to `controllers/Leadgen.php` (public route `/se_core/leadgen`).
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 4.1 Inbound Lead Ads | functional (fixtures); live fetch gated | GET verify live (challenge/403). POST X-Hub-Signature-256 verify + durable dedup store (unique leadgen_id). Big-integer-safe JSON decode (17-digit ids preserved). Page/form routing via `tblse_meta_forms`; per-form field map; consent capture; `meta_lead_id` dedup; appsecret_proof on Graph calls; reconciliation heartbeat. Live `field_data` fetch gated on `leads_retrieval` + Page token -> events HELD (no transmit). Webhook-driven (no polling). Unit 21/0, cron 5/0. |
+| 4.2 Outbound CRM events | complete | system_generated / event_source=crm / lead_event_source (Phase 0 verified 31/0); Meta lead id preferred; hashed identifiers; stable vocabulary; per-brand `se_capi_enabled` toggle; event-time/expiry validation (Phase 1 outbox). |
+| 4.3 Meta health interface | complete (helper) | `se_meta_health($brand)` returns page/form mapping, dataset, token status + last error, last webhook, last reconcile, outbox pending/failed/sent, feature toggle, externally-gated flag. |
+| App Review pack | prepared (not submitted) | `docs/META-LEADADS-APP-REVIEW-READINESS.md` |
+
+New: `controllers/Leadgen.php`. Rewritten: `se_meta_leadgen.php`. Wired in se_core.php; `se_capi.php` toggle; migrations v5
+(`tblse_meta_leadgen_events`, `tblse_meta_forms`). Cron 200, app 200, residue 0.
+
+**Externally gated (owner):** 2nd Meta app / ads integration, persistent Page token + app secret, subscribe production
+webhook (+ csrf_exclude_uris for se_core/leadgen), App Review submission.

@@ -40,6 +40,10 @@ function se_capi_send_event($row)
         return ['ok' => false, 'error' => 'brand has no meta_dataset_id'];
     }
 
+    if (function_exists('se_capi_enabled') && !se_capi_enabled($brand_id)) {
+        return ['ok' => false, 'error' => 'meta capi disabled for brand'];
+    }
+
     // The system-user token is a secret; it is stored in options, never in the
     // brands table that renders in the UI, and never in git.
     $token = get_option('se_meta_capi_token_' . $brand_id);
