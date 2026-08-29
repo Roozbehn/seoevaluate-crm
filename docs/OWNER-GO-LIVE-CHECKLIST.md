@@ -34,13 +34,19 @@
 > are now stored **outside the document root**, mode `600`.
 >
 > **Versions — module version ≠ schema version.** `se_core` **module v1.0.0**, **database schema
-> v7**. `se_appointments` **module v1.0.0**, **database schema v2**. `se_whatsapp` **module v1.0.0**.
+> v11**. `se_appointments` **module v1.0.0**, **database schema v2**. `se_whatsapp` **module v1.0.0**.
 > `perfex_dark_theme` **v1.2.3** (vendor). Earlier text that wrote "se_core v7 / se_appointments v2"
 > as *module* versions was wrong.
 >
 > **Reviewed final commit:** `c60d39d4fa7c5e16344c2f833bca5a8f7b77c592`.
 
 
+
+> **UI status (Phases 10–13).** All 28 module screens are built, navigable and browser-verified at
+> desktop, 768 px and 390 px, in English and Turkish, Dark-Theme-compatible. The remaining UI item the
+> owner must do personally is the **restricted-capability pass**: repeat the authorization checks in
+> `MANUAL-UI-CHECKLIST.md` while logged in as a second staff account that is limited to one brand.
+> That cannot be self-verified without creating an account, which was out of scope.
 
 Everything below is **owner-gated** — credentials, external submissions, legal sign-off, or production
 authority. The CRM code for each is built and fixture-tested; each item flips from gated to live once you

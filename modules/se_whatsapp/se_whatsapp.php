@@ -19,6 +19,7 @@ define('SE_WHATSAPP_MODULE_NAME', 'se_whatsapp');
 register_language_files(SE_WHATSAPP_MODULE_NAME, [SE_WHATSAPP_MODULE_NAME]);
 
 require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/outbound.php';
 
 register_activation_hook(SE_WHATSAPP_MODULE_NAME, 'se_whatsapp_activation');
 
@@ -28,6 +29,7 @@ hooks()->add_action('admin_init', 'se_whatsapp_permissions');
 // Async: drain webhook events + consume due reminders after core cron tasks.
 hooks()->add_action('after_cron_run', 'se_wa_process_pending');
 hooks()->add_action('after_cron_run', 'se_wa_consume_due_reminders');
+hooks()->add_action('after_cron_run', 'se_wa_out_drain');
 
 // Conversation tab on the lead profile.
 hooks()->add_action('after_lead_tabs_content', 'se_whatsapp_lead_tab');

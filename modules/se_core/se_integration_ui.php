@@ -166,21 +166,31 @@ function se_google_ui_status($brand_id = 0)
         $brand = $CI->db->get(db_prefix() . 'se_brands')->row();
     }
 
-    $credential = se_secret_status('google_sa', $brand_id);
+    $cred = se_gdm_credential_status($brand_id);
 
     return [
-        'enabled'          => $brand_id > 0 ? se_google_dm_enabled($brand_id) : false,
-        'customer_id'      => $brand ? ($brand->google_ads_customer_id ?: null) : null,
-        'login_account'    => get_option('se_google_login_account_' . (int) $brand_id) ?: null,
-        // Boolean readiness only — never a token, never an expiry value we do
-        // not actually have.
-        'credential_ready' => $credential['configured'],
-        'credential_mode_ok' => $credential['mode_ok'],
-        'last_auth_at'     => $credential['last_auth_at'],
-        'last_error'       => $credential['last_error'],
-        // Honest: the renewable-credential flow and status polling are not built.
-        'token_renewal_implemented' => false,
-        'status_polling_implemented' => false,
+        'enabled'            => $brand_id > 0 ? se_google_dm_enabled($brand_id) : false,
+        'customer_id'        => $brand ? ($brand->google_ads_customer_id ?: null) : null,
+        'login_account'      => get_option('se_google_login_account_' . (int) $brand_id) ?: null,
+        // Booleans and metadata only — never a token, never a key fragment.
+        'credential_ready'   => $cred['file_present'],
+        'credential_mode_ok' => $cred['file_mode_ok'],
+        'credential_valid'   => $cred['credential_valid'],
+        'client_email'       => $cred['client_email'],
+        'project_id'         => $cred['project_id'],
+        'signer_available'   => $cred['signer_available'],
+        'token_cached'       => $cred['token_cached'],
+        'token_expires_at'   => $cred['token_expires_at'],
+        'token_valid_now'    => $cred['token_valid_now'],
+        'ready'              => $cred['ready'],
+        'last_auth_at'       => $cred['last_auth_at'],
+        'last_error'         => $cred['last_error'],
+        // The abstraction is built; the signer and poller are pluggable and
+        // are not registered here, so both remain honestly reported.
+        'token_renewal_implemented'  => $cred['signer_available'],
+        'status_polling_implemented' => se_gdm_status_poller_available(),
+        'min_age_seconds'    => se_gdm_min_age_seconds($brand_id),
+        'max_age_days'       => se_gdm_max_age_days($brand_id),
     ];
 }
 

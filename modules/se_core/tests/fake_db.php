@@ -282,6 +282,14 @@ class SeFakeDb
         if (preg_match('/^(ALTER|CREATE|DROP|INSERT INTO .* SELECT)/i', $sql)) {
             return new SeFakeResult([]);
         }
+        // SELECT NOW() — se_db_now() asks the server for its clock. The fake
+        // has no server, so it answers with PHP time; the REAL clock-offset
+        // behaviour is asserted in the real-MariaDB tier, which is the only
+        // place it can be.
+        if (preg_match('/^SELECT\s+NOW\(\)\s+AS\s+n$/i', $sql)) {
+            return new SeFakeResult([['n' => date('Y-m-d H:i:s')]]);
+        }
+
         if (preg_match('/GET_LOCK\(/i', $sql))     { return new SeFakeResult([['l' => 1]]); }
         if (preg_match('/RELEASE_LOCK\(/i', $sql)) { return new SeFakeResult([['l' => 1]]); }
 
@@ -320,12 +328,26 @@ class SeFakeDb
             return new SeFakeResult($this->rows($m[2]));
         }
 
-        // SELECT <cols> FROM `tbl` WHERE <simple ANDs>
+        // SELECT <cols> FROM `tbl` WHERE <simple ANDs> [ORDER BY ...] [LIMIT n]
         if (preg_match('/^SELECT\s+(.+?)\s+FROM\s+`?([A-Za-z0-9_]+)`?\s+WHERE\s+(.+)$/is', $sql, $m)) {
+            $where = $m[3];
+            $limit = null;
+
+            // Strip trailing clauses the predicate matcher must not see.
+            if (preg_match('/^(.*?)\s+LIMIT\s+(\d+)\s*$/is', $where, $lm)) {
+                $where = $lm[1];
+                $limit = (int) $lm[2];
+            }
+
+            $where = preg_replace('/\s+ORDER\s+BY\s+.*$/is', '', $where);
+
             $out = [];
             foreach ($this->rows($m[2]) as $r) {
-                if ($this->rawWhereMatches($r, $m[3])) { $out[] = $r; }
+                if ($this->rawWhereMatches($r, $where)) { $out[] = $r; }
             }
+
+            if ($limit !== null) { $out = array_slice($out, 0, $limit); }
+
             return new SeFakeResult($out);
         }
 

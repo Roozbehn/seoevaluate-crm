@@ -122,3 +122,30 @@ application runs against it, or whether uploads and configuration can be recover
 ## Rollback / recovery objectives
 - Code: git checkout previous release + opcache clear. DB: restore pre-change dump into the same DB.
 - External: re-gate outbound by clearing token options + `se_capi_enabled_<brand>=0`.
+
+---
+
+## Schema coverage note (updated for schema v11)
+
+The module now owns **22 tables**, all prefixed `tblse_`. A dump that omits any of them is not a usable
+backup of this CRM:
+
+`se_appointments`, `se_appointment_status_history`, `se_brands`, `se_consent_ledger`,
+`se_conversion_outbox`, `se_ext_metrics`, `se_gdm_requests`, `se_meta_forms`, `se_meta_leadgen_events`,
+`se_patients`, `se_procedure_history`, `se_record_access_log`, `se_reminders`, `se_staff_brands`,
+`se_wa_conversations`, `se_wa_messages`, `se_wa_metering`, `se_wa_numbers`, `se_wa_outbound`,
+`se_wa_templates`, `se_wa_webhook_events`, `se_working_hours`.
+
+Two of these carry consent evidence and must never be pruned by a retention job: **`se_consent_ledger`**
+(append-only) and **`se_record_access_log`**.
+
+Also back up, separately and with their own access controls:
+- `application/config/app-config.php` (untracked, mode 600)
+- the **secret store directory** used by the filesystem secret provider — it lives outside the document
+  root, mode 700 with 600 files, and is **not** in the Git repository, so a repo restore does not restore it.
+
+**Restore drill is still outstanding.** A dump whose `CREATE TABLE` count matches production proves the
+dump is well-formed; it does not prove it restores. Until a restore into a throwaway database has been
+performed and its row counts verified, this project has **backup integrity evidence, not restore
+evidence**. Do not describe it otherwise.
+

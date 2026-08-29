@@ -31,6 +31,8 @@ foreach ($files as $file) {
     $ran[] = $name;
 }
 
+if (function_exists('se_test_purge_secrets')) { se_test_purge_secrets(); }
+
 $a = $GLOBALS['se_assert'];
 
 echo "\n============================================\n";

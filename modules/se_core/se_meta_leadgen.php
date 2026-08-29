@@ -21,6 +21,16 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * Do NOT create the second Meta app or persistent credentials without approval.
  */
 
+/* Bounds and retry policy. Meta's notifications are tiny; anything far larger
+ * is a bug or an attempt to fill the table, and an unbounded LONGTEXT insert
+ * per webhook is a cheap way to exhaust the account's disk quota. */
+define('SE_LEADGEN_MAX_BODY_BYTES', 65536);
+define('SE_LEADGEN_MAX_ATTEMPTS', 5);
+define('SE_LEADGEN_LEASE_SECONDS', 900);
+define('SE_LEADGEN_BACKOFF_BASE', 300);
+define('SE_LEADGEN_BACKOFF_CAP', 21600);
+define('SE_LEADGEN_GATED_RECHECK', 3600);
+
 hooks()->add_action('after_cron_run', 'se_leadgen_process_pending');
 hooks()->add_action('after_cron_run', 'se_leadgen_reconcile');
 
@@ -205,17 +215,29 @@ function se_leadgen_fetch($leadgen_id, $brand_id)
     }
 
     // Live path (only reached once a token exists — externally gated until then).
+    // The token goes in the Authorization header, NOT the query string: a URL
+    // reaches proxies, access logs, Referer headers and error text, and a Page
+    // token in any of those is a disclosure.
     $version = get_option('se_meta_graph_version') ?: 'v23.0';
     $url = 'https://graph.facebook.com/' . $version . '/' . rawurlencode($leadgen_id)
          . '?fields=field_data,created_time'
-         . '&access_token=' . rawurlencode($token)
          . '&appsecret_proof=' . rawurlencode(se_leadgen_appsecret_proof($token, $secret));
 
     $ch = curl_init($url);
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30]);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 30,
+        CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $token],
+    ]);
     $body = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+
+    // 429 and Meta's throttling code are transient: back off rather than burn
+    // an attempt and eventually park the notification as failed.
+    if ($code === 429 || $code === 613) {
+        throw new SeLeadgenRateLimited('rate limited');
+    }
 
     if ($code < 200 || $code >= 300) {
         update_option('se_meta_token_last_error_' . (int) $brand_id, 'graph HTTP ' . $code);
@@ -295,44 +317,164 @@ function se_leadgen_is_consent_question($name)
     return false;
 }
 
-/** Drain pending leadgen events. after_cron_run passes a bool; coerce the limit. */
+/** Exponential backoff with full jitter. */
+function se_leadgen_backoff_seconds($attempts)
+{
+    $exp = SE_LEADGEN_BACKOFF_BASE * (2 ** max(0, (int) $attempts - 1));
+    $exp = min($exp, SE_LEADGEN_BACKOFF_CAP);
+
+    return random_int((int) ($exp / 2), (int) $exp);
+}
+
+/** Return events whose processing lease expired to the queue. */
+function se_leadgen_recover_stale()
+{
+    $CI = &get_instance();
+
+    $CI->db->where('state', 'processing')
+           ->where('locked_at <', se_db_now(-SE_LEADGEN_LEASE_SECONDS))
+           ->update(db_prefix() . 'se_meta_leadgen_events', [
+               'state' => 'pending', 'locked_at' => null, 'locked_by' => null,
+           ]);
+
+    return (int) $CI->db->affected_rows();
+}
+
+/**
+ * Atomically claim DUE events.
+ *
+ * `held` is included deliberately. A credential-gated notification was parked
+ * as `held` and the drainer then only ever selected `pending`, so it was
+ * stranded forever: configuring the token afterwards recovered nothing. A
+ * gated event now reschedules itself and resumes automatically once the gate
+ * opens, with no operator action.
+ */
+function se_leadgen_claim_batch($worker, $limit = 100)
+{
+    $CI    = &get_instance();
+    $table = db_prefix() . 'se_meta_leadgen_events';
+    $limit = max(1, (int) $limit);
+    $now   = se_db_now();
+
+    $CI->db->query(
+        'UPDATE `' . $table . "` SET state='processing', locked_at=NOW()"
+        . ', locked_by=' . $CI->db->escape($worker)
+        . ', fence = fence + 1'
+        . " WHERE state IN ('pending','held') AND signature_valid=1"
+        . ' AND attempts < ' . (int) SE_LEADGEN_MAX_ATTEMPTS
+        . ' AND (next_attempt_at IS NULL OR next_attempt_at <= ' . $CI->db->escape($now) . ')'
+        . ' ORDER BY id ASC LIMIT ' . $limit
+    );
+
+    $CI->db->where('state', 'processing')->where('locked_by', $worker)->order_by('id', 'ASC');
+
+    return $CI->db->get($table)->result_array();
+}
+
+/** Terminal, non-retryable outcome. */
+function se_leadgen_permanent($ev, $reason)
+{
+    return [
+        'state'           => 'failed',
+        'attempts'        => (int) $ev['attempts'] + 1,
+        'failure_class'   => 'permanent',
+        'last_error'      => mb_substr($reason, 0, 255),
+        'next_attempt_at' => null,
+    ];
+}
+
+/** Provider throttling — transient, and must not consume the retry budget. */
+class SeLeadgenRateLimited extends Exception {}
+
+/** Queue health counters for the operator screen. */
+function se_leadgen_health_counters()
+{
+    $CI = &get_instance();
+
+    $CI->db->select('state, COUNT(*) AS c')->group_by('state');
+    $rows = $CI->db->get(db_prefix() . 'se_meta_leadgen_events')->result_array();
+
+    $out = ['pending' => 0, 'processing' => 0, 'held' => 0, 'processed' => 0, 'failed' => 0];
+
+    foreach ($rows as $r) { $out[$r['state']] = (int) $r['c']; }
+
+    return $out;
+}
+
+/**
+ * Drain leadgen events: claimed, leased, fenced, retried with backoff.
+ * after_cron_run passes a bool; coerce the limit.
+ */
 function se_leadgen_process_pending($limit = 100)
 {
     $limit = (int) $limit; if ($limit < 1) { $limit = 100; }
-    $CI = &get_instance();
+
+    $CI    = &get_instance();
     $table = db_prefix() . 'se_meta_leadgen_events';
 
-    $CI->db->where('state', 'pending')->where('signature_valid', 1)
-           ->order_by('id', 'ASC')->limit($limit);
-    $events = $CI->db->get($table)->result_array();
+    se_leadgen_recover_stale();
+
+    $worker = substr(md5(uniqid((string) getmypid(), true)), 0, 24);
+    $events = se_leadgen_claim_batch($worker, $limit);
 
     foreach ($events as $ev) {
-        $state = 'processed';
-        $error = null;
+        $update = null;
+
         try {
             $result = se_leadgen_process_event($ev);
+
             if ($result === 'held') {
-                $state = 'held';
+                // Gated on a credential: hold WITHOUT consuming an attempt and
+                // reschedule, so it resumes by itself once configured.
+                $update = [
+                    'state'           => 'held',
+                    'attempts'        => (int) $ev['attempts'],
+                    'failure_class'   => 'gated',
+                    'last_error'      => 'credential gated; will resume automatically',
+                    'next_attempt_at' => se_db_now(SE_LEADGEN_GATED_RECHECK),
+                ];
             } elseif ($result === 'unmapped') {
-                $state = 'failed';
-                $error = 'no active page+form mapping';
+                $update = se_leadgen_permanent($ev, 'no active page+form mapping');
             } elseif ($result === 'brand_mismatch') {
-                // Permanent configuration/tenancy problem, not a transient one:
-                // park it for an operator rather than retrying forever.
-                $state = 'failed';
-                $error = 'brand mismatch on existing meta_lead_id';
+                $update = se_leadgen_permanent($ev, 'brand mismatch on existing meta_lead_id');
+            } else {
+                $update = [
+                    'state' => 'processed', 'attempts' => (int) $ev['attempts'] + 1,
+                    'failure_class' => null, 'last_error' => null, 'next_attempt_at' => null,
+                ];
             }
+        } catch (SeLeadgenRateLimited $e) {
+            // Throttling is transient and self-healing: back off, and keep the
+            // attempt budget intact so a throttled hour cannot exhaust it.
+            $update = [
+                'state'           => 'pending',
+                'attempts'        => (int) $ev['attempts'],
+                'failure_class'   => 'retryable',
+                'last_error'      => 'rate limited by provider',
+                'next_attempt_at' => se_db_now(SE_LEADGEN_BACKOFF_CAP),
+            ];
         } catch (Exception $e) {
-            $state = 'failed';
-            $error = 'processing error';
+            $attempts = (int) $ev['attempts'] + 1;
+            $update = [
+                'state'           => $attempts >= SE_LEADGEN_MAX_ATTEMPTS ? 'failed' : 'pending',
+                'attempts'        => $attempts,
+                'failure_class'   => 'retryable',
+                'last_error'      => 'processing error',
+                'next_attempt_at' => se_db_now(se_leadgen_backoff_seconds($attempts)),
+            ];
         }
-        $CI->db->where('id', $ev['id'])->update($table, [
-            'state'        => $state,
-            'attempts'     => (int) $ev['attempts'] + 1,
-            'last_error'   => $error,
-            'processed_at' => date('Y-m-d H:i:s'),
-        ]);
+
+        $update['processed_at'] = se_db_now();
+        $update['locked_at']    = null;
+        $update['locked_by']    = null;
+
+        // Fenced: a worker whose lease expired cannot overwrite a newer result.
+        $CI->db->where('id', $ev['id'])
+               ->where('locked_by', $worker)
+               ->where('fence', (int) $ev['fence'])
+               ->update($table, $update);
     }
+
     return count($events);
 }
 
@@ -426,9 +568,14 @@ function se_leadgen_upsert_lead($brand_id, $leadgen_id, $fields)
         return (int) $existing->id;
     }
 
-    $data['name']    = $data['name'] ?? ('Meta Lead ' . $leadgen_id);
-    $data['status']  = 0;
-    $data['source']  = 0;
+    /* A configured, VALID status and source.
+     *
+     * These were hard-coded to 0, which is not a real lead status or source in
+     * Perfex: every Lead Ads lead landed outside the pipeline, invisible to
+     * every report and every kanban column. */
+    $data['name']   = $data['name'] ?? ('Meta Lead ' . $leadgen_id);
+    $data['status'] = se_leadgen_default_status((int) $brand_id);
+    $data['source'] = se_leadgen_default_source((int) $brand_id);
     $data['addedfrom'] = 0;
     $data['dateadded'] = date('Y-m-d H:i:s');
     $CI->db->insert($table, $data);
@@ -504,3 +651,35 @@ function se_meta_health($brand_id)
         'externally_gated'  => $token === '',   // no token => live fetch/send gated
     ];
 }
+
+/**
+ * Configured default lead status for a brand, falling back to the first real
+ * pipeline status. Never 0.
+ */
+function se_leadgen_default_status($brand_id)
+{
+    $configured = (int) get_option('se_meta_default_status_' . (int) $brand_id);
+
+    if ($configured > 0) { return $configured; }
+
+    $CI = &get_instance();
+    $CI->db->select('id')->order_by('statusorder', 'ASC')->limit(1);
+    $row = $CI->db->get(db_prefix() . 'leads_status')->row();
+
+    return $row ? (int) $row->id : 0;
+}
+
+/** Configured default lead source for a brand, falling back to the first real one. */
+function se_leadgen_default_source($brand_id)
+{
+    $configured = (int) get_option('se_meta_default_source_' . (int) $brand_id);
+
+    if ($configured > 0) { return $configured; }
+
+    $CI = &get_instance();
+    $CI->db->select('id')->order_by('id', 'ASC')->limit(1);
+    $row = $CI->db->get(db_prefix() . 'leads_sources')->row();
+
+    return $row ? (int) $row->id : 0;
+}
+

@@ -95,11 +95,18 @@ function se_wa_store_event($raw_body, $signature_valid)
             'payload'         => $raw_body,
             'signature_valid' => $signature_valid ? 1 : 0,
             'state'           => 'pending',
-            'next_attempt_at' => date('Y-m-d H:i:s'),
-            'received_at'     => date('Y-m-d H:i:s'),
+            'next_attempt_at' => se_db_now(),
+            'received_at'     => se_db_now(),
         ]);
     } catch (Exception $e) {
-        return ['stored' => false, 'duplicate' => true];
+        /* A duplicate-key collision is the expected outcome of Meta redelivering
+         * a notification we already hold, and IS acceptance. Any other failure
+         * is not: report it so the caller returns 500 and Meta retries. */
+        if (stripos($e->getMessage(), 'duplicate') !== false) {
+            return ['stored' => false, 'duplicate' => true];
+        }
+
+        return ['stored' => false, 'duplicate' => false, 'error' => true];
     }
 
     return ['stored' => true, 'duplicate' => false];
@@ -125,7 +132,7 @@ function se_wa_backoff_seconds($attempts)
 function se_wa_purge_old_payloads()
 {
     $CI = &get_instance();
-    $cutoff = date('Y-m-d H:i:s', strtotime('-' . SE_WA_EVENT_RETENTION_DAYS . ' days'));
+    $cutoff = se_db_now(-SE_WA_EVENT_RETENTION_DAYS * 86400);
 
     $CI->db->where('state', 'processed')
            ->where('received_at <', $cutoff)
@@ -139,7 +146,7 @@ function se_wa_purge_old_payloads()
 function se_wa_recover_stale()
 {
     $CI = &get_instance();
-    $cutoff = date('Y-m-d H:i:s', time() - SE_WA_LEASE_SECONDS);
+    $cutoff = se_db_now(-SE_WA_LEASE_SECONDS);
 
     $CI->db->where('state', 'processing')
            ->where('locked_at <', $cutoff)
@@ -163,7 +170,7 @@ function se_wa_claim_batch($worker, $limit = 100)
     $CI = &get_instance();
     $table = db_prefix() . 'se_wa_webhook_events';
     $limit = max(1, (int) $limit);
-    $now   = date('Y-m-d H:i:s');
+    $now   = se_db_now();
 
     $CI->db->query(
         'UPDATE `' . $table . "` SET state='processing', locked_at=NOW()"
@@ -236,7 +243,7 @@ function se_wa_process_pending($limit = 100)
                        'processed_at' => date('Y-m-d H:i:s'), 'locked_at' => null, 'locked_by' => null];
         } else {
             $update = ['state' => 'pending', 'attempts' => $attempts, 'last_error' => $error,
-                       'next_attempt_at' => date('Y-m-d H:i:s', time() + se_wa_backoff_seconds($attempts)),
+                       'next_attempt_at' => se_db_now(se_wa_backoff_seconds($attempts)),
                        'locked_at' => null, 'locked_by' => null];
         }
 
@@ -460,33 +467,39 @@ function se_wa_can_send($brand_id)
     return true; // real send still gated on a valid token in the referenced option
 }
 
-/**
- * Consume due appointment reminders from the Phase 2 queue. When no brand can
- * send (the current state until Meta onboarding), reminders are left pending —
- * nothing is transmitted. This is the seam the reminder interface was built for.
+/*
+ * se_wa_consume_due_reminders() now lives in outbound.php.
+ *
+ * The version that stood here counted gated reminders and did nothing else —
+ * there was no queue for it to write into. It now claims each due reminder,
+ * marks it BEFORE queueing so a crash cannot produce two, and hands it to the
+ * outbound queue as an approved template.
  */
-function se_wa_consume_due_reminders($limit = 100)
+
+
+/** Numbers configured for a brand (or every accessible brand when 0). */
+function se_wa_numbers_for($brand_id = 0)
 {
-    // after_cron_run passes a bool ($manually) as the first arg; ignore non-positive limits.
-    $limit = (int) $limit; if ($limit < 1) { $limit = 100; }
     $CI = &get_instance();
-    $table = db_prefix() . 'se_reminders';
-    if (!$CI->db->table_exists($table)) {
-        return 0;
+
+    se_apply_scope_in('brand_id');
+
+    if ((int) $brand_id > 0 && se_can_access_brand($brand_id)) {
+        $CI->db->where('brand_id', (int) $brand_id);
     }
 
-    $CI->db->where('state', 'pending')->where('scheduled_at <=', date('Y-m-d H:i:s'))
-           ->order_by('id', 'ASC')->limit((int) $limit);
-    $due = $CI->db->get($table)->result_array();
+    $CI->db->order_by('id', 'ASC');
 
-    $held = 0;
-    foreach ($due as $r) {
-        if (!se_wa_can_send((int) $r['brand_id'])) {
-            $held++;   // gated: leave pending, transmit nothing
-            continue;
-        }
-        // A live sender lands here once Meta onboarding completes (externally gated).
-    }
+    return $CI->db->get(db_prefix() . 'se_wa_numbers')->result_array();
+}
 
-    return $held;
+/** When did we last receive a webhook event at all? */
+function se_wa_last_event_at()
+{
+    $CI = &get_instance();
+
+    $CI->db->select('received_at')->order_by('id', 'DESC')->limit(1);
+    $row = $CI->db->get(db_prefix() . 'se_wa_webhook_events')->row();
+
+    return $row ? $row->received_at : null;
 }

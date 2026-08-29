@@ -165,7 +165,7 @@ function se_outbox_backoff_seconds($attempts)
 function se_outbox_recover_stale()
 {
     $CI = &get_instance();
-    $cutoff = date('Y-m-d H:i:s', time() - SE_OUTBOX_LEASE_SECONDS);
+    $cutoff = se_db_now(-SE_OUTBOX_LEASE_SECONDS);
 
     $CI->db->where('status', 'processing')
            ->where('locked_at <', $cutoff)
@@ -182,7 +182,7 @@ function se_outbox_park_stale_pending()
     $CI = &get_instance();
     $CI->db->where('status', 'pending')
            ->where('destination', 'meta_capi')
-           ->where('event_time <', date('Y-m-d H:i:s', strtotime('-' . SE_META_MAX_AGE_DAYS . ' days')))
+           ->where('event_time <', se_db_now(-SE_META_MAX_AGE_DAYS * 86400))
            ->update(db_prefix() . 'se_conversion_outbox', [
                'status'        => 'skipped',
                'failure_class' => SE_OUTBOX_FAIL_PERMANENT,
@@ -204,7 +204,7 @@ function se_outbox_claim_batch($worker, $limit = SE_OUTBOX_BATCH)
     $CI = &get_instance();
     $table = db_prefix() . 'se_conversion_outbox';
     $limit = max(1, (int) $limit);
-    $now   = date('Y-m-d H:i:s');
+    $now   = se_db_now();
 
     $CI->db->query(
         'UPDATE `' . $table . "` SET status='processing', locked_at=NOW()"
@@ -346,7 +346,7 @@ function se_outbox_process_row($row, $worker = null)
     if ($submitted) {
         se_outbox_finalize($row, $worker, [
             'status'        => 'submitted',
-            'submitted_at'  => date('Y-m-d H:i:s'),
+            'submitted_at'  => se_db_now(),
             'request_id'    => $requestId,
             'failure_class' => null,
             'error_code'    => null,
@@ -362,7 +362,7 @@ function se_outbox_process_row($row, $worker = null)
     if ($ok) {
         se_outbox_finalize($row, $worker, [
             'status'        => 'sent',
-            'sent_at'       => date('Y-m-d H:i:s'),
+            'sent_at'       => se_db_now(),
             'failure_class' => null,
             'error_code'    => null,
             'last_error'    => null,
@@ -380,7 +380,7 @@ function se_outbox_process_row($row, $worker = null)
             [
                 'status'          => 'pending',
                 'attempts'        => (int) $row['attempts'],   // unchanged, deliberately
-                'next_attempt_at' => date('Y-m-d H:i:s', time() + SE_OUTBOX_GATED_RECHECK),
+                'next_attempt_at' => se_db_now(SE_OUTBOX_GATED_RECHECK),
                 'locked_at'       => null,
                 'locked_by'       => null,
             ]
@@ -409,7 +409,7 @@ function se_outbox_process_row($row, $worker = null)
         [
             'status'          => $status,
             'attempts'        => $attempts,
-            'next_attempt_at' => date('Y-m-d H:i:s', time() + se_outbox_backoff_seconds($attempts)),
+            'next_attempt_at' => se_db_now(se_outbox_backoff_seconds($attempts)),
             'locked_at'       => null,
             'locked_by'       => null,
         ]

@@ -34,7 +34,7 @@
 > are now stored **outside the document root**, mode `600`.
 >
 > **Versions — module version ≠ schema version.** `se_core` **module v1.0.0**, **database schema
-> v7**. `se_appointments` **module v1.0.0**, **database schema v2**. `se_whatsapp` **module v1.0.0**.
+> v11**. `se_appointments` **module v1.0.0**, **database schema v2**. `se_whatsapp` **module v1.0.0**.
 > `perfex_dark_theme` **v1.2.3** (vendor). Earlier text that wrote "se_core v7 / se_appointments v2"
 > as *module* versions was wrong.
 >
@@ -70,7 +70,7 @@ MariaDB 10.11.18. Modules active — **module version vs schema version kept dis
 
 | Module | Module version | Database schema version |
 |--------|----------------|-------------------------|
-| `se_core` | **1.0.0** | **v7** |
+| `se_core` | **1.0.0** | **v11** (`se_core_schema_version`, read from `tbloptions`) |
 | `se_appointments` | **1.0.0** | **v2** |
 | `se_whatsapp` | **1.0.0** | (install-time tables; no versioned schema counter) |
 | `perfex_dark_theme` (vendor) | **1.2.3** | n/a |
@@ -88,9 +88,10 @@ MariaDB 10.11.18. Modules active — **module version vs schema version kept dis
 
 ## 4. Migrations & module versions
 Idempotent (`IF NOT EXISTS`, version-gated). **These are database schema versions, not module
-versions** — every module is at module version 1.0.0. se_core schema **v7**: last-touch attribution + consent_text_version,
+versions** — every module is at module version 1.0.0. se_core schema **v11**: last-touch attribution + consent_text_version,
 outbox lease cols + brand_id indexes, patient/consent/procedure/access-log tables, leadgen events + forms,
-gdm requests, ext metrics. se_appointments schema **v2**: type/format/cancellation/staff_tz/reminder cols,
+gdm requests, ext metrics; **v8–v11** added the WhatsApp outbound queue, outbox lease/fence/worker
+columns, Meta leadgen lease/fence columns and the Google request-status lifecycle columns. se_appointments schema **v2**: type/format/cancellation/staff_tz/reminder cols,
 status history, working hours, reminders. se_whatsapp: 6 tables. Modules active as above. Idempotency re-verified: no drift.
 
 ## 5. Test commands & totals — and how each was authenticated
@@ -104,8 +105,13 @@ status history, working hours, reminders. se_whatsapp: 6 tables. Modules active 
 - **Phases 8 and 9 did NOT fabricate any session.** Regression there was network-free unit suites, direct
   DB-level assertions and security scans only. Nothing in Phase 8 or Phase 9 forged, cloned or inserted a
   session row.
-- **Consequence:** no authenticated *browser* UI check has ever been performed by a human. That is exactly
-  why Patient CRUD UI and Dark Theme are classified as pending manual UI QA rather than end-to-end verified.
+- **Consequence at the time of Phase 9:** no authenticated *browser* UI check had been performed. That is
+  why Patient CRUD UI and Dark Theme were then classified as pending manual UI QA.
+- **Superseded by Phases 10–13.** Authenticated browser verification has since been performed against the
+  real deployed application in an existing operator browser session — no session was forged, cloned or
+  inserted, and no cookie was exported. All 28 module screens were loaded and rendered, at desktop width and
+  at 390 px and 768 px. See §20. What still cannot be self-verified is anything requiring a **second staff
+  account with restricted capabilities**; that remains owner manual QA in `docs/MANUAL-UI-CHECKLIST.md`.
 
 ### Totals
 - PHP 8.1/8.3/8.4 lint: PASS (64 files). Migration idempotency: PASS.
@@ -113,6 +119,17 @@ status history, working hours, reminders. se_whatsapp: 6 tables. Modules active 
 - In-phase (recorded per commit): CAPI 31/0 + gating 9/0; attribution 30/0; outbox/pipeline 13/0; brand-sep 23/0;
   appointments HTTP 19/0 + unit 13/0; WhatsApp unit 13/0 + cron 11/0; leadgen cron 5/0; Google DM 33/0;
   reporting HTTP 21/0. **Aggregate: 0 failures across all suites.**
+
+### Current tier totals (Phases 10–13) — reported separately, never conflated
+| Tier | Assertions | Failures |
+|------|-----------:|---------:|
+| Fake-DB / unit (`run.php`) | **1146** | **0** |
+| Real MariaDB (`run_db.php`) | **86** | **0** |
+| HTTP against the deployed app (`run_http.php`) | **49** | **0** |
+| Outbound network calls attempted during any run | **0** | — |
+
+A passing fake-DB assertion is not evidence about MariaDB, and neither is evidence about a browser.
+See `docs/TEST-TIERS.md` for what each tier can and cannot prove.
 
 ## 6. Status classification
 See `docs/FINAL-QA-MATRIX.md`. Summary: internal features **Live/end-to-end**; all external ad-platform
@@ -523,3 +540,78 @@ Dark Theme vendor source. A source package for that review is built at the revie
 
 **No independent code approval has been obtained.** Nothing in this report should be read as an
 external code review sign-off.
+
+---
+
+# Phases 10–13 — UI delivery and integration closure
+
+## 20. Browser-verified user interface
+
+Backend code, passing fixtures, a route and a documentation entry are **not** completion. Every item below
+was loaded in an authenticated browser against the deployed application and rendered inside the real Perfex
+layout.
+
+- **Navigation.** A grouped *SEO Evaluate* sidebar section with 11 permission-aware items. Items appear only
+  for staff holding the matching capability.
+- **Dashboard.** 12 linked cards with live counters.
+- **Appointments.** List with status badges and empty state, create, edit, view with status history. The raw
+  numeric lead-id field is gone; the form uses a searchable relation picker.
+- **Patients.** List, create, view, edit. Cross-brand links are refused. Archive is explicitly not a
+  deletion request.
+- **Conversion outbox monitor.** Filters, state counters, a detail screen that shows the snapshot without
+  exposing credentials, and a requeue control that stays locked when consent is absent.
+- **Meta Lead Ads.** Event queue, form/field mapping, defaults, requeue, readiness checklist.
+- **WhatsApp.** Inbox, threaded conversation, composer whose control the **server** chooses (free-form
+  inside the 24-hour window, approved template outside it), and a readiness screen. The composer is disabled
+  with a stated reason when sending is gated.
+- **Google Data Manager.** Request list with lifecycle state, mapping, readiness.
+- **Credentials status.** Booleans, mode and expiry only. No value is ever rendered, and there is no copy
+  control.
+- **Consent settings.** Fail-closed warning, visitor preview, audit trail.
+
+**Turkish and English are at full parity** across all three modules; no raw translation key renders.
+**Dark Theme:** no hardcoded colour and no fixed pixel width anywhere in the module views.
+
+**Responsive:** verified at **390 px** and **768 px** by driving real media queries, not by resizing a
+report. **0 horizontal overflow** across 12 page/width combinations. Screenshots are in the review package.
+
+**Not implemented, and labelled as such in the UI itself** — Meta reconciliation, Google JWT/OAuth signing
+(requires the `google/auth` library; no bespoke cryptography was written), and WhatsApp live sending (no
+transport is registered). These screens say *Not implemented*; none of them implies working behaviour.
+
+## 21. Defects found and closed in Phases 10–13
+
+1. **Raw translation keys** — `register_language_files()` was never called, so every module string rendered
+   as its key. Invisible to any PHP test.
+2. **Five fail-open empty-scope call sites** — a staff member with no brand mapping produced `IN ()`, a
+   MariaDB syntax error, so those pages returned 500. Now `1=0`, which denies.
+3. **Appointment partial-update bypass** — sending `{rel_id}` alone skipped the entire link check, and
+   `{end_at}` alone skipped the window check. Stored state is now merged before validation.
+4. **`GET_LOCK` result ignored** — a lock timeout was indistinguishable from a held lock, silently removing
+   the double-booking guard under contention. Proven on real MariaDB with a second connection.
+5. **PHP/MariaDB two-hour clock skew** — rows written with SQL `NOW()` were compared against PHP `date()`.
+   Retries fired three hours late; dead-worker leases recovered 2h15m late. Only the real-database tier
+   could see this.
+6. **Webhook 200 without durability** — a failed insert still returned 200, so Meta never redelivered and
+   the lead was lost silently. 200 now means durably accepted.
+7. **Meta `held` events stranded forever** — a held event was never re-claimed. It now auto-resumes.
+8. **Outbox `payload_version = 0` fell back to the live lead** — the snapshot's whole purpose. Now fails
+   closed.
+9. **WhatsApp gate conflated with the 24-hour window** — a gated message looked like a closed-window skip
+   and was permanently discarded. The gate is now checked first.
+10. **Unverified six-hour Google age rule** applied to the wrong quantity — removed; now configurable and
+    off by default.
+11. **Landing tokens not bound to brand/audience/version** — now bound, and first touch is preserved.
+
+## 22. What was deliberately not done
+
+- No external integration was activated. No token was created, no webhook subscribed, no WhatsApp message
+  sent, no Meta or Google conversion transmitted, no App Review submitted, no live Google conversion action
+  created.
+- No real patient information was entered. Synthetic fixtures were used for tests only and every one was
+  removed; the residue scan shows **0** rows in all 22 module data tables, with only the 2 real brands and
+  their 2 staff mappings preserved.
+- No secret value was read, printed, copied or committed.
+- No session was forged and no browser cookie was exported.
+- Environment unchanged: cPanel, PHP 8.1.34, MariaDB 10.11. No VPS, no PHP upgrade, no DNS/TLS change, no
+  Redis, no container, no external queue.

@@ -121,7 +121,7 @@ se_eq(json_encode($event), json_encode(se_capi_build_event($row, null)), 'CAPI e
 se_eq(json_encode($g), json_encode(se_gdm_build_event($row, null, true)), 'Google event is identical across retries');
 
 /* ======================================================================== */
-se_group('Pre-snapshot rows keep the old live-lead behaviour (no backfill)');
+se_group('Pre-snapshot rows are UNSENDABLE (no live-lead fallback)');
 
 se_test_seed_outbox();
 $db = se_test_db();
@@ -134,10 +134,24 @@ $db->seed('tblse_conversion_outbox', [
 $legacy = $db->rows('tblse_conversion_outbox')[0];
 se_eq(false, se_outbox_row_has_snapshot($legacy), 'a v0 row is recognised as pre-snapshot');
 
+/* The BUILDER is pure and still accepts a lead, so a caller can inspect what
+ * an old row would have produced. The SENDER refuses: rebuilding a historical
+ * conversion from the lead's current row is exactly the defect the snapshot
+ * removes, and keeping a fallback "just for old rows" kept it alive for every
+ * row queued before the migration. */
 $lead = (object) ['meta_lead_id' => 'm-101', 'email' => '', 'phonenumber' => '',
                   'ctwa_clid' => '', 'fbc' => '', 'fbp' => '', 'consent_ads' => 1];
 $ev = se_capi_build_event($legacy, $lead);
-se_eq('m-101', $ev['user_data']['lead_id'], 'v0 row still builds from the live lead');
+se_eq('m-101', $ev['user_data']['lead_id'], 'the pure builder can still be driven with a lead');
+
+$gate = se_outbox_consent_allows_send($legacy);
+se_eq(false, $gate['ok'], 'a v0 row FAILS the send gate');
+se_eq('no event snapshot; cannot verify consent at event time', $gate['reason'],
+    'and the reason names the missing snapshot');
+
+$consent = se_outbox_row_consent($legacy);
+se_eq('unknown', $consent['state'], 'a v0 row reports UNKNOWN consent, never the live flag');
+se_eq('no_snapshot', $consent['source'], 'and says the snapshot is missing');
 
 /* ======================================================================== */
 se_group('Consent gate at send time');
@@ -327,10 +341,26 @@ se_eq(1, count($db->rows('tblse_gdm_requests')), 'the request is tracked for lat
 $GLOBALS['SE_GDM_SENDER'] = null;
 
 /* ======================================================================== */
-se_group('Google credentials are gated (static bearer token path removed)');
+se_group('The plaintext bearer-token option is never read');
 
+/* The old design pasted a static token into `se_google_sa_token_<brand>`.
+ * Tokens are now minted through the credential provider, and that option must
+ * have no influence whatsoever — not as a value, not as a fallback. */
 se_test_seed_outbox();
-se_eq('', se_gdm_access_token(1), 'the static bearer-token option is no longer read');
+$GLOBALS['SE_GDM_TOKEN_PROVIDER'] = null;   // no signer registered
+se_test_remove_secret('google_sa_1');
+se_gdm_token_cache_reset();
+
+se_eq('', se_gdm_access_token(1), 'with no credential and no signer, no token is produced');
 
 $GLOBALS['se_test']['options']['se_google_sa_token_1'] = 'ya29.SHOULD-NEVER-BE-USED';
-se_eq('', se_gdm_access_token(1), 'even when the old option is set, it is not used');
+$GLOBALS['se_test']['options']['se_google_sa_token']   = 'ya29.ALSO-NEVER-USED';
+
+se_eq('', se_gdm_access_token(1),
+    'setting the old plaintext options changes nothing — they are not read at all');
+
+$status = se_gdm_credential_status(1);
+se_eq(false, $status['ready'], 'and the provider still reports not ready');
+se_eq(false, strpos(json_encode($status), 'SHOULD-NEVER-BE-USED') !== false,
+    'the old option value appears nowhere in the status payload');
+

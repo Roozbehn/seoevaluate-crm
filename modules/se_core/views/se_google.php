@@ -24,6 +24,16 @@
       _l('se_google_customer_id')    => html_escape((string) ($status['customer_id'] ?: '—')),
       _l('se_google_login_account')  => html_escape((string) ($status['login_account'] ?: '—')),
       _l('se_google_credential')     => $status['credential_ready'] ? se_ui_badge('ok', _l('se_credentials_installed')) : se_ui_badge('warning', _l('se_credentials_missing')),
+      _l('se_google_credential_valid') => $status['credential_valid'] ? se_ui_badge('ok', _l('se_yes')) : se_ui_badge('warning', _l('se_no')),
+      _l('se_google_service_account') => html_escape((string) ($status['client_email'] ?: '—')),
+      _l('se_google_project')        => html_escape((string) ($status['project_id'] ?: '—')),
+      _l('se_google_token_state')    => $status['token_valid_now']
+          ? se_ui_badge('ok', _l('se_google_token_valid') . ' (' . html_escape((string) $status['token_expires_at']) . ')')
+          : se_ui_badge('unknown', _l('se_google_token_none')),
+      _l('se_google_min_age')        => (int) $status['min_age_seconds'] === 0
+          ? se_ui_badge('ok', _l('se_google_min_age_off'))
+          : html_escape((int) $status['min_age_seconds'] . 's'),
+      _l('se_google_max_age')        => html_escape((int) $status['max_age_days'] . ' d'),
       _l('se_google_credential_mode') => $status['credential_mode_ok'] === null
           ? '<span class="text-muted">—</span>'
           : ($status['credential_mode_ok'] ? se_ui_badge('ok', '600') : se_ui_badge('error', _l('se_credentials_mode_bad'))),
