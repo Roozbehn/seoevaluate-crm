@@ -27,11 +27,35 @@ function se_gcal_is_live()
     return is_callable($GLOBALS['SE_GCAL_ADAPTER'] ?? null);
 }
 
-/** Fixture adapter: no network; deterministic id; idempotent by (op,appt). */
+/**
+ * Fixture adapter: no network; deterministic id; idempotent by (op,appt).
+ *
+ * The id it returns is marked `fixture => true` so the caller never writes it
+ * into a real appointment row. A `gcal-fixture-*` value persisted as a Google
+ * event id is indistinguishable from a real one later, and every subsequent
+ * sync then believes an event exists that Google has never heard of.
+ */
 function se_gcal_fixture_adapter(array $op)
 {
     $id = 'gcal-fixture-' . $op['appointment_id'] . '-' . substr(md5($op['calendar_key'] . '|' . $op['start']), 0, 10);
-    return ['ok' => true, 'event_id' => $op['operation'] === 'cancel' ? null : $id, 'error' => ''];
+
+    return [
+        'ok'       => true,
+        'event_id' => $op['operation'] === 'cancel' ? null : $id,
+        'error'    => '',
+        'fixture'  => true,
+    ];
+}
+
+/** Is this adapter result a test fixture rather than a real Google event? */
+function se_gcal_result_is_fixture(array $result)
+{
+    if (!empty($result['fixture'])) {
+        return true;
+    }
+
+    return isset($result['event_id']) && is_string($result['event_id'])
+        && strpos($result['event_id'], 'gcal-fixture-') === 0;
 }
 
 /** Per-brand/staff calendar mapping key (config-driven; empty when unmapped). */

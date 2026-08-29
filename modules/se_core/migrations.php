@@ -256,7 +256,13 @@ function se_core_migration_statements()
     $stmts[] = "ALTER TABLE `{$p}se_patients` ADD INDEX IF NOT EXISTS `brand_lead` (`brand_id`,`lead_id`)";
     $stmts[] = "ALTER TABLE `{$p}se_patients` ADD INDEX IF NOT EXISTS `brand_client` (`brand_id`,`client_id`)";
 
-    /* --- v8.6: brand-scoping index coverage for tenant queries ------------- */
+    /* --- v8.6: appointment calendar sync state ---------------------------- *
+     * Separates "a fixture ran" from "Google holds this event id", so a test
+     * adapter can never leave a real row believing it is synced.
+     */
+    $stmts[] = "ALTER TABLE `{$p}se_appointments` ADD COLUMN IF NOT EXISTS `gcal_sync_state` varchar(16) DEFAULT NULL";
+
+    /* --- v8.7: brand-scoping index coverage for tenant queries ------------- */
     $stmts[] = "ALTER TABLE `{$p}se_staff_brands` ADD INDEX IF NOT EXISTS `staff_id` (`staff_id`)";
 
     return $stmts;

@@ -47,17 +47,37 @@ class Se_appointments_model extends App_Model
     {
         $data = $this->prepare($data);
 
+        // The posted brand_id was previously trusted verbatim, so a crafted POST
+        // could create an appointment inside another tenant.
+        if (!se_can_access_brand((int) ($data['brand_id'] ?? 0))) {
+            return false;
+        }
+
         if ($this->invalid_window($data)) {
             return false;
         }
-        if ($this->has_availability_conflict($data)) {
+
+        if ($this->invalid_links($data)) {
             return false;
         }
 
-        $data['date_created'] = date('Y-m-d H:i:s');
+        // Serialise the check-then-insert. Two concurrent requests both passed
+        // the availability check and both inserted, producing a double booking
+        // that neither request could see coming.
+        $lock = $this->acquire_slot_lock($data);
 
-        $this->db->insert(db_prefix() . 'se_appointments', $data);
-        $id = $this->db->insert_id();
+        try {
+            if ($this->has_availability_conflict($data)) {
+                return false;
+            }
+
+            $data['date_created'] = date('Y-m-d H:i:s');
+
+            $this->db->insert(db_prefix() . 'se_appointments', $data);
+            $id = $this->db->insert_id();
+        } finally {
+            $this->release_slot_lock($lock);
+        }
 
         if ($id) {
             $this->record_status_history($id, (int) $data['brand_id'], null, $data['status']);
@@ -73,20 +93,58 @@ class Se_appointments_model extends App_Model
     public function update($id, $data)
     {
         $before = $this->get($id);
-        $data   = $this->prepare($data);
+
+        if (!$before) {
+            return false;   // out of scope, or gone
+        }
+
+        $data = $this->prepare($data);
+
+        // An appointment does not change tenant. Moving one is not a supported
+        // operation, so a posted brand_id is dropped rather than honoured; the
+        // record keeps the brand it already has.
+        unset($data['brand_id']);
 
         if ($this->invalid_window($data)) {
             return false;
         }
-        // Availability is only re-checked when the time or staff is being changed.
-        if (isset($data['start_at']) && $this->has_availability_conflict($data, (int) $id)) {
+
+        // Link/staff validation runs against the record's OWN brand.
+        $linkCheck = array_merge($data, ['brand_id' => (int) $before->brand_id]);
+
+        if ($this->invalid_links($linkCheck)) {
             return false;
+        }
+
+        // Availability is re-checked whenever ANYTHING that determines the slot
+        // changes - start, end, or assigned staff. Checking only start_at let a
+        // staff reassignment or an extended end time create an overlap.
+        $slotChanged = isset($data['start_at']) || isset($data['end_at']) || isset($data['staff_id']);
+
+        if ($slotChanged) {
+            $merged = array_merge([
+                'brand_id' => (int) $before->brand_id,
+                'staff_id' => (int) $before->staff_id,
+                'start_at' => $before->start_at,
+                'end_at'   => $before->end_at,
+            ], $data);
+
+            $lock = $this->acquire_slot_lock($merged);
+
+            try {
+                if ($this->has_availability_conflict($merged, (int) $id)) {
+                    return false;
+                }
+            } finally {
+                $this->release_slot_lock($lock);
+            }
         }
 
         $data['last_updated'] = date('Y-m-d H:i:s');
 
-        $this->db->where('id', $id)->update(db_prefix() . 'se_appointments', $data);
-        $affected = $this->db->affected_rows();
+        // Brand is in the SQL predicate and the affected count is checked, so a
+        // caller that skipped its own authorization still writes nothing.
+        $affected = se_guarded_update(db_prefix() . 'se_appointments', 'id', (int) $id, $data);
 
         if ($before && isset($data['status'])) {
             if ($before->status !== $data['status']) {
@@ -127,19 +185,36 @@ class Se_appointments_model extends App_Model
 
     public function delete($id)
     {
+        // Authorize BEFORE the side effects: cancelling a calendar event and
+        // dropping reminders for a record the caller may not touch is itself a
+        // cross-tenant write.
+        if (!$this->get($id)) {
+            return false;
+        }
+
         $this->sync_calendar((int) $id, 'cancel');
+
         if (function_exists('se_reminder_cancel_for_appointment')) {
             se_reminder_cancel_for_appointment((int) $id);
         }
-        $this->db->where('id', $id)->delete(db_prefix() . 'se_appointments');
 
-        return $this->db->affected_rows() > 0;
+        return se_guarded_delete(db_prefix() . 'se_appointments', 'id', (int) $id) > 0;
     }
 
     /** Full status timeline for an appointment. */
     public function status_history($appointment_id)
     {
-        $this->db->where('appointment_id', (int) $appointment_id)->order_by('id', 'ASC');
+        // Scoped: the history table carries brand_id, and reading another
+        // tenant's status timeline leaks who was seen and when.
+        $predicate = se_brand_predicate();
+
+        $this->db->where('appointment_id', (int) $appointment_id);
+
+        if ($predicate !== '') {
+            $this->db->where($predicate, null, false);
+        }
+
+        $this->db->order_by('id', 'ASC');
 
         return $this->db->get(db_prefix() . 'se_appointment_status_history')->result_array();
     }
@@ -184,10 +259,27 @@ class Se_appointments_model extends App_Model
             return;
         }
         $result = se_gcal_sync((array) $appt, $operation);
-        if (!empty($result['ok']) && array_key_exists('event_id', $result)) {
-            $this->db->where('id', (int) $appointment_id)
-                     ->update(db_prefix() . 'se_appointments', ['google_event_id' => $result['event_id']]);
+
+        if (empty($result['ok']) || !array_key_exists('event_id', $result)) {
+            return;
         }
+
+        // A fixture id must never land in a real appointment row: once written,
+        // `gcal-fixture-*` is indistinguishable from a real Google event id, and
+        // every later sync then believes an event exists that Google has never
+        // heard of. Fixture results are recorded as a separate sync state.
+        if (function_exists('se_gcal_result_is_fixture') && se_gcal_result_is_fixture($result)) {
+            se_guarded_update(db_prefix() . 'se_appointments', 'id', (int) $appointment_id, [
+                'gcal_sync_state' => 'fixture',
+            ]);
+
+            return;
+        }
+
+        se_guarded_update(db_prefix() . 'se_appointments', 'id', (int) $appointment_id, [
+            'google_event_id' => $result['event_id'],
+            'gcal_sync_state' => $result['event_id'] === null ? 'cancelled' : 'synced',
+        ]);
     }
 
     protected function has_availability_conflict($data, $ignore_id = 0)
@@ -224,8 +316,14 @@ class Se_appointments_model extends App_Model
             return;
         }
 
-        $this->db->select('consent_ads')->where('id', (int) $appt->rel_id);
+        // The lead MUST belong to the same brand as the appointment. Without
+        // this the appointment's brand_id was used to queue a conversion built
+        // from a lead in a different tenant.
+        $this->db->select('consent_ads')
+                 ->where('id', (int) $appt->rel_id)
+                 ->where('brand_id', (int) $appt->brand_id);
         $lead = $this->db->get(db_prefix() . 'leads')->row();
+
         if (!$lead || (int) $lead->consent_ads !== 1) {
             return;
         }
@@ -247,9 +345,18 @@ class Se_appointments_model extends App_Model
         }
     }
 
+    /** Maximum sensible appointment length; anything longer is a data-entry error. */
+    const MAX_DURATION_SECONDS = 86400;
+
     protected function invalid_window($clean)
     {
         if (isset($clean['start_at']) && $clean['start_at'] !== '' && strtotime($clean['start_at']) === false) {
+            return true;
+        }
+
+        // A required field that is present but blank is invalid; a field that is
+        // absent is simply not being changed by this update.
+        if (array_key_exists('title', $clean) && trim((string) $clean['title']) === '') {
             return true;
         }
 
@@ -257,7 +364,91 @@ class Se_appointments_model extends App_Model
             return false;
         }
 
-        return strtotime($clean['end_at']) <= strtotime($clean['start_at']);
+        $start = strtotime($clean['start_at']);
+        $end   = strtotime($clean['end_at']);
+
+        if ($end <= $start) {
+            return true;
+        }
+
+        return ($end - $start) > self::MAX_DURATION_SECONDS;
+    }
+
+    /**
+     * The linked lead/client and the assigned staff member must belong to the
+     * appointment's brand. None of this was checked, so an appointment in
+     * Brand A could point at a Brand B lead and be assigned to Brand B staff.
+     */
+    protected function invalid_links($clean)
+    {
+        $brand = (int) ($clean['brand_id'] ?? 0);
+
+        if (!empty($clean['rel_id']) && !empty($clean['rel_type'])) {
+            $type = $clean['rel_type'] === 'client' ? 'client' : 'lead';
+            $recordBrand = function_exists('se_record_brand') ? se_record_brand($type, (int) $clean['rel_id']) : null;
+
+            if ($recordBrand === null || (int) $recordBrand !== $brand) {
+                return true;
+            }
+        }
+
+        if (!empty($clean['staff_id']) && !$this->staff_belongs_to_brand((int) $clean['staff_id'], $brand)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /** Is this staff member mapped to the brand (or an unrestricted admin)? */
+    protected function staff_belongs_to_brand($staff_id, $brand_id)
+    {
+        $rows = $this->db->query(
+            'SELECT brand_id FROM ' . db_prefix() . 'se_staff_brands WHERE staff_id = ' . (int) $staff_id
+        )->result_array();
+
+        if (!$rows) {
+            // Unmapped staff (e.g. an agency admin) are allowed; the tenancy
+            // model treats "no mapping" as "not brand-restricted", and refusing
+            // them here would make an admin unassignable.
+            return true;
+        }
+
+        foreach ($rows as $row) {
+            if ((int) $row['brand_id'] === (int) $brand_id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Advisory lock around the check-then-write for one staff member's calendar.
+     *
+     * MariaDB GET_LOCK is connection-scoped and released explicitly (and
+     * automatically if the request dies), which is what we want: a crashed
+     * request must not hold a booking slot hostage.
+     */
+    protected function acquire_slot_lock($data)
+    {
+        $staff = (int) ($data['staff_id'] ?? 0);
+
+        if ($staff <= 0) {
+            return null;
+        }
+
+        $name = 'se_appt_slot_' . (int) ($data['brand_id'] ?? 0) . '_' . $staff;
+
+        $this->db->query('SELECT GET_LOCK(' . $this->db->escape($name) . ', 5) AS l');
+
+        return $name;
+    }
+
+    protected function release_slot_lock($name)
+    {
+        if ($name !== null) {
+            $this->db->query('SELECT RELEASE_LOCK(' . $this->db->escape($name) . ')');
+        }
     }
 
     protected function prepare($data)
@@ -291,8 +482,30 @@ class Se_appointments_model extends App_Model
         if (isset($clean['status']) && !in_array($clean['status'], self::STATUSES, true)) {
             $clean['status'] = 'scheduled';
         }
+
         if (isset($clean['consultation_format']) && !in_array($clean['consultation_format'], ['online', 'in_person'], true)) {
             $clean['consultation_format'] = 'in_person';
+        }
+
+        // Relation type is an enumeration, not free text.
+        if (isset($clean['rel_type']) && !in_array($clean['rel_type'], ['lead', 'client'], true)) {
+            $clean['rel_type'] = 'lead';
+        }
+
+        // Timezone must be one PHP actually knows, or the reminder clock silently
+        // drifts. An unknown value falls back to the configured clinic default.
+        if (isset($clean['staff_timezone'])) {
+            $tz = trim((string) $clean['staff_timezone']);
+            $clean['staff_timezone'] = ($tz !== '' && in_array($tz, timezone_identifiers_list(), true))
+                ? $tz
+                : (get_option('default_timezone') ?: 'Europe/Istanbul');
+        }
+
+        // Bounded free text.
+        foreach (['title' => 191, 'location' => 191, 'cancellation_reason' => 191, 'notes' => 5000] as $col => $max) {
+            if (isset($clean[$col])) {
+                $clean[$col] = mb_substr(trim((string) $clean[$col]), 0, $max);
+            }
         }
 
         return $clean;

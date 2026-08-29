@@ -41,6 +41,9 @@ class Se_appointments extends AdminController
 
         $data['title']        = _l('se_appointments');
         $data['appointments'] = $this->se_appointments_model->get();
+        // Selectors offer only brands and staff this member may actually use.
+        $data['brands']       = se_all_brands(true, true);
+        $data['staff']        = se_appt_selectable_staff();
         $this->load->view('se_appointments/manage', $data);
     }
 
@@ -59,12 +62,15 @@ class Se_appointments extends AdminController
 
         $data['title']       = $appointment->title;
         $data['appointment'] = $appointment;
+        $data['history']     = $this->se_appointments_model->status_history((int) $id);
         $this->load->view('se_appointments/view', $data);
     }
 
     public function save($id = '')
     {
-        if (!$this->input->post()) {
+        // POST-only: AdminController enforces CSRF on POST, and a GET that
+        // reaches a writer bypasses that entirely.
+        if ($this->input->method() !== 'post' || !$this->input->post()) {
             redirect(admin_url('se_appointments/manage'));
         }
 
@@ -98,8 +104,13 @@ class Se_appointments extends AdminController
         redirect(admin_url('se_appointments/manage'));
     }
 
+    /** Delete an appointment. POST-only + CSRF (this was a GET route). */
     public function delete($id)
     {
+        if ($this->input->method() !== 'post') {
+            access_denied('se_appointments');
+        }
+
         if (staff_cant('delete', 'se_appointments')) {
             access_denied('se_appointments');
         }

@@ -294,6 +294,11 @@ require_once $SE_MODULES . '/se_core/se_capi.php';
 require_once $SE_MODULES . '/se_core/se_google_dm.php';
 require_once $SE_MODULES . '/se_core/se_meta_leadgen.php';
 
+/* Appointment helpers that are plain functions (the model needs App_Model). */
+require_once $SE_MODULES . '/se_appointments/availability.php';
+require_once $SE_MODULES . '/se_appointments/reminders.php';
+require_once $SE_MODULES . '/se_appointments/gcal.php';
+
 /** se_core_deny() lives in se_core.php, which we cannot load (it self-executes). */
 if (!function_exists('se_core_deny')) {
     function se_core_deny()

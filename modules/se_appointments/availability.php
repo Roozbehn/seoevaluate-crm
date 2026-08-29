@@ -102,3 +102,41 @@ function se_appt_within_working_hours($brand_id, $staff_id, $start_at, $end_at)
 
     return $CI->db->count_all_results($table) > 0;
 }
+
+/**
+ * Staff who may be assigned to an appointment, restricted to the brands the
+ * current user can reach. A bare numeric staff_id input invited assigning
+ * another tenant's staff member.
+ */
+function se_appt_selectable_staff($brand_id = 0)
+{
+    $CI = &get_instance();
+
+    if ((int) $brand_id > 0) {
+        $ids = [(int) $brand_id];
+    } elseif (se_staff_sees_all_brands()) {
+        $ids = [];
+    } else {
+        $ids = array_values(array_filter(se_staff_brand_ids(), function ($id) { return (int) $id > 0; }));
+    }
+
+    if ($ids) {
+        $rows = $CI->db->query(
+            'SELECT DISTINCT staff_id FROM ' . db_prefix() . 'se_staff_brands'
+            . ' WHERE brand_id IN (' . implode(',', array_map('intval', $ids)) . ')'
+        )->result_array();
+
+        $staffIds = array_map(function ($r) { return (int) $r['staff_id']; }, $rows);
+
+        if (!$staffIds) {
+            return [];
+        }
+
+        $CI->db->where_in('staffid', $staffIds);
+    }
+
+    $CI->db->select('staffid, firstname, lastname')->where('active', 1)->order_by('firstname', 'ASC');
+
+    return $CI->db->get(db_prefix() . 'staff')->result_array();
+}
+
