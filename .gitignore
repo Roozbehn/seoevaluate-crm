@@ -15,3 +15,6 @@ application/cache/
 # --- os noise ---
 .DS_Store
 Thumbs.db
+
+# Vendor plugin (CodeCanyon) - deployed to staging, git storage decision pending
+modules/perfex_dark_theme/

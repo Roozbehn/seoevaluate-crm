@@ -161,3 +161,9 @@ Branch `feature/whatsapp-inbox` -> merged to `main`. New dedicated module `modul
 
 **Externally gated (owner action):** persistent Meta token, real WABA/number, public webhook subscribe
 (+ csrf_exclude_uris deploy step), first real message, App Review submission.
+
+---
+
+## Perfex plugin audit — inventory done; **Dark Theme installed (staging)**
+
+6 commercial CodeCanyon plugins inventoried (`docs/PERFEX-PLUGIN-AUDIT.md`). Owner approved **Dark Theme** only; installed v1.2.3 (clean review, non-destructive, idempotent, Phase 1-3 intact) — `docs/PERFEX-PLUGIN-IMPLEMENTATION-REPORT.md`. Vendor source deployed but gitignored (repo-storage decision pending per owner). WhatsBot/PRChat rejected (duplicate se_whatsapp). Accounting/Service-Management/Flutex: awaiting owner license confirmation.
