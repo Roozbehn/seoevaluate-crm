@@ -187,3 +187,20 @@ New: `controllers/Leadgen.php`. Rewritten: `se_meta_leadgen.php`. Wired in se_co
 
 **Externally gated (owner):** 2nd Meta app / ads integration, persistent Page token + app secret, subscribe production
 webhook (+ csrf_exclude_uris for se_core/leadgen), App Review submission.
+
+---
+
+## Phase 5 — Google Data Manager conversions  — **FUNCTIONAL (fixtures); live send externally gated (merged)**
+
+Branch `feature/google-conversions` -> merged to `main`. se_core schema v6 (`tblse_gdm_requests`). Rebuilt the
+35-line `se_google_dm.php` scaffold into a functional Data Manager v1 sender (verified against current official docs).
+
+| Task | Status | Evidence |
+|------|--------|----------|
+| 5.1 Data Manager integration | functional (fixtures); live send gated | events:ingest payload (encoding=HEX, destinations.operatingAccount GOOGLE_ADS + productDestinationId, per-event destinationReferences, transactionId, RFC3339-Z eventTimestamp, adIdentifiers gclid/gbraid/wbraid, userData SHA-256-hex email/phone via shared Se_hash, consent GRANTED/DENIED). Conversion-time validation (>=6h,<=90d), <=2000/request batching, per-event isolation, retry/poll (tblse_gdm_requests + requestStatus.retrieve hook), outbox integration. NOT the deprecated Ads ConversionUpload. Unit 33/0; cron gated-hold end-to-end (no external call). |
+| 5.2 Ads management/reporting | checklist (Phase 6) | Conversion-action mapping (options); campaign/spend + account-health reporting scoped to Phase 6 dashboards. |
+| 5.3 WhatsApp landing-token attribution | complete | `se_landing_token_create/verify/apply_to_lead` — HMAC-signed, time-limited token preserves gclid/gbraid/wbraid across the click-to-WhatsApp hop. Fixture-tested (create/verify/tamper/wrong-secret/expiry/apply). |
+| Setup checklist | done | `docs/GOOGLE-DATA-MANAGER-SETUP-CHECKLIST.md` (MCC, Cloud project, service account, Data Manager perms, conversion actions, GA4, Search Console). |
+
+Rewritten `se_google_dm.php` (already wired in se_core batch-2 loader); migrations v6. No clinical data in conversions.
+**Externally gated (owner):** Cloud project + service account + credentials, Data Manager permissions, conversion actions, first live upload.
