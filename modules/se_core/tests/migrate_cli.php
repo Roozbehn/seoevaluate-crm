@@ -81,17 +81,27 @@ if ($mode === '--apply') {
         exit(1);
     }
 
-    // tbloptions has no unique key on `name`, so ON DUPLICATE KEY cannot be
-    // relied on: update first, insert only when nothing was updated.
+    // tbloptions has NO unique key on `name`, so ON DUPLICATE KEY cannot be
+    // used and affected_rows is 0 both for "no such row" and for "row already
+    // had this value". Count first, then update or insert -- and collapse any
+    // duplicate rows, because get_option() reads whichever one comes first and
+    // a stale duplicate silently pins the schema version.
     $v = SE_CORE_SCHEMA_VERSION;
     $o = db_prefix() . 'options';
 
-    $my->query("UPDATE `{$o}` SET value='{$v}' WHERE name='se_core_schema_version'");
+    $rows = $my->query("SELECT id FROM `{$o}` WHERE name='se_core_schema_version' ORDER BY id ASC");
+    $ids  = [];
+    while ($x = $rows->fetch_assoc()) { $ids[] = (int) $x['id']; }
 
-    if ($my->affected_rows === 0) {
-        $exists = (int) $my->query("SELECT COUNT(*) c FROM `{$o}` WHERE name='se_core_schema_version'")->fetch_assoc()['c'];
-        if ($exists === 0) {
-            $my->query("INSERT INTO `{$o}` (name,value,autoload) VALUES ('se_core_schema_version','{$v}',1)");
+    if (!$ids) {
+        $my->query("INSERT INTO `{$o}` (name,value,autoload) VALUES ('se_core_schema_version','{$v}',1)");
+    } else {
+        $keep = array_shift($ids);
+        $my->query("UPDATE `{$o}` SET value='{$v}' WHERE id={$keep}");
+
+        if ($ids) {
+            $my->query("DELETE FROM `{$o}` WHERE id IN (" . implode(',', $ids) . ")");
+            echo 'collapsed ' . count($ids) . " duplicate se_core_schema_version row(s)\n";
         }
     }
 
