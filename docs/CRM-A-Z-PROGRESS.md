@@ -236,3 +236,16 @@ mutation, PHP switch, DNS/TLS/host change.
 | 7.3 Backup & restore | validated non-destructively; full drill pending | Fresh dump 138 tables == live 138; completion marker present; backups `700` off-docroot. Full restore drill pending an isolated DB (not created on shared account). rclone absent -> off-server copy not automated. `docs/BACKUP-RESTORE-RUNBOOK.md`. |
 | 7.4 DNS/TLS/cutover | plan only | `docs/DNS-TLS-CUTOVER-ROLLBACK.md` (TTL, cert, HSTS-after-verify, webhook TLS, rollback set). Nothing changed. |
 | 7.5 Monitoring & alerting | runbook | `docs/MONITORING-ALERTING-RUNBOOK.md` (13 signals + thresholds; uses existing health helpers; read-only). **Disk at 95% flagged.** |
+
+---
+
+## Phase 8 — Final QA + completion reports  — **COMPLETE (merged)**
+
+Branch `feature/final-qa` -> merged to `main`. No session forging in Phase 8 (per ground rules); regression
+via network-free unit suites + DB-level checks + security scans; authenticated-UI items -> manual owner checklist.
+
+Re-run: PHP 8.1/8.3/8.4 lint PASS; migration idempotency PASS (no drift); phase4/5/6 unit 21/33/7 = 61/0;
+brand isolation PASS; security scans PASS (0 secrets in tracked files, 0 synthetic residue, webhook POST still
+CSRF-gated, app-config 600, dark theme untracked, no unlicensed plugin); cron 200, app 200; error log 0 (php83-CLI
+lint artifacts cleared — app produces no errors). Reports: `docs/CRM-A-Z-FINAL-REPORT.md`, `docs/FINAL-QA-MATRIX.md`,
+`docs/OWNER-GO-LIVE-CHECKLIST.md`. All external ad-platform delivery classified Externally gated; nothing submitted.
