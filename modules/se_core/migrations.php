@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 9);
+define('SE_CORE_SCHEMA_VERSION', 10);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -292,6 +292,39 @@ function se_core_migration_statements()
     $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD COLUMN IF NOT EXISTS `brand_id` int(11) NOT NULL DEFAULT 0";
     $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD INDEX IF NOT EXISTS `claim` (`state`,`next_attempt_at`)";
     $stmts[] = "ALTER TABLE `{$p}se_meta_leadgen_events` ADD INDEX IF NOT EXISTS `brand_id` (`brand_id`)";
+
+    /* =====================================================================
+     * Phase 13 (schema v10) — WhatsApp OUTBOUND queue. Additive only.
+     * Sending stays disabled: the table exists so the composer can queue and
+     * the drainer can hold, with no live transport anywhere in the code.
+     * ===================================================================== */
+    $stmts[] = "CREATE TABLE IF NOT EXISTS `{$p}se_wa_outbound` (
+        `id` bigint(20) NOT NULL AUTO_INCREMENT,
+        `conversation_id` bigint(20) NOT NULL,
+        `brand_id` int(11) NOT NULL DEFAULT 0,
+        `kind` varchar(16) NOT NULL DEFAULT 'text',
+        `body` mediumtext DEFAULT NULL,
+        `template_name` varchar(128) DEFAULT NULL,
+        `variables_json` text DEFAULT NULL,
+        `idempotency_key` varchar(64) NOT NULL,
+        `status` varchar(16) NOT NULL DEFAULT 'pending',
+        `attempts` int(11) NOT NULL DEFAULT 0,
+        `failure_class` varchar(24) DEFAULT NULL,
+        `last_error` varchar(255) DEFAULT NULL,
+        `wamid` varchar(128) DEFAULT NULL,
+        `locked_at` datetime DEFAULT NULL,
+        `locked_by` varchar(64) DEFAULT NULL,
+        `next_attempt_at` datetime DEFAULT NULL,
+        `fence` bigint(20) NOT NULL DEFAULT 0,
+        `created_by` int(11) NOT NULL DEFAULT 0,
+        `sent_at` datetime DEFAULT NULL,
+        `date_created` datetime NOT NULL,
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `idempotency_key` (`idempotency_key`),
+        KEY `brand_id` (`brand_id`),
+        KEY `conversation_id` (`conversation_id`),
+        KEY `claim` (`status`,`next_attempt_at`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     return $stmts;
 }

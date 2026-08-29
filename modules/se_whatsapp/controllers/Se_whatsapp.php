@@ -15,7 +15,10 @@ class Se_whatsapp extends AdminController
         if (staff_cant('view', 'se_whatsapp')) {
             access_denied('se_whatsapp');
         }
-        $data['title']         = _l('se_whatsapp');
+        $data['title']     = _l('se_whatsapp');
+        $data['has_brand'] = se_staff_has_any_brand();
+        $data['out_health'] = se_wa_out_health();
+        $data['blocked']   = se_wa_send_blocked_reason(0);
         $data['conversations'] = $this->se_whatsapp_model->conversations([
             'assigned' => $this->input->get('assigned'),
         ]);
@@ -37,7 +40,10 @@ class Se_whatsapp extends AdminController
         $data['title']        = _l('se_whatsapp');
         $data['conversation'] = $conversation;
         $data['messages']     = $this->se_whatsapp_model->messages((int) $conversation->id);
-        $data['window_open']  = se_wa_window_open($conversation);
+        $data['policy']       = se_wa_compose_policy($conversation);
+        $data['templates']    = se_wa_approved_templates((int) $conversation->brand_id);
+        $data['staff']        = se_appt_selectable_staff((int) $conversation->brand_id);
+        $data['queued']       = se_wa_out_health((int) $conversation->brand_id);
         $this->load->view('se_whatsapp/conversation', $data);
     }
 
@@ -68,5 +74,75 @@ class Se_whatsapp extends AdminController
         }
 
         redirect(admin_url('se_whatsapp/conversation/' . (int) $id));
+    }
+
+    /**
+     * Queue a reply. POST-only + CSRF + capability + brand guarded.
+     *
+     * Nothing is SENT here: the message is queued and the drainer holds it
+     * while sending is gated. The window rule is enforced by the model, not
+     * trusted to the form.
+     */
+    public function reply($id)
+    {
+        if ($this->input->method() !== 'post') {
+            access_denied('se_whatsapp');
+        }
+
+        if (staff_cant('create', 'se_whatsapp')) {
+            access_denied('se_whatsapp');
+        }
+
+        $conversation = $this->se_whatsapp_model->get_conversation($id);
+
+        if (!$conversation) {
+            access_denied('se_whatsapp');
+        }
+
+        $kind = $this->input->post('kind') === 'template' ? 'template' : 'text';
+
+        $result = se_wa_queue_message((int) $id, [
+            'kind'     => $kind,
+            'body'     => (string) $this->input->post('body'),
+            'template' => (string) $this->input->post('template'),
+        ], (int) get_staff_user_id());
+
+        if ($result['ok']) {
+            set_alert('success', _l('se_wa_reply_queued'));
+        } else {
+            set_alert('warning', _l('se_wa_reply_blocked_' . $result['reason']) ?: _l('se_wa_reply_blocked'));
+        }
+
+        redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $id));
+    }
+
+    /** Per-brand readiness: numbers, templates, webhook and queue health. */
+    public function readiness()
+    {
+        if (!se_staff_can_configure_brands()) {
+            access_denied('se_whatsapp');
+        }
+
+        $brand = (int) $this->input->get('brand');
+
+        if ($brand > 0 && !se_can_access_brand($brand)) {
+            access_denied('se_whatsapp');
+        }
+
+        $data['title']     = _l('se_wa_readiness');
+        $data['brand']     = $brand;
+        $data['brands']    = se_all_brands(false, true);
+        $data['numbers']   = se_wa_numbers_for($brand);
+        $data['templates'] = $brand > 0 ? se_wa_approved_templates($brand) : [];
+        $data['blocked']   = se_wa_send_blocked_reason($brand);
+        $data['out_health'] = se_wa_out_health($brand);
+        $data['webhook']   = [
+            'url'          => site_url('se_whatsapp/webhook'),
+            'app_secret'   => se_secret_configured('wa_app', 0),
+            'verify_token' => se_secret_configured('wa_verify', 0),
+            'last_event'   => se_wa_last_event_at(),
+        ];
+
+        $this->load->view('se_whatsapp/readiness', $data);
     }
 }

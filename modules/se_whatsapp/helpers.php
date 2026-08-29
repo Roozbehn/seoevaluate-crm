@@ -467,33 +467,39 @@ function se_wa_can_send($brand_id)
     return true; // real send still gated on a valid token in the referenced option
 }
 
-/**
- * Consume due appointment reminders from the Phase 2 queue. When no brand can
- * send (the current state until Meta onboarding), reminders are left pending —
- * nothing is transmitted. This is the seam the reminder interface was built for.
+/*
+ * se_wa_consume_due_reminders() now lives in outbound.php.
+ *
+ * The version that stood here counted gated reminders and did nothing else —
+ * there was no queue for it to write into. It now claims each due reminder,
+ * marks it BEFORE queueing so a crash cannot produce two, and hands it to the
+ * outbound queue as an approved template.
  */
-function se_wa_consume_due_reminders($limit = 100)
+
+
+/** Numbers configured for a brand (or every accessible brand when 0). */
+function se_wa_numbers_for($brand_id = 0)
 {
-    // after_cron_run passes a bool ($manually) as the first arg; ignore non-positive limits.
-    $limit = (int) $limit; if ($limit < 1) { $limit = 100; }
     $CI = &get_instance();
-    $table = db_prefix() . 'se_reminders';
-    if (!$CI->db->table_exists($table)) {
-        return 0;
+
+    se_apply_scope_in('brand_id');
+
+    if ((int) $brand_id > 0 && se_can_access_brand($brand_id)) {
+        $CI->db->where('brand_id', (int) $brand_id);
     }
 
-    $CI->db->where('state', 'pending')->where('scheduled_at <=', date('Y-m-d H:i:s'))
-           ->order_by('id', 'ASC')->limit((int) $limit);
-    $due = $CI->db->get($table)->result_array();
+    $CI->db->order_by('id', 'ASC');
 
-    $held = 0;
-    foreach ($due as $r) {
-        if (!se_wa_can_send((int) $r['brand_id'])) {
-            $held++;   // gated: leave pending, transmit nothing
-            continue;
-        }
-        // A live sender lands here once Meta onboarding completes (externally gated).
-    }
+    return $CI->db->get(db_prefix() . 'se_wa_numbers')->result_array();
+}
 
-    return $held;
+/** When did we last receive a webhook event at all? */
+function se_wa_last_event_at()
+{
+    $CI = &get_instance();
+
+    $CI->db->select('received_at')->order_by('id', 'DESC')->limit(1);
+    $row = $CI->db->get(db_prefix() . 'se_wa_webhook_events')->row();
+
+    return $row ? $row->received_at : null;
 }

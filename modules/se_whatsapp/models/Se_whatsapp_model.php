@@ -11,6 +11,7 @@ class Se_whatsapp_model extends App_Model
         se_apply_scope_in(($table_alias ? $table_alias . '.' : '') . 'brand_id');
     }
 
+    /** Conversations for the inbox, with the linked lead name where present. */
     public function conversations($filters = [])
     {
         $this->scope();

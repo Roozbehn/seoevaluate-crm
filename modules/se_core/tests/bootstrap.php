@@ -298,7 +298,9 @@ require_once $SE_MODULES . '/se_core/se_meta_leadgen.php';
 require_once $SE_MODULES . '/se_appointments/availability.php';
 require_once $SE_MODULES . '/se_appointments/reminders.php';
 require_once $SE_MODULES . '/se_appointments/gcal.php';
+require_once $SE_MODULES . '/se_core/se_secret_provider.php';
 require_once $SE_MODULES . '/se_whatsapp/helpers.php';
+require_once $SE_MODULES . '/se_whatsapp/outbound.php';
 
 /** se_core_deny() lives in se_core.php, which we cannot load (it self-executes). */
 if (!function_exists('se_core_deny')) {
