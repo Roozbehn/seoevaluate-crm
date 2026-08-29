@@ -12,23 +12,34 @@ class Se_reports extends AdminController
     public function __construct()
     {
         parent::__construct();
-        if (staff_cant('view', 'se_brands')) {
+
+        // Reporting is its own capability. It deliberately does NOT gate on
+        // se_brands.view any more: that made every reporting user a global
+        // tenant user, because se_brands.view also meant "see all brands".
+        if (!se_staff_can_report()) {
             access_denied('se_reports');
         }
     }
 
-    /** Resolve + authorise the brand in scope. */
+    /**
+     * Resolve + authorise the brand in scope.
+     *
+     * Defaults to the first brand THIS staff member can reach, not the first
+     * brand that exists globally — the old default handed a restricted user a
+     * foreign brand id and then relied on the access check to bounce them.
+     */
     private function brand()
     {
         $b = (int) $this->input->get('brand');
+
         if ($b <= 0) {
-            $this->db->order_by('id', 'ASC')->limit(1);
-            $row = $this->db->get(db_prefix() . 'se_brands')->row();
-            $b = $row ? (int) $row->id : 0;
+            return se_default_brand_id();
         }
-        if ($b > 0 && function_exists('se_can_access_brand') && !se_can_access_brand($b)) {
+
+        if (!se_can_access_brand($b)) {
             ajax_access_denied();
         }
+
         return $b;
     }
 

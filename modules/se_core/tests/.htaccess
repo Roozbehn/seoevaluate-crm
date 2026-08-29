@@ -1,0 +1,11 @@
+# Test harness: never reachable over HTTP.
+# Perfex's front controller only rewrites requests for paths that do NOT exist
+# on disk (RewriteCond %{REQUEST_FILENAME} !-f), so these files would otherwise
+# be served directly by Apache. Every test file also refuses to run outside CLI.
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>

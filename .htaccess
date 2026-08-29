@@ -1,4 +1,21 @@
 AddDefaultCharset utf-8
+
+# --- Operational logs must never be served (see docs: rotated-log exposure) ---
+# The rewrite below only routes paths that do NOT exist on disk
+# (RewriteCond %{REQUEST_FILENAME} !-f), so any error_log* that a PHP CLI run
+# or the web server drops into the document root would otherwise be served
+# directly, in full, to anyone. Deny them explicitly as well as storing them
+# outside the document root.
+<FilesMatch "^(error_log|error_log\..*|.*\.log|php_errorlog)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
 RewriteEngine on
 RewriteCond $1 !^(index\.php|resources|robots\.txt)

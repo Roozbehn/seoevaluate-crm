@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 7);
+define('SE_CORE_SCHEMA_VERSION', 8);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -195,42 +195,259 @@ function se_core_migration_statements()
         KEY `brand_id` (`brand_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
+    /* =====================================================================
+     * Phase 10 (schema v8) — additive only. No existing migration above is
+     * modified, no column is dropped or retyped, every statement is guarded.
+     * ===================================================================== */
+
+    /* --- v8.1: conversion-outbox event snapshot --------------------------- *
+     * Senders used to rebuild a historical conversion from the lead's CURRENT
+     * mutable row, so a consent withdrawal or an edited identifier silently
+     * changed what was transmitted for a past event. The snapshot is captured
+     * once at queue time and is what the senders read from now on.
+     * `payload_version` = 0 means "queued before this migration": those rows
+     * keep the old live-lead behaviour, so no backfill or rewrite is needed.
+     */
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD COLUMN IF NOT EXISTS `attribution_snapshot` MEDIUMTEXT DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD COLUMN IF NOT EXISTS `consent_snapshot` TEXT DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD COLUMN IF NOT EXISTS `payload_version` tinyint(4) NOT NULL DEFAULT 0";
+
+    /* --- v8.2: outbox delivery state machine ------------------------------ *
+     * Distinguishes gated / retryable / permanent / submitted / confirmed
+     * outcomes, and gives the drainer a backoff clock plus a fencing token so
+     * an expired worker cannot overwrite a newer worker's result.
+     */
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD COLUMN IF NOT EXISTS `next_attempt_at` datetime DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD COLUMN IF NOT EXISTS `failure_class` varchar(24) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD COLUMN IF NOT EXISTS `error_code` varchar(64) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD COLUMN IF NOT EXISTS `fence` bigint(20) NOT NULL DEFAULT 0";
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD COLUMN IF NOT EXISTS `request_id` varchar(191) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD COLUMN IF NOT EXISTS `submitted_at` datetime DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD INDEX IF NOT EXISTS `drain` (`status`,`next_attempt_at`)";
+    $stmts[] = "ALTER TABLE `{$p}se_conversion_outbox` ADD INDEX IF NOT EXISTS `request_id` (`request_id`)";
+
+    /* --- v8.3: consent ledger provenance ---------------------------------- *
+     * The ledger is the authoritative record, so it has to carry WHICH question
+     * was answered and WHAT the raw answer was, not just a granted/withdrawn
+     * flag. `answer_raw` is bounded and never used for logic - only the
+     * normalized decision is.
+     */
+    $stmts[] = "ALTER TABLE `{$p}se_consent_ledger` ADD COLUMN IF NOT EXISTS `question_key` varchar(191) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_consent_ledger` ADD COLUMN IF NOT EXISTS `answer_raw` varchar(255) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_consent_ledger` ADD COLUMN IF NOT EXISTS `answer_normalized` varchar(64) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_consent_ledger` ADD INDEX IF NOT EXISTS `lookup` (`brand_id`,`rel_type`,`rel_id`,`purpose`,`consent_at`)";
+
+    /* --- v8.4: patient archive state, separate from deletion requests ------ *
+     * Archiving is an operational filing action. A deletion request is a data
+     * subject exercising a right. Overloading one column onto the other loses
+     * the legal signal, so they are now distinct.
+     */
+    $stmts[] = "ALTER TABLE `{$p}se_patients` ADD COLUMN IF NOT EXISTS `archived_at` datetime DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_patients` ADD COLUMN IF NOT EXISTS `archived_by` int(11) NOT NULL DEFAULT 0";
+    $stmts[] = "ALTER TABLE `{$p}se_patients` ADD INDEX IF NOT EXISTS `brand_state` (`brand_id`,`retention_state`)";
+
+    /* --- v8.5: tenant-safe uniqueness ------------------------------------- *
+     * One patient row per (brand, lead) and per (brand, client). Enforced in the
+     * database so a race cannot create the duplicate the model checks for.
+     * Partial uniqueness is not available in MariaDB, and lead_id/client_id use
+     * 0 for "not linked", so these are added as plain indexes and the model
+     * enforces the business rule; see se_patient_link_conflict().
+     */
+    $stmts[] = "ALTER TABLE `{$p}se_patients` ADD INDEX IF NOT EXISTS `brand_lead` (`brand_id`,`lead_id`)";
+    $stmts[] = "ALTER TABLE `{$p}se_patients` ADD INDEX IF NOT EXISTS `brand_client` (`brand_id`,`client_id`)";
+
+    /* --- v8.6: brand-scoping index coverage for tenant queries ------------- */
+    $stmts[] = "ALTER TABLE `{$p}se_staff_brands` ADD INDEX IF NOT EXISTS `staff_id` (`staff_id`)";
+
     return $stmts;
 }
 
 /**
  * Runs the migration statements through a caller-supplied executor.
- * $exec is `function(string $sql): void`. Returns the count executed.
+ *
+ * $exec is `function(string $sql): bool` and MUST return false on failure.
+ * Execution stops at the first failure and the index is reported, so the
+ * caller can record exactly how far the schema got.
+ *
+ * @return array{executed:int,total:int,failed_sql:?string,ok:bool}
  */
 function se_core_run_migrations(callable $exec)
 {
-    $stmts = se_core_migration_statements();
+    $stmts    = se_core_migration_statements();
+    $executed = 0;
+
     foreach ($stmts as $sql) {
-        $exec($sql);
+        $result = $exec($sql);
+
+        if ($result === false) {
+            return [
+                'executed'   => $executed,
+                'total'      => count($stmts),
+                'failed_sql' => $sql,
+                'ok'         => false,
+            ];
+        }
+
+        $executed++;
     }
 
-    return count($stmts);
+    return ['executed' => $executed, 'total' => count($stmts), 'failed_sql' => null, 'ok' => true];
 }
 
 /**
- * Runtime entry: apply pending schema on admin_init, gated on a stored version
- * so the DDL runs at most once per deploy rather than every request.
+ * Capability migration for the tenancy split (schema v8).
+ *
+ * `se_brands.view` used to mean three things at once, including "see every
+ * brand". Splitting it must FAIL CLOSED: nobody is auto-granted the new
+ * `se_tenancy.all_brands` capability, because doing so would faithfully
+ * preserve the vulnerability. What we do preserve is the harmless half —
+ * anyone who could open reports keeps being able to open reports, now scoped
+ * to their own brands.
+ *
+ * Idempotent: re-running inserts nothing new.
+ */
+function se_core_migrate_capabilities()
+{
+    $CI = &get_instance();
+    $p  = db_prefix();
+
+    // 1. Per-staff permissions: se_brands.view -> also grant se_reports.view.
+    $rows = $CI->db->query(
+        'SELECT staff_id FROM `' . $p . "staff_permissions` WHERE feature = 'se_brands' AND capability = 'view'"
+    )->result_array();
+
+    foreach ($rows as $row) {
+        $staffId = (int) $row['staff_id'];
+
+        $exists = (int) $CI->db->query(
+            'SELECT COUNT(*) AS c FROM `' . $p . "staff_permissions`"
+            . " WHERE staff_id = {$staffId} AND feature = 'se_reports' AND capability = 'view'"
+        )->row()->c;
+
+        if ($exists === 0) {
+            $CI->db->insert($p . 'staff_permissions', [
+                'staff_id'   => $staffId,
+                'feature'    => 'se_reports',
+                'capability' => 'view',
+            ]);
+        }
+    }
+
+    // 2. Role permissions are a serialized feature => [capabilities] map.
+    $roles = $CI->db->query('SELECT roleid, permissions FROM `' . $p . 'roles`')->result_array();
+
+    foreach ($roles as $role) {
+        if (empty($role['permissions'])) {
+            continue;
+        }
+
+        $perms = @unserialize($role['permissions']);
+
+        if (!is_array($perms) || !isset($perms['se_brands']) || !is_array($perms['se_brands'])) {
+            continue;
+        }
+
+        if (!in_array('view', $perms['se_brands'], true)) {
+            continue;
+        }
+
+        $existing = isset($perms['se_reports']) && is_array($perms['se_reports']) ? $perms['se_reports'] : [];
+
+        if (in_array('view', $existing, true)) {
+            continue; // already migrated
+        }
+
+        $existing[]          = 'view';
+        $perms['se_reports'] = array_values(array_unique($existing));
+
+        $CI->db->where('roleid', (int) $role['roleid'])
+               ->update($p . 'roles', ['permissions' => serialize($perms)]);
+    }
+}
+
+/**
+ * Runtime entry: apply pending schema on admin_init.
+ *
+ * Three properties the previous version lacked:
+ *
+ *  1. EVERY statement result is checked. CodeIgniter's db->query() returns
+ *     false on error when db_debug is off; the old loop ignored that and then
+ *     stamped the new version anyway, so a half-applied schema was recorded as
+ *     complete.
+ *  2. The version option is written ONLY after every statement succeeded.
+ *  3. Concurrent first-run admin requests are serialised with a MySQL advisory
+ *     lock. Without it, two simultaneous logins after a deploy both ran the
+ *     whole DDL list.
+ *
+ * DDL auto-commits in MariaDB, so a mid-list failure cannot be rolled back.
+ * Rather than pretending otherwise, a failure is recorded in
+ * `se_core_schema_error` (statement index + message) and the version option is
+ * left at its previous value, so the next request retries from the top. Every
+ * statement is individually idempotent, which makes that retry safe.
  */
 function se_core_migrate()
 {
     if ((int) get_option('se_core_schema_version') >= SE_CORE_SCHEMA_VERSION) {
-        return;
+        return true;
     }
 
     $CI = &get_instance();
-    se_core_run_migrations(function ($sql) use ($CI) {
-        $CI->db->query($sql);
-    });
 
-    // Pipeline + consent-purpose seeding is idempotent DML, kept out of the DDL list.
-    if (function_exists('se_pipeline_seed')) {
-        se_pipeline_seed();
+    // Serialise concurrent first-run requests. GET_LOCK is connection-scoped
+    // and released explicitly below (and automatically if the request dies).
+    $lockName = 'se_core_migrate_' . md5(db_prefix() . SE_CORE_SCHEMA_VERSION);
+    $lock     = $CI->db->query('SELECT GET_LOCK(' . $CI->db->escape($lockName) . ', 10) AS l')->row();
+
+    if (!$lock || (int) $lock->l !== 1) {
+        return false; // another request holds it; it will finish the work
     }
 
-    update_option('se_core_schema_version', SE_CORE_SCHEMA_VERSION);
+    try {
+        // Re-read inside the lock: the holder may have just finished.
+        if ((int) get_option('se_core_schema_version') >= SE_CORE_SCHEMA_VERSION) {
+            return true;
+        }
+
+        $failure = null;
+
+        $result = se_core_run_migrations(function ($sql) use ($CI, &$failure) {
+            try {
+                if ($CI->db->query($sql) === false) {
+                    $failure = 'query returned false';
+
+                    return false;
+                }
+            } catch (Exception $e) {
+                $failure = 'exception during DDL';
+
+                return false;
+            }
+
+            return true;
+        });
+
+        if (!$result['ok']) {
+            // Statement index only — never the SQL text or a DB message, which
+            // can carry schema/credential detail into an option row.
+            update_option('se_core_schema_error',
+                'v' . SE_CORE_SCHEMA_VERSION . ' failed at statement '
+                . ($result['executed'] + 1) . '/' . $result['total'] . ': ' . $failure);
+
+            return false;
+        }
+
+        // Idempotent DML, kept out of the DDL list.
+        if (function_exists('se_pipeline_seed')) {
+            se_pipeline_seed();
+        }
+
+        se_core_migrate_capabilities();
+
+        update_option('se_core_schema_version', SE_CORE_SCHEMA_VERSION);
+        update_option('se_core_schema_error', '');
+
+        return true;
+    } finally {
+        $CI->db->query('SELECT RELEASE_LOCK(' . $CI->db->escape($lockName) . ')');
+    }
 }
