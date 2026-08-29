@@ -241,7 +241,7 @@ function se_core_deny()
  * Meta Page token + App Review; se_whatsapp is now its own module.
  */
 foreach (['se_outbox_snapshot.php', 'se_outbox.php', 'se_capi.php', 'se_google_dm.php',
-          'se_meta_leadgen.php', 'se_reporting.php', 'se_google_auth.php',
+          'se_meta_leadgen.php', 'se_webhook_state.php', 'se_reporting.php', 'se_google_auth.php',
           'se_outbox_ui.php', 'se_integration_ui.php'] as $__se_b2) {
     $__se_b2_path = __DIR__ . '/' . $__se_b2;
     if (is_file($__se_b2_path)) {

@@ -622,6 +622,12 @@ function se_leadgen_process_event($ev)
         return 'processed';
     }
 
+    // A real webhook event became a real CRM lead: this is the Lead Ads
+    // live_test_passed evidence (the intended workflow ran end to end).
+    if (function_exists('se_webhook_record')) {
+        se_webhook_record('meta', 'live_test');
+    }
+
     // Record the consent DECISION, whichever way it went. An explicit refusal
     // is a withdrawal row in the ledger, not an absence of data — that is what
     // makes "we asked and they said no" provable later.
@@ -822,6 +828,9 @@ function se_leadgen_reconcile($limit = null)
     $forms = $CI->db->get(db_prefix() . 'se_meta_forms')->result_array();
 
     if (!$forms) {
+        // A skipped attempt is NOT a successful reconciliation: record the exact
+        // reason and outcome so the UI never shows a misleading green state.
+        se_leadgen_record_reconcile_outcome('Skipped', 'no active Page/form mapping');
         return 0;   // nothing mapped yet — a truthful zero, not a fake success
     }
 
@@ -890,9 +899,24 @@ function se_leadgen_reconcile($limit = null)
     if ($any_ok) {
         update_option('se_meta_last_fetch_ok_at', date('Y-m-d H:i:s'));
         update_option('se_meta_token_last_error_0', '');
+        se_leadgen_record_reconcile_outcome('Reconciled', 'upserted ' . (int) $upserted . ' lead(s)');
+    } elseif ($gated) {
+        // Mapped, but no Page/system-user token: the attempt was skipped, not
+        // reconciled. Held, not lost — and reported truthfully as Skipped.
+        se_leadgen_record_reconcile_outcome('Skipped', 'Meta Page access token missing (App Review pending)');
+    } else {
+        se_leadgen_record_reconcile_outcome('Skipped', 'no leads returned or provider error');
     }
 
     return $upserted;
+}
+
+/** Record the last reconcile attempt's result + reason + timestamp (never a secret). */
+function se_leadgen_record_reconcile_outcome($result, $reason)
+{
+    update_option('se_meta_last_reconcile_result', (string) $result);
+    update_option('se_meta_last_reconcile_reason', (string) $reason);
+    update_option('se_meta_last_reconcile_at', date('Y-m-d H:i:s'));
 }
 
 /* ------------------------------- controls + health ---------------------- */
@@ -1041,6 +1065,10 @@ function se_meta_health($brand_id)
         'outbox_pending'    => (int) ($outbox['pending'] ?? 0),
         'outbox_failed'     => (int) ($outbox['failed'] ?? 0),
         'outbox_sent'       => (int) ($outbox['sent'] ?? 0),
+
+        // Evidence-based six-state webhook model (verify_token_installed …
+        // live_test_passed). A verify-token file existing is NOT "verified".
+        'webhook_state'     => function_exists('se_webhook_state') ? se_webhook_state('meta') : null,
     ];
 }
 

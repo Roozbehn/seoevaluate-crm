@@ -47,8 +47,16 @@ $seGdmAuth = function_exists('se_gdm_credential_status') ? se_gdm_credential_sta
           : ($status['credential_mode_ok'] ? se_ui_badge('ok', '600') : se_ui_badge('error', _l('se_credentials_mode_bad'))),
       _l('se_google_token_renewal')  => $status['token_renewal_implemented']
           ? se_ui_badge('ok', _l('se_yes')) : se_ui_badge('unknown', _l('se_not_implemented')),
-      _l('se_google_status_polling') => $status['status_polling_implemented']
-          ? se_ui_badge('ok', _l('se_yes')) : se_ui_badge('unknown', _l('se_not_implemented')),
+      // Honest polling state — names the blocker instead of a bare green "Yes".
+      _l('se_google_status_polling') => '<span class="text-warning">'
+          . html_escape((string) ($status['polling_status_text'] ?? '')) . '</span>',
+      _l('se_google_last_poll_result') => !empty($status['last_poll_result'])
+          ? se_ui_badge($status['last_poll_result'] === 'Polled' ? 'ok' : 'warning',
+                        html_escape((string) $status['last_poll_result']))
+            . (!empty($status['last_poll_reason'])
+                ? ' <small class="text-muted">' . html_escape((string) $status['last_poll_reason']) . '</small>'
+                : '')
+          : '<span class="text-muted">—</span>',
       _l('se_credentials_last_auth') => html_escape((string) ($status['last_auth_at'] ?: '—')),
       _l('se_credentials_last_error') => html_escape((string) ($status['last_error'] ?: '—')),
   ], true); ?>

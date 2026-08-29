@@ -310,6 +310,8 @@ function se_integration_health($brand_id)
         'last_inbound_at'        => get_option('se_wa_last_inbound_at_' . $brand_id) ?: (get_option('se_wa_last_inbound_at') ?: null),
         'last_status_at'         => get_option('se_wa_last_status_at_' . $brand_id) ?: (get_option('se_wa_last_status_at') ?: null),
         'numbers'                => $quality,
+        // Evidence-based six-state webhook model, same shape as Meta's.
+        'webhook_state'          => function_exists('se_webhook_state') ? se_webhook_state('wa') : null,
     ];
 
     $freshness = [
@@ -326,6 +328,9 @@ function se_integration_health($brand_id)
                        'action' => $action, 'link' => $link, 'checked_at' => $now];
     };
 
+    // Every blocker names the ONE credential the system knows is missing —
+    // never "and/or". The exact strings below are contractual and asserted in
+    // tests; do not soften them into combined phrasing.
     if (!empty($meta['dataset_conflict'])) {
         $blk('meta_capi_dataset_conflict',
              'Configured dataset id conflicts with the authoritative dataset for this brand',
@@ -333,43 +338,56 @@ function se_integration_health($brand_id)
              'Reconcile the brand dataset id to ' . $meta['dataset_conflict'] . ' on the Meta integration screen',
              se_health_link('se_core/se_meta'));
     }
-    if (!empty($meta['capi_gated'])) {
-        $blk('meta_capi', 'No Conversions API token installed for this brand',
+    if (empty($meta['capi_token'])) {
+        $blk('meta_capi', 'Meta Conversions API token missing',
              'Server-side conversions are not transmitted; browser Pixel is unaffected',
-             'Install the meta_capi credential for this brand and set the dataset id',
+             'Install the meta_capi credential for this brand',
              se_health_link('se_core/se_credentials'));
     }
-    if (empty($meta['webhook_ready'])) {
-        $blk('meta_leadgen_webhook', 'Meta app secret and/or webhook verify token not installed',
-             'Lead Ads webhook cannot verify or validate signatures',
-             'Install meta_app and meta_verify credentials',
-             se_health_link('se_core/se_meta'));
+    // Lead Ads webhook credentials — report the specific missing one.
+    if (empty($meta['verify_token'])) {
+        $blk('meta_leadgen_verify', 'Meta Lead Ads verify token missing',
+             'The Lead Ads webhook cannot complete Meta subscription verification',
+             'Install the meta_verify credential',
+             se_health_link('se_core/se_credentials'));
+    } elseif (empty($meta['app_secret'])) {
+        $blk('meta_leadgen_app_secret', 'Meta App Secret missing; Lead Ads verify token installed',
+             'Signed Lead Ads POSTs cannot be validated (X-Hub-Signature-256)',
+             'Install the meta_app credential (the Meta App Secret)',
+             se_health_link('se_core/se_credentials'));
     }
+    // Live lead retrieval needs the Page/system-user token.
     if (!empty($meta['webhook_ready']) && !empty($meta['leadgen_gated'])) {
-        $blk('meta_leadgen_retrieval', 'Lead Ads page token pending (App Review / token)',
+        $blk('meta_leadgen_retrieval', 'Meta Page access token missing',
              'Webhook receives events but lead field data cannot be fetched yet — events are held, not lost',
-             'Complete Lead Ads advanced access and install the page/system-user token',
+             'Install the meta_page credential (Page/system-user token) for this brand',
              se_health_link('se_core/se_meta'));
     }
     if (empty($meta['active_form_count'])) {
-        $blk('meta_leadgen_mapping', 'No active Page/form mapping for this brand',
-             'Incoming leadgen events cannot be routed to a brand',
-             'Map at least one Page + Instant Form to this brand',
+        $blk('meta_leadgen_mapping', 'No active Page/form mapping for brand ' . $brand_id,
+             'Incoming leadgen events cannot be routed to this brand',
+             'Map at least one Page + Instant Form to brand ' . $brand_id,
              se_health_link('se_core/se_meta'));
     }
+    // WhatsApp — report the specific missing credential.
     if (empty($wa['identifiers_configured'])) {
-        $blk('whatsapp_identifiers', 'No WhatsApp number configured for this brand',
+        $blk('whatsapp_identifiers', 'No WhatsApp number configured for brand ' . $brand_id,
              'WhatsApp inbound/outbound is unavailable',
              'Configure the WABA and phone-number identifiers for this brand',
              se_health_link('se_whatsapp/se_whatsapp/inbox'));
-    } elseif (!$wa['app_secret'] || !$wa['webhook_verified']) {
-        $blk('whatsapp_auth', 'WhatsApp app secret and/or verify token not installed',
-             'WhatsApp webhook cannot verify or validate signatures',
-             'Install meta_app (shared) and wa_verify credentials',
+    } elseif (empty($wa['webhook_verified'])) {
+        $blk('whatsapp_verify', 'WhatsApp verify token missing',
+             'The WhatsApp webhook cannot complete Meta subscription verification',
+             'Install the wa_verify credential',
+             se_health_link('se_core/se_credentials'));
+    } elseif (empty($wa['app_secret'])) {
+        $blk('whatsapp_app_secret', 'Meta App Secret missing; WhatsApp verify token installed',
+             'Signed WhatsApp POSTs cannot be validated (X-Hub-Signature-256)',
+             'Install the meta_app credential (WhatsApp inherits the shared Meta App Secret)',
              se_health_link('se_core/se_credentials'));
     }
     if (!empty($google['externally_gated'])) {
-        $blk('google_dm', 'No Google service-account credential installed',
+        $blk('google_dm', 'Google service-account credential missing',
              'Offline conversion upload to Google is unavailable (optional; does not affect Meta)',
              'Install the google_sa credential and enable the integration for the brand',
              se_health_link('se_core/se_google'));

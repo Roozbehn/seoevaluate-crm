@@ -47,6 +47,23 @@
        var x=m[state]||m.unknown; return '<span class="se-badge '+x[0]+'">'+x[1]+'</span>';
      }
      function kv(k,v){return '<div class="row-kv"><span class="k">'+esc(k)+'</span><span class="v">'+v+'</span></div>';}
+     // Six-state webhook evidence chain. Each state carries a fact, not a guess:
+     // a readable secret, a route self-check, or a timestamp from a real event.
+     function ynts(flag, at){ return flag ? ('<span class="se-badge se-ready">Yes</span> <small>'+ts(at)+'</small>') : '<span class="se-badge se-disabled">No</span>'; }
+     function wstateRows(ws){
+       if(!ws){return [];}
+       var chal = ws.challenge_verified
+         ? ('<span class="se-badge se-ready">Yes</span> <small>'+ts(ws.challenge_verified_at)+(ws.challenge_src?(' · '+esc(ws.challenge_src)):'')+'</small>')
+         : '<span class="se-badge se-disabled">No</span>';
+       return [
+         ['1 · verify_token_installed', yn(ws.verify_token_installed)],
+         ['2 · verification_ready', yn(ws.verification_ready)],
+         ['3 · challenge_verified', chal],
+         ['4 · app_secret_installed', yn(ws.app_secret_installed)+(ws.app_secret_inherited?' <small>(inherited)</small>':'')],
+         ['5 · signed_post_received', ynts(ws.signed_post_received, ws.signed_post_at)],
+         ['6 · live_test_passed', ynts(ws.live_test_passed, ws.live_test_at)]
+       ];
+     }
      function card(title,state,rows){
        var h='<div class="se-hc"><h5>'+esc(title)+' '+badge(state)+'</h5>';
        rows.forEach(function(r){h+=kv(r[0],r[1]);}); return h+'</div>';
@@ -85,26 +102,22 @@
 
      // Meta Lead Ads (independent of CAPI)
      var laState=!m.webhook_ready?'blocked':(m.leadgen_gated?'warning':(m.leadgen_test_ready?'ready':'warning'));
-     var la=card('Meta Lead Ads',laState,[
-       ['App secret', yn(m.app_secret)],
-       ['Verify token', yn(m.verify_token)],
-       ['Webhook verification', m.webhook_ready?'Ready':'Not ready'],
+     var laRows=[
        ['Page token', yn(m.page_token)],
        ['Page/form mapping', esc(m.active_form_count||0)],
        ['Last webhook', ts(m.last_webhook_at)],
        ['Last successful fetch', ts(m.last_fetch_ok_at)],
        ['App Review / retrieval', m.leadgen_gated?'Pending':'Granted']
-     ]);
+     ].concat(wstateRows(m.webhook_state));
+     var la=card('Meta Lead Ads',laState,laRows);
 
      // WhatsApp
      var waState=!w.identifiers_configured?'blocked':((w.app_secret&&w.webhook_verified)?'ready':'warning');
      var waRows=[
        ['Identifiers configured', yn(w.identifiers_configured)],
-       ['App secret'+(w.app_secret_inherited?' (inherited)':''), yn(w.app_secret)],
-       ['Webhook verified', yn(w.webhook_verified)],
        ['Last inbound', ts(w.last_inbound_at)],
        ['Last status event', ts(w.last_status_at)]
-     ];
+     ].concat(wstateRows(w.webhook_state));
      (w.numbers||[]).forEach(function(n){
        waRows.push(['Number '+esc(n.number||n.phone_number_id), esc(n.state)+(n.quality?(' · '+esc(n.quality)):'')]);
      });

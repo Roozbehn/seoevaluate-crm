@@ -427,6 +427,12 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
             'date_created'      => date('Y-m-d H:i:s'),
         ]);
         $conv_id = (int) $CI->db->insert_id();
+
+        // A real inbound message became a CRM conversation: WhatsApp
+        // live_test_passed evidence (the intended workflow ran end to end).
+        if (function_exists('se_webhook_record')) {
+            se_webhook_record('wa', 'live_test');
+        }
     } else {
         $conv_id = (int) $conv->id;
         $CI->db->where('id', $conv_id)->update($convTable, [

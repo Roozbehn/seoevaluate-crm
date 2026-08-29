@@ -62,6 +62,13 @@ class Webhook extends App_Controller
         $challenge = $this->input->get('hub_challenge') ?: $this->input->get('hub.challenge');
 
         if (se_wa_verify_outcome($mode, $token)) {
+            // A correct-token request actually returned the challenge — the only
+            // proof of the handshake. Record it with its source.
+            if (function_exists('se_webhook_record')) {
+                se_webhook_record('wa', 'challenge',
+                    ['src' => (function_exists('se_webhook_is_selftest') && se_webhook_is_selftest()) ? 'self_test' : 'meta']);
+            }
+
             // Meta requires the EXACT challenge as the bare body; the marker
             // header still identifies the responder.
             set_status_header(200);
@@ -96,6 +103,12 @@ class Webhook extends App_Controller
         $sig = isset($_SERVER['HTTP_X_HUB_SIGNATURE_256']) ? $_SERVER['HTTP_X_HUB_SIGNATURE_256'] : '';
 
         $out = se_wa_receive_outcome($declared, $raw, $sig);
+
+        // Status other than 401 (bad signature) / 413 (rejected unread) means
+        // the signature validated over the raw bytes: a real signed POST.
+        if (function_exists('se_webhook_record') && !in_array((int) $out['status'], [401, 413], true)) {
+            se_webhook_record('wa', 'signed_post');
+        }
 
         set_status_header($out['status']);
         $this->emit($out['ok'], $out['reason']);

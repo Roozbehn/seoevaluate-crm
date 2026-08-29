@@ -64,6 +64,14 @@ class Leadgen extends App_Controller
         $challenge = $this->input->get('hub_challenge');
 
         if (se_leadgen_verify_outcome($mode, $token)) {
+            // A CORRECT-token request actually returned the challenge: this is
+            // the only thing that proves the handshake, so record it with its
+            // source (on-host self-test vs Meta's real callback).
+            if (function_exists('se_webhook_record')) {
+                se_webhook_record('meta', 'challenge',
+                    ['src' => (function_exists('se_webhook_is_selftest') && se_webhook_is_selftest()) ? 'self_test' : 'meta']);
+            }
+
             // Meta requires the EXACT challenge as the bare body; the marker
             // header still identifies the responder.
             set_status_header(200);
@@ -98,6 +106,13 @@ class Leadgen extends App_Controller
         $sig = isset($_SERVER['HTTP_X_HUB_SIGNATURE_256']) ? $_SERVER['HTTP_X_HUB_SIGNATURE_256'] : '';
 
         $out = se_leadgen_receive_outcome($declared, $raw, $sig);
+
+        // Any status other than 401 (bad signature) or 413 (rejected unread)
+        // means the X-Hub-Signature-256 validated over the exact raw bytes —
+        // that is a real signed POST, so record it as concrete evidence.
+        if (function_exists('se_webhook_record') && !in_array((int) $out['status'], [401, 413], true)) {
+            se_webhook_record('meta', 'signed_post');
+        }
 
         set_status_header($out['status']);
         $this->emit($out['ok'], $out['reason']);

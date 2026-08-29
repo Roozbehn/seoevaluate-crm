@@ -29,9 +29,16 @@
       // the reconcile heartbeat — so it is truthfully "—" until a token exists.
       _l('se_meta_last_fetch')   => html_escape((string) ($status['last_fetch_ok_at'] ?: '—')),
       _l('se_meta_last_reconcile') => html_escape((string) ($status['last_reconcile_at'] ?: '—')),
-      _l('se_meta_reconcile')    => $status['reconcile_implemented']
-          ? se_ui_badge('ok', !empty($status['reconcile_gated']) ? _l('se_meta_reconcile_gated') : _l('se_yes'))
-          : se_ui_badge('unknown', _l('se_not_implemented')),
+      // Honest reconciliation state — names blockers, never a bare green "Yes".
+      _l('se_meta_reconcile')    => '<span class="text-warning">'
+          . html_escape((string) ($status['reconcile_status_text'] ?? '')) . '</span>',
+      _l('se_meta_last_reconcile_result') => !empty($status['last_reconcile_result'])
+          ? se_ui_badge($status['last_reconcile_result'] === 'Reconciled' ? 'ok' : 'warning',
+                        html_escape((string) $status['last_reconcile_result']))
+            . (!empty($status['last_reconcile_reason'])
+                ? ' <small class="text-muted">' . html_escape((string) $status['last_reconcile_reason']) . '</small>'
+                : '')
+          : '<span class="text-muted">—</span>',
       _l('se_meta_last_error')   => html_escape((string) ($status['last_error'] ?: '—')),
   ], true); ?>
 

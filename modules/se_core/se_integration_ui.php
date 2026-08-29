@@ -51,7 +51,30 @@ function se_meta_ui_status($brand_id = 0)
         // form and upserts them idempotently; live fetching is gated on a token.
         'reconcile_implemented' => true,
         'reconcile_gated'    => !$tokenConfigured,
+        // Honest, blocker-naming status line (never a bare green "Yes").
+        'reconcile_status_text' => se_meta_reconcile_status_text($tokenConfigured, $activeForms > 0),
+        // Last cron attempt outcome: 'Skipped' + exact reason means a blocked
+        // attempt, which is NOT a successful reconciliation.
+        'last_reconcile_result' => get_option('se_meta_last_reconcile_result') ?: null,
+        'last_reconcile_reason' => get_option('se_meta_last_reconcile_reason') ?: null,
     ];
+}
+
+/**
+ * Honest reconciliation status string. When any prerequisite is missing it
+ * names the exact blockers instead of showing a misleading "Yes".
+ */
+function se_meta_reconcile_status_text($token_configured, $mapped)
+{
+    if ($token_configured && $mapped) {
+        return 'Implemented, not live-tested — awaiting a live authenticated fetch';
+    }
+
+    $missing = [];
+    if (!$token_configured) { $missing[] = 'Page token'; }
+    if (!$mapped)           { $missing[] = 'mapping';    }
+
+    return 'Implemented, not live-tested — blocked by ' . implode(' and ', $missing);
 }
 
 /**
@@ -310,6 +333,15 @@ function se_google_ui_status($brand_id = 0)
         // are not registered here, so both remain honestly reported.
         'token_renewal_implemented'  => $cred['signer_available'],
         'status_polling_implemented' => se_gdm_status_polling_implemented(),
+        // Honest polling status — implemented, but not live-tested, and names
+        // the blocker when the service-account credential is missing.
+        'polling_status_text' => se_gdm_status_polling_implemented()
+            ? ($cred['ready']
+                ? 'Implemented, not live-tested — awaiting a live status poll'
+                : 'Implemented, not live-tested — blocked by service-account credential')
+            : 'Not implemented',
+        'last_poll_result'   => get_option('se_gdm_last_poll_result_' . (int) $brand_id) ?: (get_option('se_gdm_last_poll_result') ?: null),
+        'last_poll_reason'   => get_option('se_gdm_last_poll_reason_' . (int) $brand_id) ?: (get_option('se_gdm_last_poll_reason') ?: null),
         'min_age_seconds'    => se_gdm_min_age_seconds($brand_id),
         'max_age_days'       => se_gdm_max_age_days($brand_id),
     ];

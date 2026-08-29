@@ -84,6 +84,63 @@ se_eq('4515580372030489', se_capi_dataset_conflict_decide('4266388243621345', '4
 se_eq('4515580372030489', se_capi_dataset_conflict_decide(' 4266388243621345 ', ' 4515580372030489 '),
     'whitespace is trimmed before comparison');
 
+/* ---- evidence-based six-state webhook model ------------------------------ */
+se_group('a verify-token file is NOT webhook verification');
+
+require_once __DIR__ . '/../se_webhook_state.php';
+
+// Clean slate: no verify token, no recorded events.
+se_test_remove_secret('meta_verify');
+foreach (['se_meta_route_ok_at','se_meta_challenge_verified_at','se_meta_challenge_src',
+          'se_meta_signed_post_at','se_meta_live_test_at'] as $k) { unset($GLOBALS['se_test']['options'][$k]); }
+
+$st = se_webhook_state('meta');
+se_ok($st['verify_token_installed'] === false, 'no verify token => verify_token_installed is false');
+se_ok($st['verification_ready'] === false, 'no route check and no token => verification_ready is false');
+se_ok($st['challenge_verified'] === false, 'no correct-token challenge has happened => challenge_verified is false');
+
+// Installing the verify-token file alone must NOT flip challenge_verified.
+se_test_install_secret('meta_verify', 'fixture-verify');
+$st = se_webhook_state('meta');
+se_ok($st['verify_token_installed'] === true, 'verify token file installed => verify_token_installed true');
+se_ok($st['verification_ready'] === false, 'token installed but route never reached => verification_ready STILL false');
+se_ok($st['challenge_verified'] === false, 'a file existing is not a returned challenge => challenge_verified STILL false');
+
+// A route self-check makes verification_ready true (token + reachable route).
+se_webhook_record('meta', 'route_ok');
+$st = se_webhook_state('meta');
+se_ok($st['verification_ready'] === true, 'verify token readable AND route reached => verification_ready true');
+se_ok($st['challenge_verified'] === false, 'route reachability still is not a challenge');
+
+// Only an actual correct-token challenge sets challenge_verified, with source.
+se_webhook_record('meta', 'challenge', ['src' => 'self_test']);
+$st = se_webhook_state('meta');
+se_ok($st['challenge_verified'] === true, 'a returned challenge sets challenge_verified');
+se_eq('self_test', $st['challenge_src'], 'the source is recorded (self-test, not Meta) and never conflated');
+
+se_ok($st['signed_post_received'] === false, 'no signed POST yet');
+se_webhook_record('meta', 'signed_post');
+$st = se_webhook_state('meta');
+se_ok($st['signed_post_received'] === true, 'a valid signed POST sets signed_post_received');
+
+se_ok($st['live_test_passed'] === false, 'no end-to-end lead yet');
+se_webhook_record('meta', 'live_test');
+$st = se_webhook_state('meta');
+se_ok($st['live_test_passed'] === true, 'a lead created from the webhook sets live_test_passed');
+
+// WhatsApp inherits the Meta App Secret; app_secret_installed reflects that.
+se_test_remove_secret('wa_app');
+se_test_install_secret('meta_app', 'canonical-app-secret');
+$wst = se_webhook_state('wa');
+se_ok($wst['app_secret_installed'] === true, 'WhatsApp app_secret_installed is true via inheritance from meta_app');
+se_ok($wst['app_secret_inherited'] === true, 'and it is flagged as inherited, not an independent wa_app file');
+
+// cleanup
+se_test_remove_secret('meta_verify');
+se_test_remove_secret('meta_app');
+foreach (['se_meta_route_ok_at','se_meta_challenge_verified_at','se_meta_challenge_src',
+          'se_meta_signed_post_at','se_meta_live_test_at'] as $k) { unset($GLOBALS['se_test']['options'][$k]); }
+
 /* ---- the Google status poller is genuinely registered -------------------- */
 se_group('Google request-status polling is implemented');
 
