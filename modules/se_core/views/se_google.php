@@ -14,12 +14,13 @@ $seGdmAuth = function_exists('se_gdm_credential_status') ? se_gdm_credential_sta
   <form method="get" action="<?php echo admin_url('se_core/se_google'); ?>" class="form-inline mbot15">
     <label for="brandsel"><?php echo html_escape(_l('se_brand')); ?></label>
     <select id="brandsel" name="brand" class="form-control mleft5" onchange="this.form.submit()">
-      <option value="0"><?php echo html_escape(_l('se_appt_filter_all')); ?></option>
+      <option value="0"<?php echo $brand === 0 ? ' selected' : ''; ?>><?php echo html_escape(_l('se_appt_filter_all')); ?></option>
       <?php foreach ($brands as $b) { ?>
         <option value="<?php echo (int) $b['id']; ?>"<?php echo $brand === (int) $b['id'] ? ' selected' : ''; ?>><?php echo html_escape($b['name']); ?></option>
       <?php } ?>
     </select>
   </form>
+  <?php if (se_is_all_brands($brand)) { echo se_all_brands_readonly_notice(); } ?>
 
   <div class="alert alert-info">
     <i class="fa fa-info-circle"></i> <?php echo html_escape(_l('se_google_lifecycle_note')); ?>

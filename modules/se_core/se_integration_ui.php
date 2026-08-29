@@ -9,6 +9,116 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * sanitized codes. No token, no raw payload, no personal data.
  */
 
+/** True when the screen is showing the aggregate "All brands" view (brand 0). */
+function se_is_all_brands($brand)
+{
+    return (int) $brand === 0;
+}
+
+/**
+ * Read-only banner for the aggregate "All brands" view. In this view no single
+ * brand's configuration may be edited or shown as if it were global: every
+ * credential/mapping/integration action is disabled and data is shown per brand.
+ */
+function se_all_brands_readonly_notice()
+{
+    return '<div class="alert alert-warning"><i class="fa fa-lock"></i> '
+        . html_escape(function_exists('_l') ? _l('se_all_brands_readonly') : 'All brands (read-only)')
+        . '</div>';
+}
+
+/**
+ * Per-provider credential progress for the Integration Credentials screen.
+ *
+ * Replaces the old global "owner actions" checklist, which went green as soon
+ * as the server-generated tokens existed even while required provider secrets
+ * (meta_app, meta_page, meta_capi, google_sa) were missing. Each row reports a
+ * provider's real state — 'complete' | 'partial' | 'missing' — with an exact,
+ * credential-naming detail string, plus whether the integration is enabled.
+ *
+ * @return array<int, array{key:string,label:string,state:string,detail:string,enabled:?bool,enabled_label:?string}>
+ */
+function se_integration_provider_progress($brand_id, $store)
+{
+    $brand_id = (int) $brand_id;
+
+    $capiTok   = se_secret_configured('meta_capi', $brand_id) || se_secret_configured('meta_capi', 0);
+    $metaVer   = se_secret_configured('meta_verify', 0);
+    $metaApp   = se_secret_configured('meta_app', 0);
+    $metaPage  = se_secret_configured('meta_page', $brand_id) || se_secret_configured('meta_page', 0);
+    $waVer     = se_secret_configured('wa_verify', 0);
+    $waAppInh  = function_exists('se_wa_app_secret') ? se_wa_app_secret() !== '' : $metaApp;
+    $googleSa  = se_secret_configured('google_sa', $brand_id) || se_secret_configured('google_sa', 0);
+
+    $storeOk = !empty($store['exists']) && !empty($store['mode_ok']) && !empty($store['outside_docroot']);
+
+    // Compose an exact "installed X; missing Y" detail line from named parts.
+    $compose = function ($installed, $missing) {
+        $parts = [];
+        if ($installed) { $parts[] = $installed . ' installed'; }
+        if ($missing)   { $parts[] = $missing . ' missing'; }
+        return implode('; ', $parts);
+    };
+
+    $rows = [];
+
+    $rows[] = [
+        'key' => 'store', 'label' => 'Secret store',
+        'state' => $storeOk ? 'complete' : 'missing',
+        'detail' => $storeOk ? 'directory present, mode 700, outside document root'
+                             : 'store directory missing or wrong mode',
+        'enabled' => null, 'enabled_label' => null,
+    ];
+
+    $rows[] = [
+        'key' => 'meta_capi', 'label' => 'Meta CAPI',
+        'state' => $capiTok ? 'complete' : 'missing',
+        'detail' => $capiTok ? 'Conversions API token installed' : 'Conversions API token missing',
+        'enabled' => $brand_id > 0 ? se_capi_enabled($brand_id) : null,
+        'enabled_label' => 'CAPI transmission',
+    ];
+
+    // Meta Lead Ads: verify token + App Secret (signatures) + Page token (fetch).
+    $laMissing = [];
+    if (!$metaApp)  { $laMissing[] = 'App Secret'; }
+    if (!$metaPage) { $laMissing[] = 'Page token'; }
+    $laInstalled = $metaVer ? 'verify token' : '';
+    $laState = (!$metaVer) ? 'missing' : ($laMissing ? 'partial' : 'complete');
+    $rows[] = [
+        'key' => 'meta_leadgen', 'label' => 'Meta Lead Ads',
+        'state' => $laState,
+        'detail' => $metaVer
+            ? $compose($laInstalled, $laMissing ? implode(' and ', $laMissing) : '')
+            : 'verify token missing',
+        'enabled' => null, 'enabled_label' => null,
+    ];
+
+    // WhatsApp: verify token + shared (inherited) App Secret. Never shown as an
+    // independent wa_app requirement.
+    $waState = (!$waVer) ? 'missing' : ($waAppInh ? 'complete' : 'partial');
+    $waDetail = $waVer
+        ? ($waAppInh
+            ? 'verify token installed; App Secret inherited from Meta App Secret'
+            : 'verify token installed; shared App Secret (Meta App Secret) missing')
+        : 'verify token missing';
+    $rows[] = [
+        'key' => 'whatsapp', 'label' => 'WhatsApp',
+        'state' => $waState, 'detail' => $waDetail,
+        'enabled' => null, 'enabled_label' => null,
+    ];
+
+    $rows[] = [
+        'key' => 'google', 'label' => 'Google',
+        'state' => $googleSa ? 'complete' : 'missing',
+        'detail' => $googleSa ? 'service-account credential installed'
+                              : 'service-account credential missing',
+        'enabled' => $brand_id > 0 && function_exists('se_google_dm_enabled') ? se_google_dm_enabled($brand_id) : null,
+        'enabled_label' => 'Google upload',
+    ];
+
+    return $rows;
+}
+
 /* ============================ META LEAD ADS ============================= */
 
 function se_meta_ui_status($brand_id = 0)

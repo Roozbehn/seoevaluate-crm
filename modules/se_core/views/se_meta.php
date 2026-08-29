@@ -8,12 +8,13 @@
   <form method="get" action="<?php echo admin_url('se_core/se_meta'); ?>" class="form-inline mbot15">
     <label for="brandsel"><?php echo html_escape(_l('se_brand')); ?></label>
     <select id="brandsel" name="brand" class="form-control mleft5" onchange="this.form.submit()">
-      <option value="0"><?php echo html_escape(_l('se_appt_filter_all')); ?></option>
+      <option value="0"<?php echo $brand === 0 ? ' selected' : ''; ?>><?php echo html_escape(_l('se_appt_filter_all')); ?></option>
       <?php foreach ($brands as $b) { ?>
         <option value="<?php echo (int) $b['id']; ?>"<?php echo $brand === (int) $b['id'] ? ' selected' : ''; ?>><?php echo html_escape($b['name']); ?></option>
       <?php } ?>
     </select>
   </form>
+  <?php if (se_is_all_brands($brand)) { echo se_all_brands_readonly_notice(); } ?>
 
   <?php se_ui_kv([
       _l('se_status')            => $status['enabled'] ? se_ui_badge('enabled', _l('se_enabled')) : se_ui_badge('disabled', _l('se_disabled')),
@@ -147,14 +148,20 @@
         <td><small class="text-muted"><?php echo html_escape((string) ($e['last_error'] ?: '—')); ?></small></td>
         <td><small><?php echo html_escape((string) ($e['received_at'] ?? '')); ?></small></td>
         <td class="text-right">
-          <?php if (in_array($e['state'], ['held', 'failed'], true)) { ?>
+          <?php if (in_array($e['state'], ['held', 'failed'], true)) {
+              if (se_is_all_brands($brand)) { ?>
+            <button type="button" class="btn btn-warning btn-sm" disabled
+                    title="<?php echo html_escape(_l('se_all_brands_readonly')); ?>">
+              <?php echo html_escape(_l('se_outbox_requeue')); ?>
+            </button>
+          <?php } else { ?>
             <?php echo form_open(admin_url('se_core/se_meta/requeue/' . (int) $e['id']), ['style' => 'display:inline']); ?>
               <button type="submit" class="btn btn-warning btn-sm"
                       onclick="return confirm('<?php echo html_escape(_l('se_meta_requeue_confirm')); ?>');">
                 <?php echo html_escape(_l('se_outbox_requeue')); ?>
               </button>
             <?php echo form_close(); ?>
-          <?php } ?>
+          <?php } } ?>
         </td>
       </tr>
     <?php } ?>
