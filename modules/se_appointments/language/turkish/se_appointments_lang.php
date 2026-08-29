@@ -1,0 +1,41 @@
+<?php
+defined('BASEPATH') or exit('No direct script access allowed');
+
+# Turkish translations for the SE Appointments module.
+$lang['se_appointments']            = 'Randevular';
+$lang['se_appointment']             = 'Randevu';
+$lang['se_appt_added']              = 'Randevu eklendi';
+$lang['se_appt_updated']            = 'Randevu güncellendi';
+$lang['se_appt_title']              = 'Başlık';
+$lang['se_appt_start']              = 'Başlangıç';
+$lang['se_appt_end']                = 'Bitiş';
+$lang['se_appt_status']             = 'Durum';
+$lang['se_appt_staff']              = 'Personel';
+$lang['se_appt_location']           = 'Konum';
+$lang['se_appt_notes']              = 'Notlar';
+$lang['se_appt_lead']               = 'Potansiyel müşteri';
+$lang['se_appt_new']                = 'Yeni randevu';
+$lang['se_appt_calendar']           = 'Takvim';
+$lang['se_appt_list']               = 'Liste';
+$lang['se_appt_status_scheduled']   = 'Planlandı';
+$lang['se_appt_status_confirmed']   = 'Onaylandı';
+$lang['se_appt_status_held']        = 'Gerçekleşti';
+$lang['se_appt_status_completed']   = 'Tamamlandı';
+$lang['se_appt_status_no_show']     = 'Gelmedi';
+$lang['se_appt_status_cancelled']   = 'İptal edildi';
+$lang['se_appt_invalid_window']     = 'Randevu kaydedilmedi: tarih aralığını, markayı ve ilişkiyi kontrol edin';
+$lang['se_appt_brand']              = 'Marka';
+$lang['se_appt_customer']           = 'Müşteri';
+$lang['se_appt_relation']           = 'İlgili kayıt';
+$lang['se_appt_format']             = 'Görüşme biçimi';
+$lang['se_appt_format_online']      = 'Çevrimiçi';
+$lang['se_appt_format_in_person']   = 'Yüz yüze';
+$lang['se_appt_timezone']           = 'Saat dilimi';
+$lang['se_appt_cancellation_reason'] = 'İptal nedeni';
+$lang['se_appt_none']               = 'Randevu bulunamadı';
+$lang['se_appt_conflict']           = 'Bu personelin takviminde çakışma var';
+$lang['se_appt_history']            = 'Durum geçmişi';
+$lang['se_appt_reminder']           = 'Hatırlatma';
+$lang['se_appt_sync_state']         = 'Takvim eşitleme';
+$lang['se_appt_filter_all']         = 'Tümü';
+$lang['se_appt_detail']             = 'Randevu detayı';

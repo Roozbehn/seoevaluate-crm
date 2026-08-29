@@ -11,6 +11,16 @@ Requires at least: 3.4.1
 
 define('SE_APPOINTMENTS_MODULE_NAME', 'se_appointments');
 
+/*
+ * Register the module's language files.
+ *
+ * THIS WAS MISSING. Without it every _l() call in this module returned its own
+ * key, so the sidebar entry read "se_appointments" and the whole manage screen
+ * rendered raw keys: se_appt_title, se_appt_start, se_appt_status_scheduled...
+ * The strings existed all along; nothing ever loaded them.
+ */
+register_language_files(SE_APPOINTMENTS_MODULE_NAME, [SE_APPOINTMENTS_MODULE_NAME]);
+
 require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/reminders.php';
 require_once __DIR__ . '/availability.php';
@@ -18,7 +28,7 @@ require_once __DIR__ . '/gcal.php';
 
 hooks()->add_action('admin_init', 'se_appt_migrate', 1);
 hooks()->add_action('admin_init', 'se_appt_permissions');
-hooks()->add_action('admin_init', 'se_appt_menu');
+
 
 // Surface appointments as a tab on the lead and customer profiles.
 hooks()->add_action('after_lead_tabs_content', 'se_appt_lead_tab_content');
@@ -47,14 +57,9 @@ function se_appt_menu()
 {
     $CI = &get_instance();
 
-    if (staff_can('view', 'se_appointments')) {
-        $CI->app_menu->add_sidebar_menu_item('se-appointments', [
-            'name'     => _l('se_appointments'),
-            'href'     => admin_url('se_appointments/index'),
-            'icon'     => 'fa fa-calendar-check-o',
-            'position' => 26,
-        ]);
-    }
+    // Registered by se_core/se_navigation.php as part of the grouped
+    // "SEO Evaluate CRM" section, so the SE features appear together rather
+    // than scattered through the sidebar. Kept as a no-op for compatibility.
 }
 
 /**

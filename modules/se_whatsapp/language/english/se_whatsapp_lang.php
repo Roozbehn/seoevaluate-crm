@@ -16,3 +16,13 @@ $lang['se_wa_reply_freeform']     = 'You can send a free-form reply.';
 $lang['se_wa_reply_template_required'] = 'Outside the 24h window — a template message is required.';
 $lang['se_wa_sending_gated']      = 'Outbound sending is gated until Meta onboarding is complete.';
 $lang['se_wa_assign_denied'] = 'That staff member cannot be assigned to this conversation.';
+
+/* --- Phase 12: WhatsApp UI ----------------------------------------------- */
+$lang['se_wa_brand']             = 'Brand';
+$lang['se_wa_assigned_staff']    = 'Assigned staff';
+$lang['se_wa_direction_in']      = 'Inbound';
+$lang['se_wa_direction_out']     = 'Outbound';
+$lang['se_wa_delivery_state']    = 'Delivery state';
+$lang['se_wa_media_placeholder'] = 'Media attachment';
+$lang['se_wa_readiness']         = 'Readiness';
+

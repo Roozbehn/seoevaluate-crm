@@ -5,13 +5,10 @@ defined('BASEPATH') or exit('No direct script access allowed');
 class Se_whatsapp_model extends App_Model
 {
     /** Apply brand scoping unless the staff member sees all brands. */
+    /** Apply brand scoping. Fails closed for a staff member with no brands. */
     private function scope($table_alias = '')
     {
-        $col = ($table_alias ? $table_alias . '.' : '') . 'brand_id';
-        if (function_exists('se_staff_sees_all_brands') && !se_staff_sees_all_brands()) {
-            $ids = se_staff_brand_ids();
-            $this->db->where('(' . $col . ' IN (' . implode(',', array_map('intval', $ids)) . '))');
-        }
+        se_apply_scope_in(($table_alias ? $table_alias . '.' : '') . 'brand_id');
     }
 
     public function conversations($filters = [])

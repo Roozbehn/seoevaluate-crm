@@ -147,10 +147,60 @@ function se_can_access_brand($brand_id)
 }
 
 /**
+ * Canonical brand-scope SQL for a column. THE fail-closed primitive.
+ *
+ * Returns '' for a caller who legitimately sees everything, and `1=0` for a
+ * caller with no reachable brands.
+ *
+ * Why this exists: five separate call sites each built their own
+ * `IN (implode(...))`. For a staff member mapped to no brand at all,
+ * se_staff_brand_ids() returns an EMPTY array, and every one of them then
+ * produced `IN ()` — a MariaDB syntax error, i.e. a 500 on the leads list, the
+ * kanban, appointments and the WhatsApp inbox. One of them was worse: the
+ * patient scope used `$ids ?: [0]`, which silently substituted the brand-0
+ * triage bucket and WIDENED access for exactly the user who should see nothing.
+ *
+ * An empty scope must deny, never error and never widen.
+ */
+function se_scope_in_sql($column)
+{
+    if (se_staff_sees_all_brands()) {
+        return '';
+    }
+
+    $ids = array_map('intval', se_staff_brand_ids());
+
+    if (!$ids) {
+        return '1=0';   // fail closed
+    }
+
+    return $column . ' IN (' . implode(',', $ids) . ')';
+}
+
+/**
+ * Apply se_scope_in_sql() to the shared query builder.
+ * Returns false when the caller may see nothing at all.
+ */
+function se_apply_scope_in($column)
+{
+    $sql = se_scope_in_sql($column);
+
+    if ($sql === '') {
+        return true;
+    }
+
+    $CI = &get_instance();
+    $CI->db->where($sql, null, false);
+
+    return $sql !== '1=0';
+}
+
+/**
  * INNER JOIN that restricts a table to the staff member's brands.
  *
  * Returns an empty string for staff who see everything, so no join is added.
- * The subquery includes brand 0 so unassigned records stay visible.
+ * For a staff member with NO reachable brands it returns a join that cannot
+ * match, rather than the `INNER JOIN ()` syntax error the old version emitted.
  */
 function se_scope_join_sql($table)
 {
@@ -158,8 +208,14 @@ function se_scope_join_sql($table)
         return '';
     }
 
-    $ids   = se_staff_brand_ids();
+    $ids   = array_map('intval', se_staff_brand_ids());
     $alias = 'se_scope_' . substr(md5($table), 0, 8);
+
+    if (!$ids) {
+        // Deliberately unsatisfiable: a derived table with no rows.
+        return 'INNER JOIN (SELECT NULL AS brand_id FROM DUAL WHERE 1=0) ' . $alias
+            . ' ON ' . $alias . '.brand_id = ' . $table . '.brand_id';
+    }
 
     $values = [];
 
@@ -169,6 +225,12 @@ function se_scope_join_sql($table)
 
     return 'INNER JOIN (' . implode(' UNION ', $values) . ') ' . $alias
         . ' ON ' . $alias . '.brand_id = ' . $table . '.brand_id';
+}
+
+/** Has the current staff member any reachable brand at all? */
+function se_staff_has_any_brand()
+{
+    return se_staff_sees_all_brands() || count(se_staff_brand_ids()) > 0;
 }
 
 /**

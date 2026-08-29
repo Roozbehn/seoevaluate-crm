@@ -169,6 +169,15 @@ function se_consent_is_granted($raw)
  */
 function se_consent_text_version($brand_id = 0)
 {
+    // The Consent Settings screen is the authority when it has been configured.
+    if (function_exists('se_consent_configured_version')) {
+        $configured = se_consent_configured_version($brand_id);
+
+        if ($configured !== '') {
+            return $configured;
+        }
+    }
+
     $perBrand = trim((string) get_option('se_consent_text_version_' . (int) $brand_id));
 
     if ($perBrand !== '') {
@@ -225,11 +234,20 @@ function se_consent_record(
         return 0;
     }
 
-    // Server-controlled. A caller-supplied version is only honoured when it
-    // came from configuration, never from a request field.
-    $resolvedVersion = $version !== null && $version !== ''
-        ? mb_substr((string) $version, 0, 32)
-        : se_consent_text_version($brand_id);
+    /* Server-controlled, unconditionally.
+     *
+     * The $version parameter is deliberately IGNORED for resolution. It used
+     * to be honoured whenever it was non-empty, which meant any caller that
+     * forwarded a request field — and se_attr_persist() did exactly that with
+     * a hidden `se_consent_text_version` input — filed an attacker-chosen
+     * string as the approved version. The version is configuration; it can
+     * only come from configuration. */
+    $resolvedVersion = se_consent_text_version($brand_id);
+
+    if ($version !== null && $version !== '' && (string) $version !== $resolvedVersion) {
+        // Worth knowing about: something tried to assert a different version.
+        log_activity('SE consent version override ignored [' . $rel_type . ' ' . $rel_id . ']');
+    }
 
     $CI = &get_instance();
 
