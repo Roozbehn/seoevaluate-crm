@@ -42,7 +42,7 @@ function se_nav_items()
             'slug'     => 'se-appointments',
             'label'    => 'se_appointments',
             'href'     => 'se_appointments/se_appointments/manage',
-            'icon'     => 'fa fa-calendar-check-o',
+            'icon'     => 'fa fa-calendar-check',
             'position' => 4,
             'can'      => function () { return staff_can('view', 'se_appointments'); },
         ],
@@ -50,7 +50,7 @@ function se_nav_items()
             'slug'     => 'se-whatsapp',
             'label'    => 'se_whatsapp',
             'href'     => 'se_whatsapp/se_whatsapp/inbox',
-            'icon'     => 'fa fa-whatsapp',
+            'icon'     => 'fab fa-whatsapp',
             'position' => 5,
             'can'      => function () { return staff_can('view', 'se_whatsapp'); },
         ],
@@ -73,14 +73,14 @@ function se_nav_integration_items()
             'slug'  => 'se-meta-leadgen',
             'label' => 'se_meta_leadgen',
             'href'  => 'se_core/se_meta',
-            'icon'  => 'fa fa-facebook-square',
+            'icon'  => 'fab fa-facebook-square',
             'can'   => function () { return se_staff_can_configure_brands(); },
         ],
         [
             'slug'  => 'se-outbox',
             'label' => 'se_outbox',
             'href'  => 'se_core/se_outbox',
-            'icon'  => 'fa fa-paper-plane-o',
+            'icon'  => 'fa fa-paper-plane',
             // The controller admits report-capable staff too; the nav keeps
             // this delivery-queue screen with the people who can act on it.
             'can'   => function () { return se_staff_can_configure_brands(); },
@@ -89,7 +89,7 @@ function se_nav_integration_items()
             'slug'  => 'se-google',
             'label' => 'se_google_dm',
             'href'  => 'se_core/se_google',
-            'icon'  => 'fa fa-google',
+            'icon'  => 'fab fa-google',
             'can'   => function () { return se_staff_can_configure_brands(); },
         ],
         [
@@ -114,7 +114,7 @@ function se_nav_integration_items()
             'slug'  => 'se-consent',
             'label' => 'se_consent_settings',
             'href'  => 'se_core/se_consent',
-            'icon'  => 'fa fa-check-square-o',
+            'icon'  => 'fa fa-check-square',
             // EXACTLY the gate Se_consent::__construct enforces.
             'can'   => function () { return se_clinic_can_manage_consent(); },
         ],

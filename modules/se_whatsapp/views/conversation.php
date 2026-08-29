@@ -76,7 +76,7 @@
 
     <?php } else { ?>
       <div class="alert alert-info">
-        <i class="fa fa-clock-o"></i> <?php echo html_escape(_l('se_wa_reply_template_required')); ?>
+        <i class="fa fa-clock"></i> <?php echo html_escape(_l('se_wa_reply_template_required')); ?>
       </div>
       <?php if (empty($templates)) { ?>
         <?php se_ui_empty(_l('se_wa_no_templates')); ?>

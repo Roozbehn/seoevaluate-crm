@@ -128,7 +128,7 @@ function se_ui_no_brand_screen()
 }
 
 /** Dashboard stat card. $href makes the whole card a link to the real screen. */
-function se_ui_stat_card($label, $value, $href = null, $icon = 'fa-circle-o', $tone = '')
+function se_ui_stat_card($label, $value, $href = null, $icon = 'fa-circle', $tone = '')
 {
     $inner = '<div class="panel_s ' . html_escape($tone) . '"><div class="panel-body">'
         . '<div class="clearfix">'
@@ -232,7 +232,7 @@ function se_ui_gate_checklist($title, array $items)
 
     foreach ($items as $item) {
         $done = !empty($item['done']);
-        echo '<li class="mbot10"><i class="fa ' . ($done ? 'fa-check-square-o text-success' : 'fa-square-o text-muted')
+        echo '<li class="mbot10"><i class="fa ' . ($done ? 'fa-check-square text-success' : 'fa-square text-muted')
            . '"></i> ' . html_escape($item['label']);
 
         if (!empty($item['hint'])) {

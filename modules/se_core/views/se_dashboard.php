@@ -36,21 +36,21 @@ se_ui_header(_l('se_group'), $header_actions, _l('se_dashboard'));
       [_l('leads'), $stats['leads'], admin_url('leads'), 'fa-filter'],
       [_l('se_patients'), $stats['patients'], admin_url('se_core/se_patients'), 'fa-user-md'],
       [_l('se_dash_appts_today'), $stats['appts_today'], admin_url('se_appointments/se_appointments/manage'), 'fa-calendar'],
-      [_l('se_dash_appts_upcoming'), $stats['appts_upcoming'], admin_url('se_appointments/se_appointments/manage'), 'fa-calendar-plus-o'],
+      [_l('se_dash_appts_upcoming'), $stats['appts_upcoming'], admin_url('se_appointments/se_appointments/manage'), 'fa-calendar-plus'],
       [_l('se_appt_status_no_show'), $stats['appts_no_show'], admin_url('se_appointments/se_appointments/manage?status=no_show'), 'fa-user-times'],
-      [_l('se_wa_unread'), $stats['wa_unread'], admin_url('se_whatsapp/se_whatsapp/inbox'), 'fa-whatsapp'],
+      [_l('se_wa_unread'), $stats['wa_unread'], admin_url('se_whatsapp/se_whatsapp/inbox'), 'fab fa-whatsapp'],
   ];
   if (!empty($show_integrations)) {
-      $cards[] = [_l('se_dash_outbox_pending'), $stats['outbox_pending'], admin_url('se_core/se_outbox?status=pending'), 'fa-paper-plane-o'];
+      $cards[] = [_l('se_dash_outbox_pending'), $stats['outbox_pending'], admin_url('se_core/se_outbox?status=pending'), 'fa-paper-plane'];
       $cards[] = [_l('se_dash_outbox_failed'), $stats['outbox_failed'], admin_url('se_core/se_outbox?status=failed'), 'fa-exclamation-circle'];
   }
   if (!empty($show_health)) {
-      $cards[] = [_l('se_dash_meta_pending'), $stats['meta_pending'], admin_url('se_core/se_meta'), 'fa-facebook-square'];
-      $cards[] = [_l('se_dash_google_submitted'), $stats['google_submitted'], admin_url('se_core/se_google'), 'fa-google'];
+      $cards[] = [_l('se_dash_meta_pending'), $stats['meta_pending'], admin_url('se_core/se_meta'), 'fab fa-facebook-square'];
+      $cards[] = [_l('se_dash_google_submitted'), $stats['google_submitted'], admin_url('se_core/se_google'), 'fab fa-google'];
       $cards[] = [_l('se_credentials'), '', admin_url('se_core/se_credentials'), 'fa-key'];
   }
   if (!empty($show_consent)) {
-      $cards[] = [_l('se_consent_settings'), '', admin_url('se_core/se_consent'), 'fa-check-square-o'];
+      $cards[] = [_l('se_consent_settings'), '', admin_url('se_core/se_consent'), 'fa-check-square'];
   }
   ?>
   <div class="row">
