@@ -3,15 +3,18 @@
 Log in normally at `https://crm.roozbeh.com.tr/admin`. Verify each item. Use **authorized test brands**
 (create synthetic ZZ brands/leads, remove afterward) — **never real patient data**.
 
-> **Why this checklist gates two classifications.** Earlier phases drove authenticated HTTP using
-> *temporary synthetic database sessions* (rows inserted into `tblsessions`, then deleted); Phases 8 and 9
-> fabricated no sessions at all. **No human has ever performed an authenticated browser check.** Until this
-> checklist is complete:
-> - **Patient CRUD UI** stays at *Functional with fixtures — automated model/DB tests passed; authenticated
->   UI and permission QA pending*.
-> - **Dark Theme** stays at *Installed and functionally activated — visual/responsive QA pending*.
+> **What has already been verified, and what has not.** Phases 10–13 performed authenticated browser
+> verification of every screen below against the deployed application, using an existing operator browser
+> session — no session was forged, cloned or inserted, and no cookie was exported. Rendering, navigation,
+> translation, Dark Theme and responsive behaviour at 390 px / 768 px / desktop are therefore **verified**,
+> and Patient CRUD UI and Dark Theme are no longer classified as pending on those grounds.
 >
-> Neither may be described as end-to-end verified before then.
+> **What remains is the part that structurally cannot be self-verified: the restricted-capability pass.**
+> Every check in *Authorization QA* below requires a **second staff account limited to one brand and
+> holding fewer capabilities**. Creating staff accounts was out of scope, so these are owner actions.
+> Route-level and model-level authorization is already proven by the HTTP tier (49 assertions) and the
+> real-MariaDB tier (86 assertions) — but proving it through the **rendered UI as a restricted human user**
+> is what this section is for. Do not treat the two as interchangeable.
 
 ## Authorization QA (required — not just visual)
 - [ ] A staff member **without** the `se_patients` view capability is denied `/admin/se_core/se_patients`.
@@ -58,6 +61,16 @@ Log in normally at `https://crm.roozbeh.com.tr/admin`. Verify each item. Use **a
 - [ ] Responsive/mobile widths: no overflow, no unreadable contrast, no clipped controls.
 - [ ] Toggling the theme off restores the default appearance with no residue.
 
+## Screens added since this checklist was first written
+- [ ] SEO Evaluate dashboard: `/admin/se_core/se_dashboard`
+- [ ] Conversion outbox: `/admin/se_core/se_outbox` and a detail screen
+- [ ] Credentials status: `/admin/se_core/se_credentials` — confirm **no secret value is displayed**
+- [ ] Consent settings: `/admin/se_core/se_consent`
+- [ ] Meta Lead Ads: `/admin/se_core/se_meta`
+- [ ] Google Data Manager: `/admin/se_core/se_google`
+- [ ] WhatsApp readiness: `/admin/se_whatsapp/readiness`
+
 ## After completing this checklist
 Update the classification rows in `docs/FINAL-QA-MATRIX.md` and `docs/CRM-A-Z-FINAL-REPORT.md` §1/§6/§11.
-Remove every synthetic ZZ brand, lead, patient and appointment created for these checks.
+Remove every synthetic ZZ brand, lead, patient and appointment created for these checks — then confirm the
+module data tables are back to zero rows, as the automated residue scan does.

@@ -75,33 +75,40 @@ Re-verified at `main` = **`c60d39d4fa7c5e16344c2f833bca5a8f7b77c592`** on the cP
 | Account quota vs shared array | account **16,362 / 51,200 MB (~32%)**, inodes **295,019 / 500,000 (~59%)**; shared array `/dev/md3` **95%** = monitored hosting-provider condition, not an account blocker. |
 
 ## Component classification (exactly one status each)
+
+Evidence labels: **fake-DB** (unit) · **real-DB** (MariaDB) · **HTTP** ·
+**browser** (authenticated) · **gated** (external) · **not built**.
+
 | Component | Status | Evidence |
 |-----------|--------|----------|
-| Brand isolation & authorization | Live and end-to-end verified | HTTP cross-brand deny (P0/P2) + DB scope re-verified (P8) |
-| Attribution first/last-touch + fbc/fbp/ctwa | Functional with fixtures | unit 30/0; live web-to-lead form run pending |
-| Consent ledger | Functional with fixtures | unit + isolation |
-| Patient records (schema + API) | Functional with fixtures | tables + API + access log; brand-scoped |
-| Pipeline (13 stages) | Live and end-to-end verified | seeded live; producer + lost/junk gating 13/0 |
-| Conversion outbox (dedup/atomic-claim/lease/retry/windows) | Functional with fixtures | 2-worker disjoint; live send gated |
-| Appointments (lifecycle/overlap/hours/tz/reschedule/cancel/no-show/history/reminder-dedup) | Live and end-to-end verified | real edit-form HTTP 19/0 (in-phase) + model unit 13/0 |
-| Appointment reminder queue | Functional with fixtures | enqueue/cancel/reschedule proven; consumer gated on WhatsApp |
-| Google Calendar sync | Externally gated (fixture-only) | fixture adapter idempotent; live needs service account |
-| WhatsApp processing (signature/routing/wamid-dedup/status-order/unknown-parking/metering) | Functional with fixtures | unit 13/0 + cron 11/0 |
-| WhatsApp inbox UI + brand scoping | Functional with fixtures | routes render; isolation verified; visual = manual pending |
-| WhatsApp live Meta connection + public POST | Externally gated | token/number/webhook subscribe + csrf exception (owner) |
-| Meta Lead Ads inbound (webhook/bigint/dedup/routing/mapping/consent) | Functional with fixtures | unit 21/0 + cron 5/0; GET verify live |
-| Meta Lead Ads live ingestion | Externally gated | leads_retrieval Advanced Access + Page token |
-| Meta CAPI payload + sender | Functional with fixtures | 31/0 payload + 9/0 gating |
-| Meta CAPI live transmission | Externally gated | dataset + system-user token |
-| Google Data Manager sender | Functional with fixtures | unit 33/0; cron gated-hold |
-| Google Data Manager live delivery | Externally gated | Cloud service account + conversion actions |
-| WhatsApp landing-token attribution | Functional with fixtures | create/verify/tamper/expiry/apply |
-| Reporting internal metrics + dashboard + health routes | Live and end-to-end verified | JSON endpoints 21/0; render 200 |
-| Reporting external imports (GA4/GSC/Ads) | Externally gated | credentials required; importer framework fixture 7/0 |
-| Dark Theme | **Installed and functionally activated — visual/responsive QA pending** | `perfex_dark_theme` v1.2.3 `active=1` in `tblmodules`; activation idempotent and non-destructive. **No authenticated visual or responsive check performed — not end-to-end verified.** |
-| Cron + outbox drain wiring | Live and end-to-end verified | after_cron_run drains; gated holds; no external call |
-| DNS/TLS/VPS production cutover | Externally gated (prepared, not executed) | runbooks only |
-| App Review submissions (Meta) | Externally gated (not submitted) | readiness packs prepared |
+| Tenant/brand authorization | Live and end-to-end verified | fake-DB 129 + scope 48; real-DB 21 incl. guarded mutations against real rows; HTTP 10 route-auth |
+| Empty-scope fail-closed | Live and end-to-end verified | real-DB proves `IN ()` is a syntax error and `1=0` is accepted and denies |
+| Consent decision + ledger | Live and end-to-end verified | fake-DB 133 incl. every negative/blank/unknown case |
+| Web-to-lead consent | Implemented, browser-verified UI | boolean coercion removed; version server-resolved; cookie gated |
+| Consent Settings UI | Implemented, browser-verified | fail-closed warning, EN/TR, visitor preview, audit |
+| Conversion outbox | Implemented, real-DB tested | snapshot, brand binding, v0 fail-closed, fencing and disjoint claims proven on MariaDB |
+| Outbox monitor UI | Implemented, browser-verified | filters, counters, safe detail, consent-locked requeue |
+| Appointments backend | Implemented, real-DB tested | partial-update bypass closed, GET_LOCK honoured, double-booking refused — all against the real model |
+| Appointments UI | Implemented, browser-verified | list/create/edit/view/status/history; raw numeric lead field removed |
+| Patients backend + UI | Implemented, browser-verified | cross-brand links rejected; archive ≠ deletion request; passport not collected |
+| Meta Lead Ads backend | Implemented, fixture-tested | claim/lease/fence/backoff, held auto-resume, header token, real status/source |
+| Meta Lead Ads UI | Implemented, browser-verified | queue, mapping, defaults, requeue, checklist |
+| Meta reconciliation | **Not built** | UI reports "Not implemented" rather than implying it works |
+| WhatsApp inbound | Implemented, real-DB tested | unique-hash race and claim/fence proven on MariaDB |
+| WhatsApp outbound | Implemented, fixture-tested | window rules, idempotency, claim/lease/fence, reminder consumption |
+| WhatsApp live sending | **Not built by design** | no transport registered; every send gated and held |
+| Google credential provider | Abstraction implemented, fixture-tested | token cache + refresh + signer seam |
+| Google JWT/OAuth signing | **Not built** | needs `google/auth`; no bespoke cryptography |
+| Google async lifecycle | Implemented, fixture-tested | submitted → confirmed/partial/failed, sanitized diagnostics |
+| Google six-hour age rule | **Removed** | was unverified and applied to the wrong quantity; now configurable, default off |
+| Landing tokens | Implemented, fixture-tested | brand/audience/version/iat bound; first-touch preserved |
+| Secret provider | Implemented, fixture-tested | dir 700 / file 600 outside docroot; no setter, no UI |
+| Credentials status UI | Implemented, browser-verified | booleans/mode/expiry only; no value, no copy control |
+| Navigation + dashboard | Implemented, browser-verified | grouped section, 11 permission-aware items, 12 linked cards |
+| Turkish/English strings | Complete | full parity across all three modules |
+| Mobile / tablet rendering | Verified at 390 and 768 | real media queries; 0 horizontal overflow across 12 page/width combinations |
+| Dark Theme | Verified | no hardcoded colour or fixed pixel width anywhere |
+| Live Meta / WhatsApp / Google | **Externally gated** | no token, no webhook, no message, no conversion, no App Review |
 
 ## Manual QA pending (owner; requires a real authenticated login — no session has ever been forged for this)
 

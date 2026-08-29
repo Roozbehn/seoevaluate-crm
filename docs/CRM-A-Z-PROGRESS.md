@@ -315,3 +315,30 @@ modified and no external integration was activated.**
 **Not done by design in Phase 10:** cron unchanged; no option migrated or deleted; no credential added; no
 live-integration code modified; no external integration activated; no new dump or isolated DB; no claim of
 independent code approval.
+
+---
+
+## Phase 13 — Integration, test-tier and UI closure — **COMPLETE**
+
+Branch `feature/final-integration-test-closure`. Schema **v11**.
+
+| Task | Outcome |
+|------|---------|
+| 13.1 Appointment backend re-verification | Closed the partial-update bypass (`{rel_id}` alone skipped the entire link check; `{end_at}` alone skipped the window check). `GET_LOCK`'s result is now honoured — it was ignored, so a timed-out lock looked identical to a held one and the double-booking guard silently vanished. Required fields on create. Unmapped staff are no longer treated as unrestricted. |
+| 13.2 Real MariaDB test tier | New tier executing the REAL model classes against the live schema in a rolled-back transaction, with a network-kill fixture. 86 assertions. Found the clock skew below. |
+| 13.3 PHP/MariaDB clock skew | **Real production bug.** Rows written with SQL `NOW()` were compared against PHP `date()`; PHP runs UTC, MariaDB on system time — a measured two-hour offset. Retries fired three hours late; dead-worker leases took 2h15m to recover. `se_db_now()` now supplies the database clock everywhere. |
+| 13.4 Meta Lead Ads backend | Atomic claim, worker identity, lease, stale recovery, fence, backoff with jitter, rate-limit handling. `held` events auto-resume instead of being stranded forever. Token moved to the Authorization header. Lead status/source configured instead of 0. |
+| 13.5 Webhook receivers | Bounded reads with 413; 200 now means durably accepted — a failed insert previously returned 200 and Meta never redelivered, losing the lead silently. |
+| 13.6 Conversion outbox | Snapshot bound to the supplied brand; producer refuses missing/cross-brand leads; fail closed on payload_version 0 (the live-lead fallback is gone); unconditional consent recheck before transport; missing Google mapping is gated configuration. |
+| 13.7 WhatsApp outbound | New queue with idempotency, claim/lease/fence/backoff, 24-hour window enforced at queue AND send time, approved-template-only outside it, reminder consumption that marks before queueing. Gate is checked before the window — conflating them permanently discarded gated messages. |
+| 13.8 WhatsApp UI | Real inbox list, threaded conversation, composer whose control the server chooses, template selector, disabled composer with an explicit reason, readiness screen. |
+| 13.9 Google | Renewable credential-provider abstraction with a signer seam (JWT/OAuth deliberately not hand-rolled), token cache, async `requestStatus` lifecycle with confirmed/partial/failed, sanitized diagnostics. Six-hour age rule removed as unverified. Landing tokens brand/audience/version bound and first-touch preserving. |
+| 13.10 HTTP test tier | 49 assertions against the deployed app: verification, signatures, size bounds, route authorization, GET-on-mutation, harness and log inaccessibility. |
+| 13.11 Mobile verification | Real media-query rendering at 390 and 768 across 12 page/width combinations; 0 horizontal overflow. Screenshots captured. |
+
+**Tiers:** fake DB 1146/0 · real MariaDB 86/0 · HTTP 49/0.
+
+**Not done, and reported as not done:** Meta reconciliation; Google JWT signing
+(needs `google/auth`); WhatsApp live transport. All three are surfaced in the UI
+as "Not implemented" rather than implied to work.
+

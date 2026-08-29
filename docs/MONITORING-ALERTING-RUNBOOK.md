@@ -71,6 +71,24 @@ DB creds, message/patient content). Two ready surfaces already exist in the app:
 | External reporting-import freshness | options `se_report_last_import_*` | age > 26h when credentials configured |
 | Number quality & messaging errors | `tblse_wa_numbers.quality_rating` + message failed states | quality != GREEN; failed deliveries |
 | Appointment-reminder backlog | `tblse_reminders` state=pending & scheduled_at < now | backlog > N (consumer gated until WhatsApp live) |
+| **WhatsApp outbound queue** | `tblse_wa_outbound` state counts | `failed` > 0; `queued` rising across two cron cycles; any row `gated` for > 24h that the owner believes should have sent |
+| **Stale worker leases** | rows whose `lease_expires_at` is in the past but state is still `claimed` — in `tblse_conversion_outbox`, `tblse_meta_leadgen_events`, `tblse_wa_outbound` | > 0 for more than two cron cycles means recovery is not running |
+| **Fencing-token conflicts** | count of claim attempts rejected because the fence advanced | a nonzero rate is normal under concurrency; a *rising* rate means workers are overlapping and the lease is too short |
+| **PHP vs MariaDB clock offset** | `SELECT NOW()` compared with PHP `date()` | **any offset > 60 s is CRIT.** See below — this was a real, silent production bug. |
+
+## Clock source — why this is a monitored signal
+
+Every queue in this system stores timestamps written by MariaDB (`NOW()`), and every scheduling decision —
+retry due time, lease expiry, stale recovery, retention — must compare against the **same** clock.
+
+PHP on this host runs UTC; MariaDB runs on system time. The measured offset was **two hours**. Because the
+code originally compared database timestamps against PHP `date()`, retries fired roughly three hours late
+and a dead worker's rows took 2h15m to recover instead of fifteen minutes. Nothing errored, nothing logged,
+and no in-memory test could see it. It was found only by executing the real models against real MariaDB.
+
+The fix is `se_db_now()`: one cached `SELECT NOW()` per request, advanced locally, used everywhere a queue
+timestamp is compared or written. **Do not reintroduce `date()` or `time()` into any queue comparison.**
+Monitor the offset so that a host or timezone change surfaces as an alert instead of as late messages.
 
 ## Wiring
 - Poll the authenticated health JSON from an internal monitor (service account/session), or run a
