@@ -486,6 +486,14 @@ function se_wa_handle_status($brand_id, $status)
     $rank = ['sent' => 1, 'delivered' => 2, 'read' => 3];
     $msgTable = db_prefix() . 'se_wa_messages';
 
+    // Health heartbeat: a status event was ingested for this brand (and
+    // globally). Timestamp only — never the wamid or any payload content.
+    if (function_exists('update_option')) {
+        $nowTs = function_exists('se_db_now') ? se_db_now() : date('Y-m-d H:i:s');
+        update_option('se_wa_last_status_at', $nowTs);
+        update_option('se_wa_last_status_at_' . (int) $brand_id, $nowTs);
+    }
+
     // The routed brand is part of BOTH the lookup and the update. A wamid is
     // supplied by the webhook body, and without the brand a status callback
     // routed to Brand A could read and overwrite Brand B's message row.
