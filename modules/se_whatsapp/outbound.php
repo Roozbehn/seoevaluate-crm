@@ -349,9 +349,13 @@ function se_wa_out_process($row)
      * would then be permanently SKIPPED as if the customer had gone quiet —
      * discarding a message that was only waiting for configuration. Check the
      * gate first and hold; only then judge the window. */
-    if (!se_wa_transport_available() || se_wa_send_blocked_reason((int) $conv->brand_id) !== '') {
+    $blockedReason = se_wa_send_blocked_reason((int) $conv->brand_id);
+    if (!se_wa_transport_available() || $blockedReason !== '') {
+        // Name the EXACT gate — a generic 'not configured' hides which
+        // credential or component is actually missing.
+        $why = $blockedReason !== '' ? $blockedReason : 'no_transport';
         return ['status' => 'pending', 'attempts' => (int) $row['attempts'],
-                'failure_class' => 'gated', 'last_error' => 'sending not configured',
+                'failure_class' => 'gated', 'last_error' => 'sending gated: ' . $why,
                 'next_attempt_at' => se_db_now(3600)];
     }
 
