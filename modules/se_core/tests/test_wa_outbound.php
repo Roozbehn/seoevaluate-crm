@@ -71,8 +71,16 @@ se_eq(false, isset($status['value']), 'status NEVER carries the value');
 se_eq(false, strpos(json_encode($status), 'fixture-not-a-real-secret') !== false,
     'and the value appears nowhere in the status payload');
 
+/* The app secret alone is not enough to SEND: the Cloud API token (wa_token)
+ * is a different credential, and its absence must be named precisely. */
+se_eq('no_token', se_wa_send_blocked_reason(1),
+    'with an app secret but no Cloud API token, the gate names the token');
+
+se_test_install_secret('wa_token', 'fixture-not-a-real-token');
 se_eq('no_transport', se_wa_send_blocked_reason(1),
-    'with a credential but no transport, sending is still gated');
+    'with credentials and a token but no transport, sending is still gated');
+/* wa_token stays installed for the rest of the suite: the drain tests below
+ * exercise the transport seam and must pass the token gate. Removed at EOF. */
 
 se_group('Compose policy follows the 24-hour service window');
 
@@ -278,3 +286,4 @@ se_eq(false, isset($allow['application/x-executable']), 'no executable type is a
 
 // Leave the shared store clean for the next suite.
 se_test_remove_secret('wa_app');
+se_test_remove_secret('wa_token');

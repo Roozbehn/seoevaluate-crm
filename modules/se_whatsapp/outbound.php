@@ -71,8 +71,17 @@ function se_wa_send_blocked_reason($brand_id)
         return 'no_number';
     }
 
-    if (!se_secret_configured('wa_app', 0)) {
+    // The app secret may be INHERITED from meta_app (same Meta app) — check the
+    // canonical accessor, not the raw wa_app file, or a working inherited
+    // secret reads as 'no_credentials'.
+    if (function_exists('se_wa_app_secret') ? se_wa_app_secret() === '' : !se_secret_configured('wa_app', 0)) {
         return 'no_credentials';
+    }
+
+    // Sending needs the Cloud API TOKEN (provider wa_token) — a different
+    // credential from the app secret, which only validates webhook signatures.
+    if (se_wa_cloud_token() === '') {
+        return 'no_token';
     }
 
     if (!se_wa_transport_available()) {
@@ -80,6 +89,12 @@ function se_wa_send_blocked_reason($brand_id)
     }
 
     return '';
+}
+
+/** The WhatsApp Cloud API access token (secret provider wa_token). Never logged. */
+function se_wa_cloud_token()
+{
+    return function_exists('se_secret_read') ? se_secret_read('wa_token') : '';
 }
 
 /* ---------------------------------------------------------------------------

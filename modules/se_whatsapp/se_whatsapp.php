@@ -20,6 +20,7 @@ register_language_files(SE_WHATSAPP_MODULE_NAME, [SE_WHATSAPP_MODULE_NAME]);
 
 require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/outbound.php';
+require_once __DIR__ . '/transport.php';   // registers the live Cloud API sender when wa_token exists
 
 register_activation_hook(SE_WHATSAPP_MODULE_NAME, 'se_whatsapp_activation');
 

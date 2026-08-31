@@ -97,12 +97,14 @@ function se_integration_provider_progress($brand_id, $store)
         'enabled' => null, 'enabled_label' => null,
     ];
 
-    // WhatsApp: verify token + shared (inherited) App Secret. Never shown as an
-    // independent wa_app requirement.
-    $waState = (!$waVer) ? 'missing' : ($waAppInh ? 'complete' : 'partial');
+    // WhatsApp: verify token + shared (inherited) App Secret + Cloud API token
+    // for outbound. Never shown as an independent wa_app requirement.
+    $waTok = se_secret_configured('wa_token', 0);
+    $waState = (!$waVer) ? 'missing' : (($waAppInh && $waTok) ? 'complete' : 'partial');
     $waDetail = $waVer
         ? ($waAppInh
-            ? 'verify token installed; App Secret inherited from Meta App Secret'
+            ? ('verify token installed; App Secret inherited from Meta App Secret; Cloud API token '
+               . ($waTok ? 'installed' : 'missing'))
             : 'verify token installed; shared App Secret (Meta App Secret) missing')
         : 'verify token missing';
     $rows[] = [

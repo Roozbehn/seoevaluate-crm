@@ -40,6 +40,7 @@ function se_secret_providers()
         'meta_verify'   => ['label' => 'Meta webhook verify token', 'per_brand' => false],
         'wa_app'        => ['label' => 'WhatsApp app secret', 'per_brand' => false],
         'wa_verify'     => ['label' => 'WhatsApp webhook verify token', 'per_brand' => false],
+        'wa_token'      => ['label' => 'WhatsApp Cloud API token', 'per_brand' => false],
         'google_sa'     => ['label' => 'Google service-account key', 'per_brand' => true],
         'landing_token' => ['label' => 'Landing-token HMAC secret', 'per_brand' => false],
     ];

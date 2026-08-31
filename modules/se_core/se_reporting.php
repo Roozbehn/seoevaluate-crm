@@ -393,6 +393,11 @@ function se_integration_health($brand_id)
              'Signed WhatsApp POSTs cannot be validated (X-Hub-Signature-256)',
              'Install the meta_app credential (WhatsApp inherits the shared Meta App Secret)',
              se_health_link('se_core/se_credentials'));
+    } elseif (function_exists('se_wa_cloud_token') && se_wa_cloud_token() === '') {
+        $blk('whatsapp_token', 'WhatsApp Cloud API token missing',
+             'Inbound webhooks validate, but the CRM cannot send WhatsApp messages',
+             'Generate a system-user token with whatsapp_business_management and whatsapp_business_messaging and install it as wa_token',
+             se_health_link('se_core/se_credentials'));
     }
     if (!empty($google['externally_gated'])) {
         $blk('google_dm', 'Google service-account credential missing',
