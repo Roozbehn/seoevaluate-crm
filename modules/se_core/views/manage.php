@@ -111,7 +111,12 @@ function se_edit_brand(brand, staffIds) {
     $.each(brand, function (key, value) {
         var field = $('#se-brand-form [name="' + key + '"]');
         if (field.length && field.attr('type') !== 'checkbox') {
-            field.val(value);
+            // Platform identifiers are opaque strings. Assign through the DOM
+            // property as well so long numeric-looking IDs cannot be dropped by
+            // form helpers or jQuery value hooks when the edit form is opened.
+            field.each(function () {
+                this.value = value == null ? '' : String(value);
+            });
         }
     });
 
