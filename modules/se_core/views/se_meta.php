@@ -107,13 +107,17 @@
 </div></div></div>
 
 <div class="col-md-6">
-<?php se_ui_gate_checklist(_l('se_meta_external_setup'), [
+<?php $standard_operational = !empty($status['last_fetch_ok_at'])
+    && (int) get_option('se_meta_leadgen_review_gated') === 1;
+se_ui_gate_checklist(_l('se_meta_external_setup'), [
     ['label' => _l('se_meta_step_app'),     'hint' => _l('se_meta_step_app_hint'),     'done' => (bool) $status['app_owner']],
     ['label' => _l('se_meta_step_secret'),  'hint' => _l('se_meta_step_secret_hint'),  'done' => $status['app_secret']],
     ['label' => _l('se_meta_step_token'),   'hint' => _l('se_meta_step_token_hint'),   'done' => $status['page_token']],
     ['label' => _l('se_meta_step_mapping'), 'hint' => _l('se_meta_step_mapping_hint'), 'done' => count($forms) > 0],
     ['label' => _l('se_meta_step_webhook'), 'hint' => _l('se_meta_step_webhook_hint'), 'done' => (bool) $status['last_webhook_at']],
-    ['label' => _l('se_meta_step_review'),  'hint' => _l('se_meta_step_review_hint'),  'done' => false],
+    ['label' => _l($standard_operational ? 'se_meta_step_standard' : 'se_meta_step_review'),
+     'hint'  => _l($standard_operational ? 'se_meta_step_standard_hint' : 'se_meta_step_review_hint'),
+     'done'  => $standard_operational || (int) get_option('se_meta_leadgen_review_gated') !== 1],
 ]); ?>
 </div></div>
 <?php } ?>

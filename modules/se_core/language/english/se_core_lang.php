@@ -244,7 +244,9 @@ $lang['se_meta_step_mapping_hint'] = 'Routing requires both page ID and form ID.
 $lang['se_meta_step_webhook']    = 'Webhook subscribed and receiving';
 $lang['se_meta_step_webhook_hint'] = 'Owner action in the Meta app dashboard.';
 $lang['se_meta_step_review']     = 'Lead Ads App Review approved';
-$lang['se_meta_step_review_hint'] = 'Required for live lead retrieval.';
+$lang['se_meta_step_review_hint'] = 'Required only when Meta gates the requested assets or access level.';
+$lang['se_meta_step_standard']    = 'Standard access operational';
+$lang['se_meta_step_standard_hint'] = 'Business-owned assets are live-tested; advanced access remains optional and pending.';
 
 $lang['se_google_subtitle']      = 'Data Manager status and mappings';
 $lang['se_google_customer_id']   = 'Google Ads customer ID';

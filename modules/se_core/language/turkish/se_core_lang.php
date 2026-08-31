@@ -239,7 +239,9 @@ $lang['se_meta_step_mapping_hint'] = 'Yönlendirme hem sayfa hem form kimliği g
 $lang['se_meta_step_webhook']    = 'Webhook aboneliği yapıldı ve veri geliyor';
 $lang['se_meta_step_webhook_hint'] = 'Meta uygulama panelinde sahip tarafından yapılır.';
 $lang['se_meta_step_review']     = 'Lead Ads App Review onaylandı';
-$lang['se_meta_step_review_hint'] = 'Canlı kayıt çekimi için gerekli.';
+$lang['se_meta_step_review_hint'] = 'Yalnızca Meta istenen varlıkları veya erişim düzeyini kısıtlarsa gereklidir.';
+$lang['se_meta_step_standard']    = 'Standart erişim çalışıyor';
+$lang['se_meta_step_standard_hint'] = 'İşletmeye ait varlıklar canlı test edildi; gelişmiş erişim isteğe bağlı ve beklemede.';
 
 $lang['se_google_subtitle']      = 'Data Manager durumu ve eşlemeleri';
 $lang['se_google_customer_id']   = 'Google Ads müşteri kimliği';
