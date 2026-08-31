@@ -450,6 +450,7 @@ function se_wa_record_outbound($row, $conv, $wamid)
         'brand_id'        => (int) $conv->brand_id,
         'wamid'           => $wamid,
         'direction'       => 'out',
+        'source'          => 'cloud_api',
         'type'            => $row['kind'] === 'template' ? 'template' : 'text',
         'body'            => $row['body'],
         'template_name'   => $row['template_name'],

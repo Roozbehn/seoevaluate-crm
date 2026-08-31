@@ -66,6 +66,7 @@ $stmts[] = "CREATE TABLE IF NOT EXISTS `{$p}se_wa_messages` (
     `brand_id` int(11) NOT NULL DEFAULT 0,
     `wamid` varchar(128) NOT NULL,
     `direction` varchar(8) NOT NULL,
+    `source` varchar(24) DEFAULT NULL,
     `type` varchar(24) NOT NULL DEFAULT 'text',
     `body` mediumtext DEFAULT NULL,
     `media_ref` varchar(191) DEFAULT NULL,

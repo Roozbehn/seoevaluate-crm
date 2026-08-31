@@ -376,6 +376,9 @@ function se_wa_process_event($ev)
     foreach (($value['messages'] ?? []) as $msg) {
         se_wa_handle_inbound($brand_id, $routing['phone_number_id'], $msg, $value['contacts'][0] ?? []);
     }
+    foreach (($value['message_echoes'] ?? []) as $echo) {
+        se_wa_handle_echo($brand_id, $routing['phone_number_id'], $echo, $value['contacts'][0] ?? []);
+    }
     foreach (($value['statuses'] ?? []) as $st) {
         se_wa_handle_status($brand_id, $st);
     }
@@ -469,6 +472,7 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
         'brand_id'        => (int) $brand_id,
         'wamid'           => $wamid,
         'direction'       => 'in',
+        'source'          => 'customer',
         'type'            => $type,
         'body'            => $body,
         'media_ref'       => $media_ref,
@@ -478,6 +482,93 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
 
     // Meter the inbound (service category) once per wamid.
     se_wa_meter((int) $brand_id, 'service', false, 'in:' . $wamid);
+}
+
+/**
+ * Mirror one message sent from the linked WhatsApp Business handset.
+ *
+ * Meta emits coexistence handset sends under smb_message_echoes, in
+ * value.message_echoes (not value.messages). They are outbound operational
+ * messages: they must appear in the same conversation, must not increment the
+ * CRM-local unread count or open the API customer-service window, and must be
+ * distinguishable from messages sent by the CRM Cloud API transport.
+ */
+function se_wa_handle_echo($brand_id, $phone_number_id, $echo, $contact)
+{
+    $CI = &get_instance();
+    $wamid = mb_substr((string) ($echo['id'] ?? ''), 0, SE_WA_MAX_ID_LEN);
+    // contacts[].wa_id / `to` is the customer's WhatsApp id. `to_user_id` is
+    // a different Meta identifier in real coexistence payloads and must not be
+    // used as the conversation key.
+    $to = (string) ($contact['wa_id'] ?? ($echo['to'] ?? ''));
+    $to = mb_substr($to, 0, SE_WA_MAX_ID_LEN);
+
+    if ($wamid === '' || $to === '') {
+        return;
+    }
+
+    $msgTable = db_prefix() . 'se_wa_messages';
+    // wamid is globally unique in the schema. A replay — including replaying
+    // the already-processed durable event after this handler is deployed — is
+    // a no-op and can never create a duplicate row.
+    $CI->db->where('wamid', $wamid);
+    if ($CI->db->count_all_results($msgTable) > 0) {
+        return;
+    }
+
+    $convTable = db_prefix() . 'se_wa_conversations';
+    $CI->db->where('phone_number_id', $phone_number_id)->where('wa_user_id', $to);
+    $conv = $CI->db->get($convTable)->row();
+
+    if ($conv && (int) $conv->brand_id !== (int) $brand_id) {
+        throw new SeWaPermanentError('conversation brand mismatch');
+    }
+
+    $now = date('Y-m-d H:i:s');
+    if (!$conv) {
+        // A handset can start a thread before the customer has ever messaged
+        // the API number. Preserve that real thread without inventing an
+        // inbound timestamp or a customer-service window.
+        $CI->db->insert($convTable, [
+            'brand_id'        => (int) $brand_id,
+            'phone_number_id' => $phone_number_id,
+            'wa_user_id'      => $to,
+            'unread_count'    => 0,
+            'state'           => 'open',
+            'date_created'    => $now,
+        ]);
+        $conv_id = (int) $CI->db->insert_id();
+    } else {
+        $conv_id = (int) $conv->id;
+        $CI->db->where('id', $conv_id)->where('brand_id', (int) $brand_id)
+               ->update($convTable, ['last_updated' => $now]);
+    }
+
+    $type = mb_substr((string) ($echo['type'] ?? 'text'), 0, 24);
+    $body = $type === 'text'
+        ? mb_substr((string) ($echo['text']['body'] ?? ''), 0, SE_WA_MAX_TEXT_LEN)
+        : null;
+    $media_ref = null;
+    if (in_array($type, ['image', 'document', 'audio', 'video'], true) && isset($echo[$type]['id'])) {
+        $media_ref = 'media:' . mb_substr((string) $echo[$type]['id'], 0, SE_WA_MAX_ID_LEN);
+    }
+    $ts = isset($echo['timestamp'])
+        ? date('Y-m-d H:i:s', (int) $echo['timestamp'])
+        : $now;
+
+    $CI->db->insert($msgTable, [
+        'conversation_id' => $conv_id,
+        'brand_id'        => (int) $brand_id,
+        'wamid'           => $wamid,
+        'direction'       => 'out',
+        'source'          => 'handset',
+        'type'            => $type,
+        'body'            => $body,
+        'media_ref'       => $media_ref,
+        'delivery_state'  => 'sent',
+        'sent_at'         => $ts,
+        'date_created'    => $now,
+    ]);
 }
 
 /** Apply a delivery status update, ignoring out-of-order regressions. */

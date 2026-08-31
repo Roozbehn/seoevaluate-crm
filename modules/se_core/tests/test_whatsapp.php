@@ -117,6 +117,77 @@ se_wa_handle_status(1, ['id' => 'wamid.UNKNOWN', 'status' => 'read']);
 se_ok(true, 'an unknown wamid is ignored without error');
 
 /* ======================================================================== */
+se_group('Coexistence handset echoes are mirrored exactly once');
+
+se_test_seed_wa();
+$db = se_test_db();
+$echoTs = time() - 120;
+$echo = [
+    'from' => 'BUSINESS1',
+    'to' => 'U1',
+    'to_user_id' => 'META-OPAQUE-USER',
+    'id' => 'wamid.HANDSET1',
+    'timestamp' => (string) $echoTs,
+    'type' => 'text',
+    'text' => ['body' => 'sent from the handset'],
+];
+
+se_wa_handle_echo(1, 'PN1', $echo, ['wa_id' => 'U1']);
+$rows = array_values(array_filter($db->rows('tblse_wa_messages'), function ($r) {
+    return ($r['wamid'] ?? '') === 'wamid.HANDSET1';
+}));
+se_eq(1, count($rows), 'one handset message is mirrored');
+se_eq(901, (int) $rows[0]['conversation_id'], 'the real contacts[].wa_id selects the existing conversation');
+se_eq('out', $rows[0]['direction'], 'the handset message is outbound');
+se_eq('handset', $rows[0]['source'], 'its source is explicitly recorded as handset');
+se_eq('sent from the handset', $rows[0]['body'], 'the text body is retained');
+se_eq(date('Y-m-d H:i:s', $echoTs), $rows[0]['sent_at'], 'Meta timestamp is retained');
+se_eq(0, (int) $db->rows('tblse_wa_conversations')[0]['unread_count'], 'an echo does not create local unread');
+
+se_wa_handle_echo(1, 'PN1', $echo, ['wa_id' => 'U1']);
+$rows = array_values(array_filter($db->rows('tblse_wa_messages'), function ($r) {
+    return ($r['wamid'] ?? '') === 'wamid.HANDSET1';
+}));
+se_eq(1, count($rows), 'replaying the same echo is a no-op');
+
+// Exercise the exact durable-event shape Meta sent in production: the field
+// is smb_message_echoes and the array is value.message_echoes.
+se_wa_process_event(['payload' => json_encode([
+    'entry' => [['id' => 'WABA1', 'changes' => [[
+        'field' => 'smb_message_echoes',
+        'value' => [
+            'metadata' => ['phone_number_id' => 'PN1'],
+            'contacts' => [['wa_id' => 'U1']],
+            'message_echoes' => [[
+                'from' => 'BUSINESS1', 'to' => 'U1', 'to_user_id' => 'META-OPAQUE-USER',
+                'id' => 'wamid.HANDSET2', 'timestamp' => (string) $echoTs,
+                'type' => 'text', 'text' => ['body' => 'processor path'],
+            ]],
+        ],
+    ]]]],
+])]);
+$rows = array_values(array_filter($db->rows('tblse_wa_messages'), function ($r) {
+    return ($r['wamid'] ?? '') === 'wamid.HANDSET2';
+}));
+se_eq(1, count($rows), 'the async event processor consumes message_echoes');
+se_eq('handset', $rows[0]['source'], 'the processor path preserves source');
+
+// A handset can start a thread. Do not invent an inbound event or service
+// window when creating the CRM conversation for it.
+se_wa_handle_echo(1, 'PN1', [
+    'to' => 'U-NEW', 'id' => 'wamid.HANDSET3', 'timestamp' => (string) $echoTs,
+    'type' => 'text', 'text' => ['body' => 'new thread'],
+], []);
+$newConv = null;
+foreach ($db->rows('tblse_wa_conversations') as $r) {
+    if (($r['wa_user_id'] ?? '') === 'U-NEW') { $newConv = $r; }
+}
+se_ok($newConv !== null, 'a handset-first conversation is created');
+se_eq(0, (int) $newConv['unread_count'], 'a handset-first conversation starts read');
+se_eq(null, $newConv['last_inbound_at'] ?? null, 'no inbound timestamp is fabricated');
+se_eq(null, $newConv['window_expires_at'] ?? null, 'no API service window is fabricated');
+
+/* ======================================================================== */
 se_group('Conversation brand mismatch is refused');
 
 se_test_seed_wa();

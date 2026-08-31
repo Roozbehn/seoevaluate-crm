@@ -20,6 +20,9 @@
                       border:1px solid rgba(128,128,128,.35)">
             <small class="text-muted">
               <?php echo html_escape($out ? _l('se_wa_direction_out') : _l('se_wa_direction_in')); ?>
+              <?php if ($out && !empty($m['source'])) {
+                  echo ' &middot; ' . html_escape(_l('se_wa_source_' . $m['source']));
+              } ?>
               &middot; <?php echo html_escape($m['type'] ?? 'text'); ?>
               <?php if ($out && !empty($m['delivery_state'])) {
                   echo ' &middot; ' . se_ui_badge($m['delivery_state']);

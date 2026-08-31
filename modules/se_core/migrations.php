@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 11);
+define('SE_CORE_SCHEMA_VERSION', 12);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -273,6 +273,13 @@ function se_core_migration_statements()
     $stmts[] = "ALTER TABLE `{$p}se_wa_webhook_events` ADD INDEX IF NOT EXISTS `claim` (`state`,`next_attempt_at`)";
     $stmts[] = "ALTER TABLE `{$p}se_wa_webhook_events` ADD UNIQUE INDEX IF NOT EXISTS `event_hash` (`event_hash`)";
     $stmts[] = "ALTER TABLE `{$p}se_wa_messages` ADD INDEX IF NOT EXISTS `brand_wamid` (`brand_id`,`wamid`)";
+
+    /* --- v12: distinguish customer, Cloud API, and handset messages ------ *
+     * Coexistence mirrors messages sent from the WhatsApp Business handset
+     * through smb_message_echoes. Direction alone cannot tell an operator
+     * whether an outbound row came from the CRM or the handset.
+     */
+    $stmts[] = "ALTER TABLE `{$p}se_wa_messages` ADD COLUMN IF NOT EXISTS `source` varchar(24) DEFAULT NULL";
 
     /* --- v8.8: brand-scoping index coverage for tenant queries ------------- */
     $stmts[] = "ALTER TABLE `{$p}se_staff_brands` ADD INDEX IF NOT EXISTS `staff_id` (`staff_id`)";
