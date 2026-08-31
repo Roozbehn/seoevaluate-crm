@@ -356,11 +356,19 @@ function se_integration_health($brand_id)
              'Install the meta_app credential (the Meta App Secret)',
              se_health_link('se_core/se_credentials'));
     }
-    // Live lead retrieval needs the Page/system-user token.
-    if (!empty($meta['webhook_ready']) && !empty($meta['leadgen_gated'])) {
+    // Live lead retrieval — report the specific gate: missing token vs a token
+    // present but lacking the App-Review permission.
+    if (!empty($meta['webhook_ready']) && empty($meta['page_token'])) {
         $blk('meta_leadgen_retrieval', 'Meta Page access token missing',
              'Webhook receives events but lead field data cannot be fetched yet — events are held, not lost',
              'Install the meta_page credential (Page/system-user token) for this brand',
+             se_health_link('se_core/se_meta'));
+    } elseif (!empty($meta['page_token']) && !empty($meta['leadgen_review_gated'])) {
+        $item = $meta['leadgen_review_item'] ?: 'leads_retrieval';
+        $blk('meta_leadgen_review',
+             'Meta Lead Ads "' . $item . '" permission not granted (App Review required)',
+             'The Page cannot be subscribed to leadgen and lead field data cannot be fetched — events are held, not lost',
+             'Submit the app for App Review for ' . $item . ' (and pages_manage_ads for form management)',
              se_health_link('se_core/se_meta'));
     }
     if (empty($meta['active_form_count'])) {

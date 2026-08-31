@@ -1063,7 +1063,12 @@ function se_meta_health($brand_id)
         'verify_token'      => $verify !== '',
         'webhook_ready'     => $webhookReady,
         'leadgen_test_ready' => $leadgenTestReady,
-        'leadgen_gated'     => $token === '',       // live lead retrieval pending App Review/token
+        // Live lead retrieval is gated when EITHER the Page token is absent OR
+        // the token lacks the App-Review permission (leads_retrieval). A present
+        // token does NOT imply retrieval is granted.
+        'leadgen_gated'     => $token === '' || (int) get_option('se_meta_leadgen_review_gated') === 1,
+        'leadgen_review_gated' => (int) get_option('se_meta_leadgen_review_gated') === 1,
+        'leadgen_review_item'  => get_option('se_meta_leadgen_review_item') ?: null,
         'token_configured'  => $token !== '',       // back-compat alias
         // Back-compat: legacy callers/tests read externally_gated. It now means
         // exactly the LEAD ADS leg (live lead retrieval), never CAPI — the two

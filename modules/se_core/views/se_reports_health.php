@@ -108,7 +108,7 @@
        ['Page/form mapping', esc(m.active_form_count||0)],
        ['Last webhook', ts(m.last_webhook_at)],
        ['Last successful fetch', ts(m.last_fetch_ok_at)],
-       ['App Review / retrieval', m.leadgen_gated?'Pending':'Granted']
+       ['App Review / retrieval', m.leadgen_review_gated?('Pending — '+esc(m.leadgen_review_item||'leads_retrieval')):(m.leadgen_gated?'Pending':'Granted')]
      ].concat(wstateRows(m.webhook_state));
      var la=card('Meta Lead Ads',laState,laRows);
 

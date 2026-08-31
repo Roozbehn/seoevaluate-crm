@@ -236,9 +236,12 @@ function se_meta_ui_status($brand_id = 0)
         // Reconciliation is implemented: it re-fetches recent leads per mapped
         // form and upserts them idempotently; live fetching is gated on a token.
         'reconcile_implemented' => true,
-        'reconcile_gated'    => !$tokenConfigured,
+        'reconcile_gated'    => !$tokenConfigured || (int) get_option('se_meta_leadgen_review_gated') === 1,
         // Honest, blocker-naming status line (never a bare green "Yes").
-        'reconcile_status_text' => se_meta_reconcile_status_text($tokenConfigured, $activeForms > 0),
+        'reconcile_status_text' => se_meta_reconcile_status_text(
+            $tokenConfigured, $activeForms > 0,
+            (int) get_option('se_meta_leadgen_review_gated') === 1,
+            get_option('se_meta_leadgen_review_item') ?: 'leads_retrieval'),
         // Last cron attempt outcome: 'Skipped' + exact reason means a blocked
         // attempt, which is NOT a successful reconciliation.
         'last_reconcile_result' => get_option('se_meta_last_reconcile_result') ?: null,
@@ -250,15 +253,16 @@ function se_meta_ui_status($brand_id = 0)
  * Honest reconciliation status string. When any prerequisite is missing it
  * names the exact blockers instead of showing a misleading "Yes".
  */
-function se_meta_reconcile_status_text($token_configured, $mapped)
+function se_meta_reconcile_status_text($token_configured, $mapped, $review_gated = false, $review_item = 'leads_retrieval')
 {
-    if ($token_configured && $mapped) {
+    if ($token_configured && $mapped && !$review_gated) {
         return 'Implemented, not live-tested — awaiting a live authenticated fetch';
     }
 
     $missing = [];
     if (!$token_configured) { $missing[] = 'Page token'; }
-    if (!$mapped)           { $missing[] = 'mapping';    }
+    if ($review_gated)      { $missing[] = $review_item . ' (App Review)'; }
+    if (!$mapped)           { $missing[] = 'mapping'; }
 
     return 'Implemented, not live-tested — blocked by ' . implode(' and ', $missing);
 }
