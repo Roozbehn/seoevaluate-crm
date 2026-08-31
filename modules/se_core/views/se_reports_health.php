@@ -53,15 +53,20 @@
      function yntssrc(flag, at, src){ return flag ? ('<span class="se-badge se-ready">Yes</span> <small>'+ts(at)+(src?(' · '+esc(src)):'')+'</small>') : '<span class="se-badge se-disabled">No</span>'; }
      function wstateRows(ws){
        if(!ws){return [];}
-       var chal = ws.challenge_verified
-         ? ('<span class="se-badge se-ready">Yes</span> <small>'+ts(ws.challenge_verified_at)+(ws.challenge_src?(' · '+esc(ws.challenge_src)):'')+'</small>')
-         : '<span class="se-badge se-disabled">No</span>';
+       // Provider (Meta) evidence turns states green; self-tests are shown as
+       // separate, clearly-labelled footnotes and never as provider traffic.
+       function provRow(flag, at, selftestAt){
+         var h = flag ? ('<span class="se-badge se-ready">Yes</span> <small>'+ts(at)+' · meta</small>')
+                      : '<span class="se-badge se-disabled">No</span>';
+         if(selftestAt){ h += ' <small class="text-muted">(self-test: '+ts(selftestAt)+')</small>'; }
+         return h;
+       }
        return [
          ['1 · verify_token_installed', yn(ws.verify_token_installed)],
          ['2 · verification_ready', yn(ws.verification_ready)],
-         ['3 · challenge_verified', chal],
+         ['3 · challenge_verified', provRow(ws.challenge_verified, ws.challenge_verified_at, ws.challenge_selftest_at)],
          ['4 · app_secret_installed', yn(ws.app_secret_installed)+(ws.app_secret_inherited?' <small>(inherited)</small>':'')],
-         ['5 · signed_post_received', yntssrc(ws.signed_post_received, ws.signed_post_at, ws.signed_post_src)],
+         ['5 · signed_post_received', provRow(ws.signed_post_received, ws.signed_post_at, ws.signed_post_selftest_at)],
          ['6 · live_test_passed', ynts(ws.live_test_passed, ws.live_test_at)]
        ];
      }
@@ -98,7 +103,10 @@
      }
      capiRows.push(['Ready', yn(m.capi_ready)]);
      capiRows.push(['Transmission', m.capi_enabled?'Enabled':'Disabled']);
-     capiRows.push(['Last event', ts(m.last_capi_at)]);
+     capiRows.push(['Last accepted event', m.last_capi_at
+       ? (ts(m.last_capi_at)+(m.last_capi_event?(' · '+esc(m.last_capi_event)):'')+(m.last_capi_event_id?(' <small>id '+esc(m.last_capi_event_id)+'</small>'):''))
+       : '—']);
+     if(m.last_capi_error){ capiRows.push(['Last error', esc(m.last_capi_error)]); }
      var capi=card('Meta Conversions API',capiState,capiRows);
 
      // Meta Lead Ads (independent of CAPI)
@@ -108,7 +116,10 @@
        ['Page/form mapping', esc(m.active_form_count||0)],
        ['Last webhook', ts(m.last_webhook_at)],
        ['Last successful fetch', ts(m.last_fetch_ok_at)],
-       ['App Review / retrieval', m.leadgen_review_gated?('Pending — '+esc(m.leadgen_review_item||'leads_retrieval')):(m.leadgen_gated?'Pending':'Granted')]
+       ['App Review / retrieval',
+         (m.leadgen_access_level==='standard_operational')
+           ? ('Operational — standard access (business-owned assets)'+(m.leadgen_review_gated?'; advanced access pending':''))
+           : (m.leadgen_review_gated?('Pending — '+esc(m.leadgen_review_item||'leads_retrieval')):(m.leadgen_gated?'Pending':'Granted'))]
      ].concat(wstateRows(m.webhook_state));
      var la=card('Meta Lead Ads',laState,laRows);
 
@@ -130,7 +141,11 @@
        ['Customer id', esc(g.customer_id||'—')],
        ['Credential', g.credential_present?(g.credential_failing?'Present (failing)':'Present'):'Not configured'],
        ['Authentication', g.sa_token_configured?'OK':(g.credential_failing?'Failing':'—')],
-       ['Request-status polling', g.status_polling?'Implemented':'Off'],
+       ['Request-status polling', g.status_polling
+         ? (g.credential_present
+             ? 'Implemented, not live-tested — awaiting a live status poll'
+             : 'Implemented, not live-tested — google_sa_22 missing')
+         : 'Off'],
        ['Last request', ts(g.last_request_id)],
        ['Last status', esc(g.last_request_status||'—')]
      ]);

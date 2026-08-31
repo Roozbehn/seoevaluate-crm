@@ -67,6 +67,15 @@ function se_wa_transport_available()
  */
 function se_wa_send_blocked_reason($brand_id)
 {
+    // AUTHORITATIVE send-capability check — the composer, the queue drain,
+    // Integration Health and diagnostics must all read THIS, so the UI can
+    // never contradict what the pipeline actually does. Registration of the
+    // live transport is lazy (module load order once made the eager attempt
+    // silently skip), so try it here before judging 'no_transport'.
+    if (function_exists('se_wa_maybe_register_live_transport')) {
+        se_wa_maybe_register_live_transport();
+    }
+
     if (!se_wa_can_send($brand_id)) {
         return 'no_number';
     }
@@ -392,11 +401,16 @@ function se_wa_out_process($row)
     }
 
     if (!empty($result['ok'])) {
+        // Provider AUTHENTICATION evidence: the Cloud API token really sent.
+        if (function_exists('se_secret_note_auth')) {
+            se_secret_note_auth('wa_token', 0, true);
+        }
+
         // Record the sent message in the conversation thread.
         se_wa_record_outbound($row, $conv, (string) ($result['wamid'] ?? ''));
 
         return ['status' => 'sent', 'attempts' => (int) $row['attempts'] + 1,
-                'wamid' => (string) ($result['wamid'] ?? ''), 'sent_at' => se_db_now(),
+                'wamid' => (string) ($result['wamid'] ?? ''), 'sent_at' => date('Y-m-d H:i:s'),
                 'failure_class' => null, 'last_error' => null];
     }
 
@@ -440,8 +454,14 @@ function se_wa_record_outbound($row, $conv, $wamid)
         'body'            => $row['body'],
         'template_name'   => $row['template_name'],
         'delivery_state'  => 'sent',
-        'sent_at'         => se_db_now(),
-        'date_created'    => se_db_now(),
+        // DISPLAY timestamps use the PHP application clock (business timezone,
+        // Europe/Istanbul), matching how inbound messages are stamped from
+        // Meta's Unix timestamps. se_db_now() (the DB clock, a different
+        // timezone on this host) is reserved for queue/lease scheduling —
+        // mixing the two rendered an outbound reply an hour behind its
+        // inbound counterpart in the same thread.
+        'sent_at'         => date('Y-m-d H:i:s'),
+        'date_created'    => date('Y-m-d H:i:s'),
     ]);
 }
 

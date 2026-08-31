@@ -39,6 +39,17 @@ class Se_whatsapp extends AdminController
         }
         $data['title']        = _l('se_whatsapp');
         $data['conversation'] = $conversation;
+
+        // Viewing the thread marks it read INSIDE the CRM. Local unread state
+        // only — sending a WhatsApp read receipt to the customer is a separate,
+        // policy-controlled action and is NOT triggered by opening the page.
+        if ((int) $conversation->unread_count > 0) {
+            $this->db->where('id', (int) $conversation->id)
+                     ->where('brand_id', (int) $conversation->brand_id)
+                     ->update(db_prefix() . 'se_wa_conversations', ['unread_count' => 0]);
+            $conversation->unread_count = 0;
+        }
+
         $data['messages']     = $this->se_whatsapp_model->messages((int) $conversation->id);
         $data['policy']       = se_wa_compose_policy($conversation);
         $data['templates']    = se_wa_approved_templates((int) $conversation->brand_id);

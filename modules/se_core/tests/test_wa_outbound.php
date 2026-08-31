@@ -79,6 +79,19 @@ se_eq('no_token', se_wa_send_blocked_reason(1),
 se_test_install_secret('wa_token', 'fixture-not-a-real-token');
 se_eq('no_transport', se_wa_send_blocked_reason(1),
     'with credentials and a token but no transport, sending is still gated');
+
+/* REGRESSION (module load order): transport.php's eager registration used to
+ * run before se_core's secret provider existed, silently skip, and leave the
+ * composer claiming "no transport" even after real sends succeeded. The
+ * authoritative gate (se_wa_send_blocked_reason) now lazily registers the live
+ * transport, so once transport.php is loaded the gate clears — the SAME check
+ * the composer, drain and Health read. */
+require_once __DIR__ . '/../../se_whatsapp/transport.php';
+se_eq('', se_wa_send_blocked_reason(1),
+    'once the live transport is loadable and every credential exists, the gate clears (composer and drain agree)');
+se_ok(se_wa_transport_available(), 'the live transport was lazily registered by the authoritative gate');
+$GLOBALS['SE_WA_TRANSPORT'] = null;   // restore: later tests register fixtures
+
 /* wa_token stays installed for the rest of the suite: the drain tests below
  * exercise the transport seam and must pass the token gate. Removed at EOF. */
 
@@ -194,7 +207,12 @@ se_group('A gated row holds WITHOUT consuming an attempt');
 
 se_test_seed_wa_out();
 $db = se_test_db();
-$GLOBALS['SE_WA_TRANSPORT'] = null;   // no transport = gated
+/* Gate on a CREDENTIAL, not on "no transport": now that the authoritative
+ * gate lazily registers the live transport, an unset transport self-heals
+ * whenever the token exists — so the durable gate to simulate is a missing
+ * Cloud API token. */
+$GLOBALS['SE_WA_TRANSPORT'] = null;
+se_test_remove_secret('wa_token');
 
 $db->seed('tblse_wa_outbound', [
     ['id' => 1, 'conversation_id' => 901, 'brand_id' => 1, 'kind' => 'text', 'body' => 'hi',
@@ -209,6 +227,8 @@ se_eq('pending', $out['status'], 'a gated row returns to pending');
 se_eq(0, $out['attempts'], 'and does NOT consume an attempt');
 se_eq('gated', $out['failure_class'], 'classified as gated');
 se_ok(!empty($out['next_attempt_at']), 'and is rescheduled');
+
+se_test_install_secret('wa_token', 'fixture-not-a-real-token');   // restore for later tests
 
 /* ======================================================================== */
 se_group('The window is re-checked at SEND time, not only at queue time');

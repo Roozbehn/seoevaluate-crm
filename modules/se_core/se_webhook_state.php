@@ -54,10 +54,14 @@ function se_webhook_state($provider)
     $p = 'se_' . $provider . '_';
 
     $routeOk      = get_option($p . 'route_ok_at') ?: null;
+    // PROVIDER evidence (Meta's own callbacks) and SELF-TEST evidence are
+    // stored separately and NEVER mixed: a later self-test must not overwrite
+    // or masquerade as provider traffic, and only provider evidence turns the
+    // production states green.
     $challenge    = get_option($p . 'challenge_verified_at') ?: null;
-    $challengeSrc = get_option($p . 'challenge_src') ?: null;
+    $challengeSt  = get_option($p . 'challenge_selftest_at') ?: null;
     $signed       = get_option($p . 'signed_post_at') ?: null;
-    $signedSrc    = get_option($p . 'signed_post_src') ?: null;
+    $signedSt     = get_option($p . 'signed_post_selftest_at') ?: null;
     $live         = get_option($p . 'live_test_at') ?: null;
 
     return [
@@ -65,14 +69,18 @@ function se_webhook_state($provider)
         'verify_token_installed' => $s['verify'],
         'verification_ready'     => $s['verify'] && $routeOk !== null,
         'route_ok_at'            => $routeOk,
+        // Green ONLY on Meta's real callback; self-test tracked separately.
         'challenge_verified'     => $challenge !== null,
         'challenge_verified_at'  => $challenge,
-        'challenge_src'          => $challengeSrc,          // 'self_test' | 'meta'
+        'challenge_src'          => $challenge !== null ? 'meta' : null,
+        'challenge_selftest_at'  => $challengeSt,
         'app_secret_installed'   => $s['app_secret'],
         'app_secret_inherited'   => $s['app_secret_inherited'],
+        // Green ONLY on a provider-signed POST; self-test tracked separately.
         'signed_post_received'   => $signed !== null,
         'signed_post_at'         => $signed,
-        'signed_post_src'        => $signedSrc,             // 'self_test' | 'meta'
+        'signed_post_src'        => $signed !== null ? 'meta' : null,
+        'signed_post_selftest_at' => $signedSt,
         'live_test_passed'       => $live !== null,
         'live_test_at'           => $live,
     ];
@@ -93,17 +101,19 @@ function se_webhook_record($provider, $event, $args = [])
     $p   = 'se_' . $provider . '_';
     $now = function_exists('se_db_now') ? se_db_now() : date('Y-m-d H:i:s');
 
+    $selfTest = ($args['src'] ?? 'meta') === 'self_test';
+
     switch ($event) {
         case 'route_ok':
             update_option($p . 'route_ok_at', $now);
             break;
         case 'challenge':
-            update_option($p . 'challenge_verified_at', $now);
-            update_option($p . 'challenge_src', ($args['src'] ?? 'meta') === 'self_test' ? 'self_test' : 'meta');
+            // Self-test evidence lives in its OWN option; it never touches the
+            // provider timestamp, so a replay cannot downgrade real evidence.
+            update_option($p . ($selfTest ? 'challenge_selftest_at' : 'challenge_verified_at'), $now);
             break;
         case 'signed_post':
-            update_option($p . 'signed_post_at', $now);
-            update_option($p . 'signed_post_src', ($args['src'] ?? 'meta') === 'self_test' ? 'self_test' : 'meta');
+            update_option($p . ($selfTest ? 'signed_post_selftest_at' : 'signed_post_at'), $now);
             break;
         case 'live_test':
             update_option($p . 'live_test_at', $now);

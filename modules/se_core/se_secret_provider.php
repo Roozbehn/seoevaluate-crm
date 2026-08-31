@@ -124,11 +124,21 @@ function se_secret_status($provider, $brand_id = 0)
     }
 
     // A shared secret may be INHERITED from a canonical one, so the UI can say
-    // so instead of showing a working provider as "missing". Currently only the
-    // WhatsApp app secret inherits the Meta App Secret (same Meta app).
+    // so instead of showing a working provider as "missing":
+    //   - wa_app inherits meta_app (same Meta app);
+    //   - meta_capi inherits meta_page (the dataset is assigned to the same
+    //     system user, verified live: events_received=1 with that token).
+    // Never label an effective inherited credential as missing.
     $inheritedFrom = null;
     if ($provider === 'wa_app' && !$configured && se_secret_read('meta_app') !== '') {
         $inheritedFrom = 'meta_app';
+    }
+    if ($provider === 'meta_capi' && !$configured) {
+        if (se_secret_read('meta_page', (int) $brand_id) !== '') {
+            $inheritedFrom = 'meta_page' . ((int) $brand_id > 0 ? '_' . (int) $brand_id : '');
+        } elseif (se_secret_read('meta_page', 0) !== '') {
+            $inheritedFrom = 'meta_page';
+        }
     }
 
     return [

@@ -385,6 +385,13 @@ function se_leadgen_fetch($leadgen_id, $brand_id)
         return ['ok' => false, 'gated' => false, 'field_data' => []];
     }
     $decoded = json_decode((string) $body, true) ?: [];
+
+    // Provider AUTHENTICATION evidence: the Page/system-user token really
+    // fetched from Graph (not merely "the file is readable").
+    if (function_exists('se_secret_note_auth')) {
+        se_secret_note_auth('meta_page', (int) $brand_id, true);
+    }
+
     return ['ok' => true, 'gated' => false, 'field_data' => $decoded['field_data'] ?? []];
 }
 
@@ -1077,6 +1084,10 @@ function se_meta_health($brand_id)
         'capi_enabled'      => se_capi_enabled($brand_id),
         'capi_gated'        => !$capiToken,
         'last_capi_at'      => get_option('se_meta_last_capi_at') ?: null,
+        'last_capi_event'   => get_option('se_meta_last_capi_event') ?: null,
+        'last_capi_event_id' => get_option('se_meta_last_capi_event_id') ?: null,
+        'last_capi_dataset' => get_option('se_meta_last_capi_dataset') ?: null,
+        'last_capi_error'   => get_option('se_meta_last_capi_error') ?: null,
         // Dataset-drift guard: the authoritative dataset for this brand comes
         // from the versioned asset registry (single source of truth), and, if
         // they disagree, the id the brand is wrongly pointed at.
@@ -1090,10 +1101,18 @@ function se_meta_health($brand_id)
         'verify_token'      => $verify !== '',
         'webhook_ready'     => $webhookReady,
         'leadgen_test_ready' => $leadgenTestReady,
-        // Live lead retrieval is gated when EITHER the Page token is absent OR
-        // the token lacks the App-Review permission (leads_retrieval). A present
-        // token does NOT imply retrieval is granted.
-        'leadgen_gated'     => $token === '' || (int) get_option('se_meta_leadgen_review_gated') === 1,
+        // Capability model (verified live, not inferred):
+        //   - STANDARD access to leads_retrieval/pages_manage_ads operates for
+        //     BUSINESS-OWNED assets — subscription, fetch and reconcile all
+        //     succeeded with the current token.
+        //   - ADVANCED access (App Review) remains pending; it widens access
+        //     beyond business-owned/test assets but is NOT required for the
+        //     current, working setup.
+        // 'leadgen_gated' therefore means only "no token": a present token that
+        // demonstrably fetched is operational, and saying otherwise would
+        // contradict the recorded fetch evidence.
+        'leadgen_gated'     => $token === '',
+        'leadgen_access_level' => get_option('se_meta_leadgen_access_level') ?: null,
         'leadgen_review_gated' => (int) get_option('se_meta_leadgen_review_gated') === 1,
         'leadgen_review_item'  => get_option('se_meta_leadgen_review_item') ?: null,
         'token_configured'  => $token !== '',       // back-compat alias

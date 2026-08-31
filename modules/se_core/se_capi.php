@@ -139,8 +139,21 @@ function se_capi_send_event($row)
     }
 
     if ($code >= 200 && $code < 300) {
+        // Health evidence: last ACCEPTED event — name, stable event id, dataset,
+        // provider-response timestamp. Never identifiers or hashed user data.
+        update_option('se_meta_last_capi_at', date('Y-m-d H:i:s'));
+        update_option('se_meta_last_capi_event', (string) ($event['event_name'] ?? ''));
+        update_option('se_meta_last_capi_event_id', (string) ($event['event_id'] ?? ''));
+        update_option('se_meta_last_capi_dataset', (string) $brand->meta_dataset_id);
+        if (function_exists('se_secret_note_auth')) {
+            // The effective CAPI credential authenticated against the provider.
+            se_secret_note_auth('meta_capi', $brand_id, true);
+        }
+
         return ['ok' => true, 'error' => '', 'class' => null, 'code' => 'ok'];
     }
+
+    update_option('se_meta_last_capi_error', 'HTTP ' . (int) $code . ' at ' . date('Y-m-d H:i:s'));
 
     // 4xx is our problem and will not fix itself; 401/403/429 and 5xx will.
     $class = ($code >= 400 && $code < 500 && !in_array($code, [401, 403, 408, 429], true))

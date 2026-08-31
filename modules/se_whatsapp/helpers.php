@@ -410,6 +410,13 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
     $ts = isset($msg['timestamp']) ? date('Y-m-d H:i:s', (int) $msg['timestamp']) : date('Y-m-d H:i:s');
     $window = date('Y-m-d H:i:s', strtotime($ts) + SE_WA_WINDOW_HOURS * 3600);
 
+    // Health heartbeat: a real inbound message was ingested for this brand.
+    // Timestamp only — never the sender number or any content.
+    if (function_exists('update_option')) {
+        update_option('se_wa_last_inbound_at', $ts);
+        update_option('se_wa_last_inbound_at_' . (int) $brand_id, $ts);
+    }
+
     if (!$conv) {
         $CI->db->insert($convTable, [
             'brand_id'          => (int) $brand_id,

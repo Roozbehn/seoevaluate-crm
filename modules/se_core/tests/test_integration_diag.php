@@ -106,7 +106,7 @@ require_once __DIR__ . '/../se_webhook_state.php';
 // Clean slate: no verify token, no recorded events.
 se_test_remove_secret('meta_verify');
 foreach (['se_meta_route_ok_at','se_meta_challenge_verified_at','se_meta_challenge_src',
-          'se_meta_signed_post_at','se_meta_live_test_at'] as $k) { unset($GLOBALS['se_test']['options'][$k]); }
+          'se_meta_signed_post_at','se_meta_signed_post_selftest_at','se_meta_challenge_selftest_at','se_meta_live_test_at'] as $k) { unset($GLOBALS['se_test']['options'][$k]); }
 
 $st = se_webhook_state('meta');
 se_ok($st['verify_token_installed'] === false, 'no verify token => verify_token_installed is false');
@@ -126,16 +126,32 @@ $st = se_webhook_state('meta');
 se_ok($st['verification_ready'] === true, 'verify token readable AND route reached => verification_ready true');
 se_ok($st['challenge_verified'] === false, 'route reachability still is not a challenge');
 
-// Only an actual correct-token challenge sets challenge_verified, with source.
+// A SELF-TEST challenge must NEVER turn the production state green — it is
+// recorded separately and only Meta's real callback sets challenge_verified.
 se_webhook_record('meta', 'challenge', ['src' => 'self_test']);
 $st = se_webhook_state('meta');
-se_ok($st['challenge_verified'] === true, 'a returned challenge sets challenge_verified');
-se_eq('self_test', $st['challenge_src'], 'the source is recorded (self-test, not Meta) and never conflated');
+se_ok($st['challenge_verified'] === false, 'a self-test challenge does NOT set challenge_verified');
+se_ok($st['challenge_selftest_at'] !== null, 'the self-test is tracked in its own timestamp');
+
+se_webhook_record('meta', 'challenge', ['src' => 'meta']);
+$st = se_webhook_state('meta');
+se_ok($st['challenge_verified'] === true, "Meta's real callback sets challenge_verified");
+se_eq('meta', $st['challenge_src'], 'and the source is provider, never self_test');
+
+$metaChallengeAt = $st['challenge_verified_at'];
+se_webhook_record('meta', 'challenge', ['src' => 'self_test']);
+$st = se_webhook_state('meta');
+se_eq($metaChallengeAt, $st['challenge_verified_at'],
+    'a later self-test replay never overwrites or downgrades provider evidence');
 
 se_ok($st['signed_post_received'] === false, 'no signed POST yet');
-se_webhook_record('meta', 'signed_post');
+se_webhook_record('meta', 'signed_post', ['src' => 'self_test']);
 $st = se_webhook_state('meta');
-se_ok($st['signed_post_received'] === true, 'a valid signed POST sets signed_post_received');
+se_ok($st['signed_post_received'] === false, 'a self-test signed POST does NOT set signed_post_received');
+se_webhook_record('meta', 'signed_post', ['src' => 'meta']);
+$st = se_webhook_state('meta');
+se_ok($st['signed_post_received'] === true, 'a provider-signed POST sets signed_post_received');
+se_eq('meta', $st['signed_post_src'], 'with provider source');
 
 se_ok($st['live_test_passed'] === false, 'no end-to-end lead yet');
 se_webhook_record('meta', 'live_test');
@@ -153,7 +169,7 @@ se_ok($wst['app_secret_inherited'] === true, 'and it is flagged as inherited, no
 se_test_remove_secret('meta_verify');
 se_test_remove_secret('meta_app');
 foreach (['se_meta_route_ok_at','se_meta_challenge_verified_at','se_meta_challenge_src',
-          'se_meta_signed_post_at','se_meta_live_test_at'] as $k) { unset($GLOBALS['se_test']['options'][$k]); }
+          'se_meta_signed_post_at','se_meta_signed_post_selftest_at','se_meta_challenge_selftest_at','se_meta_live_test_at'] as $k) { unset($GLOBALS['se_test']['options'][$k]); }
 
 /* ---- the Google status poller is genuinely registered -------------------- */
 se_group('Google request-status polling is implemented');

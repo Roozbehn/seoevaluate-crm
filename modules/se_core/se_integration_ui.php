@@ -88,12 +88,18 @@ function se_integration_provider_progress($brand_id, $store)
     if (!$metaPage) { $laMissing[] = 'Page token'; }
     $laInstalled = $metaVer ? 'verify token' : '';
     $laState = (!$metaVer) ? 'missing' : ($laMissing ? 'partial' : 'complete');
+    $laDetail = $metaVer
+        ? $compose($laInstalled, $laMissing ? implode(' and ', $laMissing) : '')
+        : 'verify token missing';
+    // "Complete" here means CREDENTIALS complete — external scope limits are
+    // stated alongside, never hidden behind a green badge.
+    if ($laState === 'complete' && (int) get_option('se_meta_leadgen_review_gated') === 1) {
+        $laDetail .= '; operational at standard access — advanced access (App Review) pending';
+    }
     $rows[] = [
         'key' => 'meta_leadgen', 'label' => 'Meta Lead Ads',
         'state' => $laState,
-        'detail' => $metaVer
-            ? $compose($laInstalled, $laMissing ? implode(' and ', $laMissing) : '')
-            : 'verify token missing',
+        'detail' => $laDetail,
         'enabled' => null, 'enabled_label' => null,
     ];
 
@@ -261,6 +267,14 @@ function se_meta_ui_status($brand_id = 0)
  */
 function se_meta_reconcile_status_text($token_configured, $mapped, $review_gated = false, $review_item = 'leads_retrieval')
 {
+    // Live evidence beats every static inference: once an authenticated fetch
+    // has actually succeeded, "not live-tested" would be a lie.
+    $fetchOk = get_option('se_meta_last_fetch_ok_at') ?: '';
+    if ($fetchOk !== '') {
+        return 'Live-tested — last successful fetch ' . $fetchOk
+             . ($review_gated ? ' (standard access, business-owned assets; advanced access pending)' : '');
+    }
+
     if ($token_configured && $mapped && !$review_gated) {
         return 'Implemented, not live-tested — awaiting a live authenticated fetch';
     }
