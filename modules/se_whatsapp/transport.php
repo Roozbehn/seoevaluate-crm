@@ -93,8 +93,22 @@ function se_wa_live_transport(array $m)
             'error' => mb_substr($msg, 0, 180) . $sub];
 }
 
-// Register the live transport ONLY when a token exists and nothing else (a test
-// fixture, a future alternative) has registered one first.
-if (function_exists('se_wa_cloud_token') && se_wa_cloud_token() !== '' && !se_wa_transport_available()) {
-    se_wa_register_transport('se_wa_live_transport');
+/**
+ * Register the live transport when a token exists and nothing else (a test
+ * fixture, a future alternative) has registered one first.
+ *
+ * Called LAZILY from the drain, not only at load: at module-load time the
+ * se_core secret provider may not be loaded yet (module load order is not
+ * guaranteed), which made this registration silently skip and the drain gate
+ * report no_transport despite a valid token.
+ */
+function se_wa_maybe_register_live_transport()
+{
+    if (!se_wa_transport_available()
+        && function_exists('se_secret_read')
+        && se_wa_cloud_token() !== '') {
+        se_wa_register_transport('se_wa_live_transport');
+    }
 }
+
+se_wa_maybe_register_live_transport();   // still try eagerly when order permits

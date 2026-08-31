@@ -349,6 +349,12 @@ function se_wa_out_process($row)
      * would then be permanently SKIPPED as if the customer had gone quiet —
      * discarding a message that was only waiting for configuration. Check the
      * gate first and hold; only then judge the window. */
+    // Lazy transport init: module load order cannot be trusted for the eager
+    // registration (see transport.php). No-op in tests (transport.php unloaded).
+    if (function_exists('se_wa_maybe_register_live_transport')) {
+        se_wa_maybe_register_live_transport();
+    }
+
     $blockedReason = se_wa_send_blocked_reason((int) $conv->brand_id);
     if (!se_wa_transport_available() || $blockedReason !== '') {
         // Name the EXACT gate — a generic 'not configured' hides which
