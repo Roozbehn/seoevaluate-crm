@@ -118,7 +118,8 @@ class Leadgen extends App_Controller
         // means the X-Hub-Signature-256 validated over the exact raw bytes —
         // that is a real signed POST, so record it as concrete evidence.
         if (function_exists('se_webhook_record') && !in_array((int) $out['status'], [401, 413], true)) {
-            se_webhook_record('meta', 'signed_post');
+            se_webhook_record('meta', 'signed_post',
+                ['src' => (function_exists('se_webhook_is_selftest') && se_webhook_is_selftest()) ? 'self_test' : 'meta']);
         }
 
         set_status_header($out['status']);

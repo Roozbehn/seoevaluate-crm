@@ -50,6 +50,7 @@
      // Six-state webhook evidence chain. Each state carries a fact, not a guess:
      // a readable secret, a route self-check, or a timestamp from a real event.
      function ynts(flag, at){ return flag ? ('<span class="se-badge se-ready">Yes</span> <small>'+ts(at)+'</small>') : '<span class="se-badge se-disabled">No</span>'; }
+     function yntssrc(flag, at, src){ return flag ? ('<span class="se-badge se-ready">Yes</span> <small>'+ts(at)+(src?(' · '+esc(src)):'')+'</small>') : '<span class="se-badge se-disabled">No</span>'; }
      function wstateRows(ws){
        if(!ws){return [];}
        var chal = ws.challenge_verified
@@ -60,7 +61,7 @@
          ['2 · verification_ready', yn(ws.verification_ready)],
          ['3 · challenge_verified', chal],
          ['4 · app_secret_installed', yn(ws.app_secret_installed)+(ws.app_secret_inherited?' <small>(inherited)</small>':'')],
-         ['5 · signed_post_received', ynts(ws.signed_post_received, ws.signed_post_at)],
+         ['5 · signed_post_received', yntssrc(ws.signed_post_received, ws.signed_post_at, ws.signed_post_src)],
          ['6 · live_test_passed', ynts(ws.live_test_passed, ws.live_test_at)]
        ];
      }

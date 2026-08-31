@@ -57,6 +57,7 @@ function se_webhook_state($provider)
     $challenge    = get_option($p . 'challenge_verified_at') ?: null;
     $challengeSrc = get_option($p . 'challenge_src') ?: null;
     $signed       = get_option($p . 'signed_post_at') ?: null;
+    $signedSrc    = get_option($p . 'signed_post_src') ?: null;
     $live         = get_option($p . 'live_test_at') ?: null;
 
     return [
@@ -71,6 +72,7 @@ function se_webhook_state($provider)
         'app_secret_inherited'   => $s['app_secret_inherited'],
         'signed_post_received'   => $signed !== null,
         'signed_post_at'         => $signed,
+        'signed_post_src'        => $signedSrc,             // 'self_test' | 'meta'
         'live_test_passed'       => $live !== null,
         'live_test_at'           => $live,
     ];
@@ -101,6 +103,7 @@ function se_webhook_record($provider, $event, $args = [])
             break;
         case 'signed_post':
             update_option($p . 'signed_post_at', $now);
+            update_option($p . 'signed_post_src', ($args['src'] ?? 'meta') === 'self_test' ? 'self_test' : 'meta');
             break;
         case 'live_test':
             update_option($p . 'live_test_at', $now);

@@ -113,7 +113,8 @@ class Webhook extends App_Controller
         // Status other than 401 (bad signature) / 413 (rejected unread) means
         // the signature validated over the raw bytes: a real signed POST.
         if (function_exists('se_webhook_record') && !in_array((int) $out['status'], [401, 413], true)) {
-            se_webhook_record('wa', 'signed_post');
+            se_webhook_record('wa', 'signed_post',
+                ['src' => (function_exists('se_webhook_is_selftest') && se_webhook_is_selftest()) ? 'self_test' : 'meta']);
         }
 
         set_status_header($out['status']);
