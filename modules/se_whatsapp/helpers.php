@@ -666,6 +666,15 @@ function se_wa_window_open($conversation)
     return strtotime($conversation->window_expires_at) > time();
 }
 
+/** Privacy-safe contact label for screenshots and support evidence. */
+function se_wa_redacted_contact($value)
+{
+    $value = preg_replace('/\s+/', '', (string) $value);
+    $tail  = mb_substr($value, -4);
+
+    return $tail === '' ? '[redacted]' : '••••' . $tail;
+}
+
 /** Can this brand actually send (has a configured, tokened number)? */
 function se_wa_can_send($brand_id)
 {

@@ -1,8 +1,10 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
-<?php init_head(); $c = $conversation; ?>
+<?php init_head(); $c = $conversation;
+$evidence_redacted = $this->input->get('evidence') === 'redacted';
+$contact_label = $evidence_redacted ? se_wa_redacted_contact($c->wa_user_id) : $c->wa_user_id; ?>
 <div id="wrapper"><div class="content">
 
-<?php se_ui_header(_l('se_whatsapp') . ' — ' . $c->wa_user_id, [
+<?php se_ui_header(_l('se_whatsapp') . ' — ' . $contact_label, [
     ['href' => admin_url('se_whatsapp/se_whatsapp/inbox'), 'label' => _l('se_back'), 'icon' => 'fa-arrow-left'],
 ]); ?>
 
@@ -29,7 +31,9 @@
               } ?>
             </small><br />
             <?php if (!empty($m['body'])) { ?>
-              <?php echo nl2br(html_escape($m['body'])); ?>
+              <?php echo $evidence_redacted
+                  ? '<span class="text-muted">[message redacted for evidence]</span>'
+                  : nl2br(html_escape($m['body'])); ?>
             <?php } elseif (!empty($m['template_name'])) { ?>
               <em><?php echo html_escape(_l('se_wa_template')); ?>: <?php echo html_escape($m['template_name']); ?></em>
             <?php } elseif (!empty($m['media_ref'])) { ?>
@@ -108,7 +112,7 @@
       <h5><?php echo html_escape(_l('se_wa_conversation')); ?></h5>
       <?php se_ui_kv([
           _l('se_wa_brand')          => se_ui_brand_badge((int) $c->brand_id),
-          _l('se_wa_contact')        => html_escape($c->wa_user_id),
+          _l('se_wa_contact')        => html_escape($contact_label),
           _l('se_appt_lead')         => !empty($c->lead_id)
               ? '<a href="' . admin_url('leads/index/' . (int) $c->lead_id) . '">#' . (int) $c->lead_id . '</a>'
               : '<span class="text-muted">&mdash;</span>',
@@ -130,7 +134,9 @@
             <?php foreach ($staff as $s) { ?>
               <option value="<?php echo (int) $s['staffid']; ?>"
                 <?php echo (int) $c->assigned_staff === (int) $s['staffid'] ? ' selected' : ''; ?>>
-                <?php echo html_escape(trim($s['firstname'] . ' ' . $s['lastname'])); ?>
+                <?php echo html_escape($evidence_redacted
+                    ? ('Authorized staff #' . (int) $s['staffid'])
+                    : trim($s['firstname'] . ' ' . $s['lastname'])); ?>
               </option>
             <?php } ?>
           </select>

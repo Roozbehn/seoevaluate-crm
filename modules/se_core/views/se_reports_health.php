@@ -34,7 +34,8 @@
 </div></div></div></div>
 <script>
 (function(){
-  var el=document.getElementById('se-health'), b=el.getAttribute('data-brand');
+  var el=document.getElementById('se-health'), b=el.getAttribute('data-brand'),
+      evidenceRedacted=new URLSearchParams(window.location.search).get('evidence')==='redacted';
   fetch('<?php echo admin_url('se_core/se_reports/health_data'); ?>?brand='+b,{credentials:'same-origin'})
    .then(function(r){return r.json()}).then(function(d){
      function esc(s){var e=document.createElement('div');e.textContent=s==null?'':String(s);return e.innerHTML;}
@@ -131,7 +132,7 @@
        ['Last status event', ts(w.last_status_at)]
      ].concat(wstateRows(w.webhook_state));
      (w.numbers||[]).forEach(function(n){
-       waRows.push(['Number '+esc(n.number||n.phone_number_id), esc(n.state)+(n.quality?(' · '+esc(n.quality)):'')]);
+       waRows.push(['Number '+(evidenceRedacted?'[redacted]':esc(n.number||n.phone_number_id)), esc(n.state)+(n.quality?(' · '+esc(n.quality)):'')]);
      });
      var wa=card('WhatsApp',waState,waRows);
 

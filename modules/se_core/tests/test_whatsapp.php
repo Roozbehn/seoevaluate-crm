@@ -59,6 +59,10 @@ se_eq(false, se_wa_verify_signature($body, '', $secret), 'a missing header fails
 se_eq(false, se_wa_verify_signature($body, hash_hmac('sha256', $body, $secret), $secret),
     'a header without the sha256= prefix fails');
 se_eq(false, se_wa_verify_signature($body, $good, ''), 'an unconfigured secret fails closed');
+se_eq('••••8549', se_wa_redacted_contact('90 531 432 8549'),
+    'evidence labels retain only the final four contact digits');
+se_eq('[redacted]', se_wa_redacted_contact(''),
+    'an empty contact has a safe evidence label');
 
 /* ======================================================================== */
 se_group('Body-size limit');
