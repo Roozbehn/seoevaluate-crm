@@ -52,7 +52,9 @@
   <div class="col-md-6"><div class="panel_s"><div class="panel-body">
     <h5><?php echo html_escape(_l('se_wa_queue_health')); ?></h5>
     <?php se_ui_counters($out_health); ?>
-    <p class="text-muted"><small><?php echo html_escape(_l('se_wa_queue_note')); ?></small></p>
+    <p class="text-muted"><small><?php echo html_escape(_l(
+        $blocked === '' ? 'se_wa_queue_note_ready' : 'se_wa_queue_note'
+    )); ?></small></p>
   </div></div></div>
 </div>
 

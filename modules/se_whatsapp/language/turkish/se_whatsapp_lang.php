@@ -44,6 +44,7 @@ $lang['se_wa_window_until']        = 'şu ana kadar açık';
 $lang['se_wa_composer_disabled']   = 'Gönderim henüz yapılandırılmadı';
 $lang['se_wa_queue_health']        = 'Giden kuyruğu';
 $lang['se_wa_queue_note']          = 'Mesajlar kuyruğa alınır, satır içinde gönderilmez. Taşıma yapılandırılmadığında deneme hakkı harcanmadan bekletilir.';
+$lang['se_wa_queue_note_ready']    = 'Mesajlar kuyruğa alınır ve yapılandırılmış Cloud API taşımasıyla eşzamansız gönderilir; operatör isteği sırasında gönderilmez.';
 $lang['se_wa_queue_pending']       = 'bekliyor';
 $lang['se_wa_queue_processing']    = 'işleniyor';
 $lang['se_wa_queue_sent']          = 'gönderildi';

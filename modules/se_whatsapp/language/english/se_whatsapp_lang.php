@@ -45,6 +45,7 @@ $lang['se_wa_window_until']        = 'open until';
 $lang['se_wa_composer_disabled']   = 'Sending is not configured yet';
 $lang['se_wa_queue_health']        = 'Outbound queue';
 $lang['se_wa_queue_note']          = 'Messages are queued, never sent inline. With no transport configured they are held without consuming a retry.';
+$lang['se_wa_queue_note_ready']    = 'Messages are queued and sent asynchronously through the configured Cloud API transport; they are never sent inline with the operator request.';
 $lang['se_wa_queue_pending']       = 'pending';
 $lang['se_wa_queue_processing']    = 'processing';
 $lang['se_wa_queue_sent']          = 'sent';
