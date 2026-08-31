@@ -147,9 +147,19 @@ class Se_whatsapp extends AdminController
         $data['templates'] = $brand > 0 ? se_wa_approved_templates($brand) : [];
         $data['blocked']   = se_wa_send_blocked_reason($brand);
         $data['out_health'] = se_wa_out_health($brand);
+        $data['webhook_state'] = function_exists('se_webhook_state')
+            ? se_webhook_state('wa')
+            : null;
         $data['webhook']   = [
             'url'          => site_url('se_whatsapp/webhook'),
-            'app_secret'   => se_secret_configured('wa_app', 0),
+            // WhatsApp and Lead Ads use the same Meta app in production.  The
+            // canonical accessor intentionally inherits meta_app when there is
+            // no dedicated wa_app file; checking the raw provider here made a
+            // verified, working webhook appear unconfigured.
+            'app_secret'   => function_exists('se_wa_app_secret') && se_wa_app_secret() !== '',
+            'app_secret_inherited' => function_exists('se_wa_app_secret_inherited')
+                ? se_wa_app_secret_inherited()
+                : false,
             'verify_token' => se_secret_configured('wa_verify', 0),
             'last_event'   => se_wa_last_event_at(),
         ];

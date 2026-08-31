@@ -18,10 +18,17 @@
     </select>
   </form>
 
-  <div class="alert alert-warning">
-    <i class="fa fa-lock"></i> <strong><?php echo html_escape(_l('se_wa_sending_gated')); ?></strong>
-    &mdash; <?php echo html_escape($blocked !== '' ? _l('se_wa_blocked_' . $blocked) : _l('se_wa_blocked_none')); ?>
-  </div>
+  <?php if ($blocked !== '') { ?>
+    <div class="alert alert-warning">
+      <i class="fa fa-lock"></i> <strong><?php echo html_escape(_l('se_wa_sending_gated')); ?></strong>
+      &mdash; <?php echo html_escape(_l('se_wa_blocked_' . $blocked)); ?>
+    </div>
+  <?php } else { ?>
+    <div class="alert alert-success">
+      <i class="fa fa-check-circle"></i> <strong><?php echo html_escape(_l('se_wa_sending_ready')); ?></strong>
+      &mdash; <?php echo html_escape(_l('se_wa_blocked_none')); ?>
+    </div>
+  <?php } ?>
 
   <p class="text-muted"><small><i class="fa fa-shield"></i>
     <?php echo html_escape(_l('se_credentials_no_values_note')); ?></small></p>
@@ -33,7 +40,9 @@
     <?php se_ui_kv([
         _l('se_meta_webhook_url')  => '<code>' . html_escape($webhook['url']) . '</code>',
         _l('se_meta_app_secret')   => $webhook['app_secret']
-            ? se_ui_badge('ok', _l('se_credentials_installed')) : se_ui_badge('warning', _l('se_credentials_missing')),
+            ? se_ui_badge('ok', !empty($webhook['app_secret_inherited'])
+                ? _l('se_wa_secret_inherited') : _l('se_credentials_installed'))
+            : se_ui_badge('warning', _l('se_credentials_missing')),
         _l('se_wa_verify_token')   => $webhook['verify_token']
             ? se_ui_badge('ok', _l('se_credentials_installed')) : se_ui_badge('warning', _l('se_credentials_missing')),
         _l('se_wa_last_event')     => html_escape((string) ($webhook['last_event'] ?: '—')),
@@ -108,15 +117,22 @@
 <?php } ?>
 
 <div class="row"><div class="col-md-12">
-<?php se_ui_gate_checklist(_l('se_wa_external_setup'), [
+<?php
+$signedPost = !empty($webhook_state['signed_post_received']);
+$liveTest   = !empty($webhook_state['live_test_passed']);
+$transport  = function_exists('se_wa_transport_available') && se_wa_transport_available();
+$sentCount  = (int) ($out_health['sent'] ?? 0);
+se_ui_gate_checklist(_l('se_wa_external_setup'), [
     ['label' => _l('se_wa_step_secret'),   'hint' => _l('se_wa_step_secret_hint'),   'done' => $webhook['app_secret']],
     ['label' => _l('se_wa_step_verify'),   'hint' => _l('se_wa_step_verify_hint'),   'done' => $webhook['verify_token']],
-    ['label' => _l('se_wa_step_csrf'),     'hint' => _l('se_wa_step_csrf_hint'),     'done' => false],
+    // A provider-signed POST reaching the controller is stronger evidence of
+    // the narrow route exclusion than a static configuration guess.
+    ['label' => _l('se_wa_step_csrf'),     'hint' => _l('se_wa_step_csrf_hint'),     'done' => $signedPost],
     ['label' => _l('se_wa_step_number'),   'hint' => _l('se_wa_step_number_hint'),   'done' => count($numbers) > 0],
     ['label' => _l('se_wa_step_webhook'),  'hint' => _l('se_wa_step_webhook_hint'),  'done' => (bool) $webhook['last_event']],
     ['label' => _l('se_wa_step_templates'),'hint' => _l('se_wa_step_templates_hint'),'done' => count($templates) > 0],
-    ['label' => _l('se_wa_step_review'),   'hint' => _l('se_wa_step_review_hint'),   'done' => false],
-    ['label' => _l('se_wa_step_transport'),'hint' => _l('se_wa_step_transport_hint'),'done' => false],
+    ['label' => _l('se_wa_step_review'),   'hint' => _l('se_wa_step_review_hint'),   'done' => $liveTest && $sentCount > 0],
+    ['label' => _l('se_wa_step_transport'),'hint' => _l('se_wa_step_transport_hint'),'done' => $transport],
 ]); ?>
 </div></div>
 
