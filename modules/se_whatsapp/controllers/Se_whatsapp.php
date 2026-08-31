@@ -18,10 +18,10 @@ class Se_whatsapp extends AdminController
         $data['title']     = _l('se_whatsapp');
         $data['has_brand'] = se_staff_has_any_brand();
         $data['out_health'] = se_wa_out_health();
-        $data['blocked']   = se_wa_send_blocked_reason(0);
         $data['conversations'] = $this->se_whatsapp_model->conversations([
             'assigned' => $this->input->get('assigned'),
         ]);
+        $data['blocked']   = se_wa_inbox_blocked_reason($data['conversations']);
         // Only staff the current user could legitimately assign.
         $data['staff'] = function_exists('se_appt_selectable_staff') ? se_appt_selectable_staff() : [];
         $this->load->view('se_whatsapp/inbox', $data);

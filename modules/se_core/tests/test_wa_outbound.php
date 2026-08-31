@@ -90,6 +90,14 @@ require_once __DIR__ . '/../../se_whatsapp/transport.php';
 se_eq('', se_wa_send_blocked_reason(1),
     'once the live transport is loadable and every credential exists, the gate clears (composer and drain agree)');
 se_ok(se_wa_transport_available(), 'the live transport was lazily registered by the authoritative gate');
+se_eq('', se_wa_inbox_blocked_reason([]),
+    'an empty all-brand inbox does not pretend brand 0 is a sendable brand');
+se_eq('', se_wa_inbox_blocked_reason([
+    ['brand_id' => 1], ['brand_id' => 2],
+]), 'a multi-brand inbox leaves capability decisions to each conversation');
+se_eq('', se_wa_inbox_blocked_reason([
+    ['brand_id' => 1], ['brand_id' => 1],
+]), 'a single-brand inbox uses the configured brand capability instead of brand 0');
 $GLOBALS['SE_WA_TRANSPORT'] = null;   // restore: later tests register fixtures
 
 /* wa_token stays installed for the rest of the suite: the drain tests below

@@ -100,6 +100,35 @@ function se_wa_send_blocked_reason($brand_id)
     return '';
 }
 
+/**
+ * Inbox-level capability notice.
+ *
+ * The inbox may contain more than one accessible brand, so brand 0 is not a
+ * valid stand-in for "all brands" here.  Show a send-capability notice only
+ * when every visible conversation belongs to one concrete brand; the
+ * conversation composer still performs the authoritative per-brand check.
+ */
+function se_wa_inbox_blocked_reason(array $conversations)
+{
+    $brands = [];
+
+    foreach ($conversations as $conversation) {
+        $brand_id = (int) (is_array($conversation)
+            ? ($conversation['brand_id'] ?? 0)
+            : ($conversation->brand_id ?? 0));
+
+        if ($brand_id > 0) {
+            $brands[$brand_id] = true;
+        }
+    }
+
+    if (count($brands) !== 1) {
+        return '';
+    }
+
+    return se_wa_send_blocked_reason((int) array_key_first($brands));
+}
+
 /** The WhatsApp Cloud API access token (secret provider wa_token). Never logged. */
 function se_wa_cloud_token()
 {
