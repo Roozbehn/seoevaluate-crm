@@ -42,7 +42,9 @@ function se_integration_provider_progress($brand_id, $store)
 {
     $brand_id = (int) $brand_id;
 
-    $capiTok   = se_secret_configured('meta_capi', $brand_id) || se_secret_configured('meta_capi', 0);
+    $capiTok   = function_exists('se_capi_token_available') ? se_capi_token_available($brand_id)
+                 : (se_secret_configured('meta_capi', $brand_id) || se_secret_configured('meta_capi', 0));
+    $capiInh   = function_exists('se_capi_token_inherited') && se_capi_token_inherited($brand_id);
     $metaVer   = se_secret_configured('meta_verify', 0);
     $metaApp   = se_secret_configured('meta_app', 0);
     $metaPage  = se_secret_configured('meta_page', $brand_id) || se_secret_configured('meta_page', 0);
@@ -73,7 +75,9 @@ function se_integration_provider_progress($brand_id, $store)
     $rows[] = [
         'key' => 'meta_capi', 'label' => 'Meta CAPI',
         'state' => $capiTok ? 'complete' : 'missing',
-        'detail' => $capiTok ? 'Conversions API token installed' : 'Conversions API token missing',
+        'detail' => $capiTok
+            ? ($capiInh ? 'Conversions API token inherited from the Page/system-user token' : 'Conversions API token installed')
+            : 'Conversions API token missing',
         'enabled' => $brand_id > 0 ? se_capi_enabled($brand_id) : null,
         'enabled_label' => 'CAPI transmission',
     ];

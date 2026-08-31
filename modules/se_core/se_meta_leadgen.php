@@ -85,10 +85,35 @@ function se_meta_capi_token($brand_id)
     $token = se_secret_read('meta_capi', 0);
     if ($token !== '') { return $token; }
 
+    // The Conversions API works with the SAME system-user token as Lead Ads
+    // when the dataset is assigned to that system user (verified: events_received
+    // = 1 to the correct dataset). So a brand with a Page/system-user token but
+    // no dedicated CAPI token INHERITS it — exactly as WhatsApp inherits the
+    // shared Meta App Secret. A dedicated meta_capi file still takes precedence.
+    $page = se_secret_read('meta_page', (int) $brand_id);
+    if ($page !== '') { return $page; }
+
+    $page = se_secret_read('meta_page', 0);
+    if ($page !== '') { return $page; }
+
     $opt = (string) get_option('se_meta_capi_token_' . (int) $brand_id);
     if ($opt !== '') { return $opt; }
 
     return (string) get_option('se_meta_capi_token');
+}
+
+/** Is a CAPI-capable token available (dedicated meta_capi, or inherited meta_page)? */
+function se_capi_token_available($brand_id)
+{
+    return se_meta_capi_token((int) $brand_id) !== '';
+}
+
+/** True when CAPI has no dedicated token but inherits the Page/system-user one. */
+function se_capi_token_inherited($brand_id)
+{
+    $own = se_secret_configured('meta_capi', (int) $brand_id) || se_secret_configured('meta_capi', 0);
+    if ($own) { return false; }
+    return se_secret_configured('meta_page', (int) $brand_id) || se_secret_configured('meta_page', 0);
 }
 
 function se_leadgen_verify_signature($raw_body, $header, $app_secret = null)
@@ -957,7 +982,7 @@ function se_capi_ready($brand_id)
     // silent mis-route into an explicit blocker.
     if (se_capi_dataset_conflict((int) $brand_id) !== null) { return false; }
 
-    return se_secret_configured('meta_capi', (int) $brand_id) && !empty($dataset);
+    return se_capi_token_available((int) $brand_id) && !empty($dataset);
 }
 
 /**
@@ -1025,7 +1050,8 @@ function se_meta_health($brand_id)
     $appSecret = se_meta_app_secret();
     $verify    = se_meta_verify_token();
     $dataset   = $brand ? ($brand->meta_dataset_id ?? null) : null;
-    $capiToken = se_secret_configured('meta_capi', $brand_id);
+    // CAPI token: a dedicated meta_capi, OR the inherited Page/system-user token.
+    $capiToken = se_capi_token_available($brand_id);
     $activeForms = count(array_filter($forms, function ($f) { return (int) $f['active'] === 1; }));
 
     $outbox = function_exists('se_outbox_health') ? se_outbox_health($brand_id) : [];
@@ -1046,6 +1072,7 @@ function se_meta_health($brand_id)
 
         // --- CAPI leg (independent of Lead Ads) ---
         'capi_token'        => $capiToken,
+        'capi_token_inherited' => se_capi_token_inherited($brand_id),
         'capi_ready'        => se_capi_ready($brand_id),
         'capi_enabled'      => se_capi_enabled($brand_id),
         'capi_gated'        => !$capiToken,
