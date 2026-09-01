@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 12);
+define('SE_CORE_SCHEMA_VERSION', 13);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -29,6 +29,15 @@ function se_core_migration_statements()
     $p = db_prefix();
 
     $stmts = [];
+
+    /* --- v13: idempotent website-to-CRM lead delivery ------------------- *
+     * The public website's durable outbox identifies a lead with its UUID.
+     * Keeping that identifier on the CRM row makes at-least-once HTTP
+     * delivery safe: a timeout followed by a retry returns the first row
+     * instead of creating a duplicate person.
+     */
+    $stmts[] = "ALTER TABLE `{$p}leads` ADD COLUMN IF NOT EXISTS `website_lead_id` varchar(64) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}leads` ADD UNIQUE INDEX IF NOT EXISTS `website_lead_id` (`website_lead_id`)";
 
     /* --- Phase 1.1: last-touch attribution + consent-text version --------- *
      * The original click IDs / UTMs / landing / referrer / first_touch_at stay

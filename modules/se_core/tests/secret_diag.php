@@ -42,6 +42,7 @@ $providers = [
     'wa_verify'     => false,
     'google_sa'     => true,
     'landing_token' => false,
+    'website_lead'  => true,
 ];
 
 /* Server-generated tokens that this system installs itself and therefore must

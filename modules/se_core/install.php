@@ -109,6 +109,7 @@ $attribution = [
     'fbc'              => "varchar(255) DEFAULT NULL",
     'fbp'              => "varchar(255) DEFAULT NULL",
     'meta_lead_id'     => "varchar(32) DEFAULT NULL",
+    'website_lead_id'  => "varchar(64) DEFAULT NULL",
 
     // Click-to-WhatsApp click id. Arrives only on the first inbound message,
     // so it is captured once and kept for the life of the record.
@@ -142,6 +143,11 @@ if (!$CI->db->field_exists('meta_lead_id_idx', $leads)) {
     if ($indexes === 0) {
         $CI->db->query('ALTER TABLE `' . $leads . '` ADD INDEX `meta_lead_id` (`meta_lead_id`)');
     }
+}
+
+$websiteLeadIndexes = $CI->db->query('SHOW INDEX FROM `' . $leads . "` WHERE Key_name = 'website_lead_id'")->num_rows();
+if ($websiteLeadIndexes === 0) {
+    $CI->db->query('ALTER TABLE `' . $leads . '` ADD UNIQUE INDEX `website_lead_id` (`website_lead_id`)');
 }
 
 /* ------------------------------------------------------------------ */

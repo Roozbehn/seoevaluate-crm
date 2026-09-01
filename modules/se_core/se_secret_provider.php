@@ -43,6 +43,7 @@ function se_secret_providers()
         'wa_token'      => ['label' => 'WhatsApp Cloud API token', 'per_brand' => false],
         'google_sa'     => ['label' => 'Google service-account key', 'per_brand' => true],
         'landing_token' => ['label' => 'Landing-token HMAC secret', 'per_brand' => false],
+        'website_lead'  => ['label' => 'Website lead-ingest token', 'per_brand' => true],
     ];
 }
 
