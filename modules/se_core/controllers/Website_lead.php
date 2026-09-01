@@ -17,8 +17,8 @@ class Website_lead extends App_Controller
             return $this->emit(413, false, 'payload_too_large');
         }
 
-        $brandId = function_exists('se_clinic_single_brand_id')
-            ? (int) se_clinic_single_brand_id() : 0;
+        $brandId = function_exists('se_clinic_sole_brand_id')
+            ? (int) se_clinic_sole_brand_id() : 0;
         if ($brandId <= 0) {
             return $this->emit(503, false, 'brand_unconfigured');
         }

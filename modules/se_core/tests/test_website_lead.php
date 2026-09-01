@@ -21,6 +21,9 @@ se_eq(false, in_array('admin/se_core/website_lead', $csrfUris, true), 'the admin
 se_eq(false, count(array_filter($csrfUris, function ($uri) {
     return strpos($uri, '*') !== false || strpos($uri, '.+') !== false;
 })) > 0, 'no wildcard widens the CSRF exception');
+$controllerSource = file_get_contents(dirname(__DIR__) . '/controllers/Website_lead.php');
+se_ok(strpos($controllerSource, 'se_clinic_sole_brand_id()') !== false,
+    'the controller resolves the real single-clinic helper');
 
 se_group('Website lead payload boundary');
 

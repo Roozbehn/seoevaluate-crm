@@ -114,6 +114,7 @@ if ($mode === '--apply') {
 if ($mode === '--verify') {
     $p       = db_prefix();
     $checks  = [
+        ["{$p}leads",                ['website_lead_id']],
         ["{$p}se_conversion_outbox", ['attribution_snapshot', 'consent_snapshot', 'payload_version',
                                       'next_attempt_at', 'failure_class', 'error_code', 'fence',
                                       'request_id', 'submitted_at']],
@@ -134,6 +135,11 @@ if ($mode === '--verify') {
             if (!$present) { $bad++; }
         }
     }
+
+    $idx = $my->query("SHOW INDEX FROM `{$p}leads` WHERE Key_name='website_lead_id' AND Non_unique=0");
+    $unique = $idx && $idx->num_rows > 0;
+    printf("  %-28s %-22s %s\n", "{$p}leads", 'website_lead_id unique', $unique ? 'OK' : 'MISSING');
+    if (!$unique) { $bad++; }
 
     $row = $my->query("SELECT value v FROM `{$p}options` WHERE name='se_core_schema_version'")->fetch_assoc();
     echo "  schema version = v" . (int) ($row['v'] ?? 0) . "\n";
