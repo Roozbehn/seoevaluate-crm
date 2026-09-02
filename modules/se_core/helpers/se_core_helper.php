@@ -55,8 +55,25 @@ function se_authz_memo($key, callable $resolver)
 function se_staff_sees_all_brands()
 {
     return se_authz_memo('all_brands', function () {
+        // No staff session (public token page, dispatcher, cron): nobody sees
+        // anything, and — the part that matters — no query. Perfex's is_admin()
+        // without $GLOBALS['current_user'] runs a SELECT on the SHARED query
+        // builder; called from inside a model's half-built get() that polluted
+        // the statement and threw (a 500 after the appointment row was written).
+        if (!se_staff_session_id()) {
+            return false;
+        }
+
         return is_admin() || staff_can(SE_CAP_ALL_BRANDS, SE_FEATURE_TENANCY);
     });
+}
+
+/** The logged-in staff id, or 0 when there is no staff session. Never queries. */
+function se_staff_session_id()
+{
+    $id = function_exists('get_staff_user_id') ? get_staff_user_id() : 0;
+
+    return is_numeric($id) ? (int) $id : 0;
 }
 
 /**
@@ -70,6 +87,10 @@ function se_staff_sees_all_brands()
 function se_staff_can_triage()
 {
     return se_authz_memo('triage', function () {
+        if (!se_staff_session_id()) {
+            return false;   // same reason as se_staff_sees_all_brands()
+        }
+
         return is_admin() || staff_can(SE_CAP_TRIAGE, SE_FEATURE_TENANCY);
     });
 }

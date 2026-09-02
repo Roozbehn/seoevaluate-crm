@@ -157,6 +157,8 @@ $db->seed('tblse_working_hours', []);
 se_group('Journey quote: the patient books a slot — through the model, with no staff session');
 
 se_test_act_as(0, [], false);   // a token page: nobody is logged in
+se_authz_reset_cache();
+$GLOBALS['se_test']['is_admin_calls_without_session'] = 0;
 $j = se_test_journey_row();
 $avail = se_journey_booking_slots(1);   // real clock, as the page uses it
 se_ok(count($avail['slots']) > 0, 'live slots exist');
@@ -181,6 +183,15 @@ se_ok(strpos(end($GLOBALS['se_wa_sent'])['body'], 'klinikte görüşmeniz oluşt
 se_eq(1, count(array_filter($db->rows('tblse_journey_tasks'), function ($t) { return $t['kind'] === 'consultation_self_booked'; })), 'staff task to confirm');
 se_eq(1, count(array_filter($db->rows('tblse_journey_audit'), function ($a) { return $a['action'] === 'booking_self_service'; })), 'audited');
 se_ok(se_journey_consultation_upcoming($j) !== null, 'the upcoming consultation is visible to the pages');
+// Production 2026-09-03: the page returned a blank 500 AFTER the row was inserted — the model's
+// post-write hooks re-read the row through the staff-scoped get(), and with no session Perfex's
+// is_admin() ran a query on the half-built statement. The hooks must see the row without a
+// session (reminder queued, milestone considered) and the authz helpers must never call is_admin().
+se_eq(0, (int) $GLOBALS['se_test']['is_admin_calls_without_session'], 'no is_admin() query on a session-less request (the authz helpers short-circuit)');
+$apptId = (int) $r['appointment_id'];
+se_eq(1, count(array_filter($db->rows('tblse_reminders'), function ($x) use ($apptId) { return (int) $x['appointment_id'] === $apptId; })), 'the reminder for the self-booked consultation is queued (the hook saw the row)');
+se_eq(1, (int) $a['reminder_queued'], 'and the row is marked reminder_queued');
+se_eq(1, count(array_filter($db->rows('tblse_appointment_status_history'), function ($x) use ($apptId) { return (int) $x['appointment_id'] === $apptId && $x['new_status'] === 'scheduled'; })), 'status history written');
 
 $r2 = se_journey_booking_pick($j, $pick, 'page');
 se_eq('already_booked', $r2['reason'], 'a second pick is refused');

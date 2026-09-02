@@ -159,6 +159,13 @@ function is_admin($staff_id = '')
         && (int) $staff_id !== (int) $GLOBALS['se_test']['staff_id']) {
         return in_array((int) $staff_id, $GLOBALS['se_test']['admin_ids'] ?? [], true);
     }
+    // Perfex's is_admin() with no staff session runs a SELECT on the shared
+    // query builder (no $GLOBALS['current_user'] to answer from) — mid-build
+    // that pollutes the caller's statement. Count such calls so a test can
+    // assert that no-session code paths never reach it.
+    if ((int) $GLOBALS['se_test']['staff_id'] <= 0) {
+        $GLOBALS['se_test']['is_admin_calls_without_session'] = ($GLOBALS['se_test']['is_admin_calls_without_session'] ?? 0) + 1;
+    }
 
     return $GLOBALS['se_test']['is_admin'];
 }

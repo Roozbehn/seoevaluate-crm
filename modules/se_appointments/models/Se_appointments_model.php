@@ -42,6 +42,36 @@ class Se_appointments_model extends App_Model
     }
 
     /**
+     * One row the model itself just wrote, read by id WITHOUT staff scope.
+     *
+     * The post-write hooks (status history signal, reminder queue, calendar
+     * sync) used get(), which applies the staff brand scope. On a request with
+     * no staff session — the patient's booking page, the dispatcher — that
+     * scope resolves through Perfex's is_admin(), which runs its own query on
+     * the SHARED query builder while get() has select()/join() half built:
+     * the polluted statement threw, the request died with a 500 AFTER the row
+     * was inserted, and the caller never learned the id. Even without the
+     * exception the scope would have hidden the row (1=0) and silently skipped
+     * the milestone, the reminder and the calendar event. The hooks act on a
+     * row this model owns; they need no scope.
+     */
+    protected function row($id)
+    {
+        $this->db->select(
+            db_prefix() . 'se_appointments.*, '
+            . 'CONCAT(' . db_prefix() . 'staff.firstname, " ", ' . db_prefix() . 'staff.lastname) as staff_name'
+        );
+        $this->db->join(
+            db_prefix() . 'staff',
+            db_prefix() . 'staff.staffid = ' . db_prefix() . 'se_appointments.staff_id',
+            'left'
+        );
+        $this->db->where(db_prefix() . 'se_appointments.id', (int) $id);
+
+        return $this->db->get(db_prefix() . 'se_appointments')->row();
+    }
+
+    /**
      * @param array $opts 'system' => true when the caller is NOT a staff request
      *                    (the patient journey booking a slot from a token page,
      *                    the cron): the brand was resolved by the caller from
@@ -273,7 +303,7 @@ class Se_appointments_model extends App_Model
         if (!function_exists('se_reminder_enqueue')) {
             return;
         }
-        $appt = $this->get($appointment_id);
+        $appt = $this->row($appointment_id);
         if (!$appt || in_array($appt->status, ['cancelled', 'no_show'], true)) {
             return;
         }
@@ -290,7 +320,7 @@ class Se_appointments_model extends App_Model
         if (!function_exists('se_gcal_sync')) {
             return;
         }
-        $appt = $this->get($appointment_id);
+        $appt = $this->row($appointment_id);
         if (!$appt) {
             return;
         }
@@ -304,18 +334,20 @@ class Se_appointments_model extends App_Model
         // `gcal-fixture-*` is indistinguishable from a real Google event id, and
         // every later sync then believes an event exists that Google has never
         // heard of. Fixture results are recorded as a separate sync state.
+        // By id and brand of the row itself, not the staff scope: the sync
+        // state belongs to the row we just wrote, whoever triggered the write.
         if (function_exists('se_gcal_result_is_fixture') && se_gcal_result_is_fixture($result)) {
-            se_guarded_update(db_prefix() . 'se_appointments', 'id', (int) $appointment_id, [
-                'gcal_sync_state' => 'fixture',
-            ]);
+            $this->db->where('id', (int) $appointment_id)->where('brand_id', (int) $appt->brand_id)
+                     ->update(db_prefix() . 'se_appointments', ['gcal_sync_state' => 'fixture']);
 
             return;
         }
 
-        se_guarded_update(db_prefix() . 'se_appointments', 'id', (int) $appointment_id, [
-            'google_event_id' => $result['event_id'],
-            'gcal_sync_state' => $result['event_id'] === null ? 'cancelled' : 'synced',
-        ]);
+        $this->db->where('id', (int) $appointment_id)->where('brand_id', (int) $appt->brand_id)
+                 ->update(db_prefix() . 'se_appointments', [
+                     'google_event_id' => $result['event_id'],
+                     'gcal_sync_state' => $result['event_id'] === null ? 'cancelled' : 'synced',
+                 ]);
     }
 
     protected function has_availability_conflict($data, $ignore_id = 0)
@@ -347,7 +379,7 @@ class Se_appointments_model extends App_Model
             return;
         }
 
-        $appt = $this->get($appointment_id);
+        $appt = $this->row($appointment_id);
         if (!$appt || $appt->rel_type !== 'lead' || (int) $appt->rel_id === 0) {
             return;
         }
