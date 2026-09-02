@@ -1,0 +1,15 @@
+{
+  // Cloudflare cron trigger for the CRM's fast messaging dispatcher.
+  // The cPanel host caps crontab at 15 minutes; this Worker calls the
+  // key-protected route every minute instead. Secret: CRM_CRON_KEY
+  // (wrangler secret put CRM_CRON_KEY) — same value as Perfex APP_CRON_KEY.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "crm-dispatch",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "triggers": { "crons": ["* * * * *"] },
+  "vars": { "DISPATCH_URL": "https://crm.roozbeh.com.tr/se_core/dispatch/index/" },
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": true }
+}
