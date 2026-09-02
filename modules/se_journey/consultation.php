@@ -442,6 +442,14 @@ function se_journey_booking_pick($j, $slot_start, $via = 'page')
  */
 function se_journey_send_booking_link($j, $issued_by = 0, $correlation = '', $copy_key = 'quote_accepted_ack')
 {
+    // Inside WhatsApp (the booking Flow) when published; else the calendar page link.
+    if (function_exists('se_journey_flow_ready') && se_journey_flow_ready((int) $j->brand_id, 'booking')['ready']) {
+        $r = se_journey_send_flow($j, 'booking', se_journey_copy((int) $j->brand_id, 'booking_flow', ['name' => se_journey_first_name($j)], (string) $j->language), $correlation,
+            ['purpose' => 'booking_flow', 'issued_by' => (int) $issued_by, 'bypass_pause' => true]);
+        if ($r['ok']) {
+            return ['ok' => true, 'reason' => '', 'link' => '', 'mode' => 'flow'];
+        }
+    }
     $tok = se_journey_issue_token($j, 'book', (int) $issued_by);
     if (!$tok['ok']) {
         return ['ok' => false, 'reason' => 'token_failed', 'link' => '', 'mode' => ''];

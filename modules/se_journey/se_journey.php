@@ -20,6 +20,7 @@ require_once __DIR__ . '/media.php';
 require_once __DIR__ . '/review.php';
 require_once __DIR__ . '/consultation.php';
 require_once __DIR__ . '/leadsync.php';
+require_once __DIR__ . '/flows.php';
 require_once __DIR__ . '/aftercare.php';
 require_once __DIR__ . '/health.php';
 require_once __DIR__ . '/ui.php';

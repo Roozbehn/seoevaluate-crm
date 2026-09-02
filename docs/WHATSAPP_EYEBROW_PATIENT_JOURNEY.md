@@ -452,6 +452,47 @@ a Google Calendar link. In-window the confirmation text carries the link; outsid
 4-variable template `eyebrow_consultation_calendar_tr` goes once Meta approves it, else the
 original 3-variable confirmation (the pages still offer the file).
 
+### 6.3 WhatsApp Flows — the form and the calendar inside WhatsApp (`modules/se_journey/flows.php`)
+
+Per brand optional (`se_journey_flows_<brand>`). When ON and a flow is **published**, the journey
+sends the flow instead of the CRM link: the intake (`privacy_and_flow` + Flow CTA "Formu Doldur")
+and the calendar after an accepted quote (`booking_flow` + "Tarih Seç"). In-window: an interactive
+message of type `flow` (`flow_message_version 3`, `flow_action data_exchange`, entry screen);
+outside: the templates `eyebrow_intake_flow_tr` / `eyebrow_booking_flow_tr` with a FLOW button
+(the flow id is resolved at submission; the per-message `flow_token` goes as a `button` component,
+`sub_type flow`). Anything missing (key, id, publish, switch) → the links, unchanged. Photos stay on
+WhatsApp itself; the quote answer is already buttons.
+
+**Data endpoint** `POST /se_journey/flow` (CSRF-excluded, `modules/se_journey/config/csrf_exclude_uris.php`):
+`X-Hub-Signature-256` over the raw body with the app secret (432 on mismatch) → RSA-OAEP(SHA-256)
+unwrap of the AES key with the business private key (secret provider **`flow_key`**, RSA-2048 PEM;
+PHP's openssl only does OAEP-SHA-1, so the unpadding is implemented by hand and cross-checked
+against the OpenSSL CLI in the suite) → AES-128-GCM (tag appended) → handler → AES-128-GCM reply
+with the bit-inverted IV, base64, `text/plain` (421 when undecryptable so Meta re-fetches the
+key). `flow_token` = `<kind>.<journey token of purpose flow>` (7 days) — nothing about the patient
+inside it. Decrypted content is never logged.
+
+**Flow JSON** is generated from `se_journey_questionnaire()` (`se_journey_flow_json()`), so both
+doors ask the same questions with the same keys and option ids: `CONSENT` (notice from Consent
+Settings + three OptIns, health required) → `IDENTITY` → `CONCERN` → `HEALTH_1` → `HEALTH_2`
+(terminal) for the intake; `DAY` → `TIME` (terminal) for booking, days/slots from
+`se_journey_booking_slots()`. Meta's limits are honoured (labels 20/30, options ≤ 20/200, ≤ 50
+components, `routing_model`, `data_api_version 3.0`, version 6.3) and asserted by the suite. Every
+screen is stored through the SAME functions as the web form (`se_journey_record_form_consent`,
+`se_journey_intake_save`, `se_journey_intake_submit`, `se_journey_booking_pick`): sealed answers,
+flags, lead sync, photo request, confirmation — identical. `INIT` resumes where the patient left
+off; a missing earlier answer at submit sends the patient back to its screen with
+`error_message`; a finished flow closes at once (`already_submitted` / `already_booked`). The
+completion webhook (`interactive.type nfm_reply`) is a receipt (`flow_completed` event), never a
+data path.
+
+**Admin: Journeys → WhatsApp Flows.** Readiness (key installed, key registered at Meta + check,
+Meta App ID, endpoint URL, switch), per flow: *Create at Meta + upload JSON* (`POST /{waba}/flows`
+with `endpoint_uri` + `application_id`, then `POST /{flow}/assets` `FLOW_JSON`), *Upload JSON*
+(after a questionnaire change — the page flags a changed hash), *Publish*, *Sync status*
+(`validation_errors` shown verbatim); *Register public key with Meta*
+(`POST /{phone_number_id}/whatsapp_business_encryption`).
+
 ### 8.1 Patient self-booking (Journey Settings → flags section)
 
 | Option | Default | Meaning |
@@ -656,6 +697,16 @@ assumed. Secrets were generated on the host and never displayed.
   session. Four stray appointments (#91–#94, 8 Sep) from the failed attempts are the owner's to cancel.
 * Lead sync (§6.1) and the calendar file (§6.2) shipped; no schema change. Templates to submit:
   `eyebrow_consultation_calendar_tr`. Suite: **3,123 pass, 0 fail**.
+
+### 16.3 Addendum — WhatsApp Flows shipped (2026-09-03), owner steps to switch them on
+
+Code + endpoint deployed; `flow_key` generated on the host (RSA-2048, 0600, never displayed);
+`se_journey_flow_app_id` = the CRM integration app. Suite **3,497 pass, 0 fail**. Then, in
+Journeys → WhatsApp Flows: (1) *Register public key with Meta* → *Check at Meta* shows VALID;
+(2) intake: *Create at Meta + upload JSON* → fix any validation error Meta reports → *Publish*;
+(3) the same for the calendar; (4) Journeys → Templates: submit `eyebrow_intake_flow_tr` and
+`eyebrow_booking_flow_tr` (their FLOW buttons bind to the created flow ids); (5) tick *Use
+WhatsApp Flows* and save. From then on the journey sends the flows; the links remain the fallback.
 
 **Not done, by design (owner steps, in order):**
 

@@ -1473,6 +1473,11 @@ function se_journey_on_wa_inbound(array $ctx)
 
     se_journey_event($j, 'wa_inbound', $ctx['type'] === 'text' ? 'text' : (string) $ctx['type'], [], 'patient', null, 'wa_message', (string) ($ctx['message_id'] ?? ''), $corr);
 
+    /* 0. A completed WhatsApp Flow: the endpoint already stored the answers; this is the receipt. */
+    if (!empty($ctx['flow_reply']) && is_array($ctx['flow_reply']) && function_exists('se_journey_on_flow_reply')) {
+        return se_journey_on_flow_reply($j, $ctx);
+    }
+
     /* 1. Opt-out beats everything, on every state. */
     if ($body !== '' && se_journey_matches_keyword($body, se_journey_optout_keywords())) {
         return se_journey_handle_optout($j, $ctx);

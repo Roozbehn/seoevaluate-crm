@@ -150,7 +150,7 @@ function se_journey_set_consent_bypass($brand_id, $on, $reason, $staff_id)
 
 function se_journey_token_purposes()
 {
-    return ['intake', 'upload', 'quote', 'checkin', 'info', 'book', 'calendar'];
+    return ['intake', 'upload', 'quote', 'checkin', 'info', 'book', 'calendar', 'flow'];
 }
 
 function se_journey_token_ttl_seconds($purpose)
@@ -159,6 +159,7 @@ function se_journey_token_ttl_seconds($purpose)
         case 'quote':   return 14 * 86400;
         case 'book':    return 14 * 86400;   // consultation slot picker after an accepted quote
         case 'calendar': return 45 * 86400;  // "add to calendar" file for a booked consultation
+        case 'flow':    return 7 * 86400;    // a WhatsApp Flow session (flow_token) — intake or booking inside WhatsApp
         case 'info':    return 30 * 86400;
         case 'checkin': return 3 * 86400;
         default:        return se_journey_intake_ttl_hours() * 3600;

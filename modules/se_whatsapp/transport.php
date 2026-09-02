@@ -49,19 +49,10 @@ function se_wa_live_transport(array $m)
             $kind               => $obj,
         ];
     } elseif ($m['kind'] === 'interactive') {
-        // Reply buttons (Cloud API "interactive" type "button"). Shape validated
-        // at queue time by se_wa_shape_interactive().
+        // Reply buttons (Cloud API "interactive" type "button") or a Flow
+        // (type "flow"). Shape validated at queue time by se_wa_shape_interactive().
         $p = (array) ($m['payload'] ?? []);
-        $interactive = [
-            'type'   => 'button',
-            'body'   => ['text' => (string) $m['body']],
-            'action' => ['buttons' => array_map(function ($b) {
-                return ['type' => 'reply', 'reply' => ['id' => (string) $b['id'], 'title' => (string) $b['title']]];
-            }, array_values((array) ($p['buttons'] ?? [])))],
-        ];
-        if (!empty($p['footer'])) {
-            $interactive['footer'] = ['text' => (string) $p['footer']];
-        }
+        $interactive = se_wa_interactive_payload((string) $m['body'], $p);
         $payload = [
             'messaging_product' => 'whatsapp',
             'recipient_type'    => 'individual',

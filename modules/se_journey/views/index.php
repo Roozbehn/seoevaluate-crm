@@ -6,6 +6,7 @@
 $actions = [];
 if (se_journey_is_integration_admin() || se_journey_can('manage_templates')) {
     $actions[] = ['href' => admin_url('se_journey/se_journey/templates'), 'label' => _l('se_journey_templates'), 'icon' => 'fa-file-text-o'];
+    $actions[] = ['href' => admin_url('se_journey/se_journey/flows'), 'label' => _l('se_journey_flows'), 'icon' => 'fa-mobile'];
 }
 if (se_journey_is_integration_admin() || se_journey_can('manage_consent')) {
     $actions[] = ['href' => admin_url('se_journey/se_journey/settings'), 'label' => _l('se_journey_settings'), 'icon' => 'fa-cog'];

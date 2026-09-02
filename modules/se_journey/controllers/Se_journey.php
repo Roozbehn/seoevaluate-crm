@@ -341,6 +341,78 @@ class Se_journey extends AdminController
     /* Template registry + settings (integration admin)                    */
     /* ------------------------------------------------------------------ */
 
+    /* ------------------------------------------------------------------ */
+    /* WhatsApp Flows: the intake form and the calendar inside WhatsApp     */
+
+    public function flows()
+    {
+        if (!se_journey_can('manage_templates') && !se_journey_is_integration_admin()) {
+            access_denied('se_journey');
+        }
+        $brand = $this->brand();
+        $data['title'] = _l('se_journey_flows');
+        $data['brand'] = $brand;
+        $data['readiness'] = $brand > 0 ? se_journey_flow_readiness($brand) : null;
+        $data['key_status'] = null;
+        if ($brand > 0 && (string) $this->input->get('check_key') === '1') {
+            $data['key_status'] = se_journey_flow_public_key_status($brand);
+        }
+        $data['json'] = [];
+        foreach (se_journey_flow_kinds() as $kind => $def) {
+            $data['json'][$kind] = json_encode(se_journey_flow_json($brand, $kind), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        }
+        $this->load->view('se_journey/flows', $data);
+    }
+
+    public function flow_action($what)
+    {
+        $this->post_only();
+        if (!se_journey_can('manage_templates') && !se_journey_is_integration_admin()) {
+            access_denied('se_journey');
+        }
+        $brand = $this->brand();
+        $staff = (int) get_staff_user_id();
+        $kind  = (string) $this->input->post('kind');
+        $back  = admin_url('se_journey/se_journey/flows?brand=' . $brand);
+        if ($what === 'settings') {
+            if (!se_journey_is_integration_admin()) { access_denied('se_journey'); }
+            update_option('se_journey_flows_' . $brand, (int) $this->input->post('flows_enabled') === 1 ? 1 : 0);
+            update_option('se_journey_flow_app_id', preg_replace('/\D/', '', (string) $this->input->post('flow_app_id')));
+            se_journey_audit($brand, 0, 'settings_saved', null, null, 'flows');
+            set_alert('success', _l('se_journey_saved'));
+            redirect($back);
+        }
+        if ($what === 'register_key') {
+            $r = se_journey_flow_register_public_key($brand);
+            set_alert($r['ok'] ? 'success' : 'warning', $r['ok'] ? _l('se_journey_flow_key_registered') : _l('se_journey_blocked') . ': ' . $r['reason']);
+            redirect($back . '&check_key=1');
+        }
+        if (!isset(se_journey_flow_kinds()[$kind])) {
+            set_alert('warning', _l('se_journey_blocked') . ': unknown flow');
+            redirect($back);
+        }
+        switch ($what) {
+            case 'create':
+                $r = se_journey_flow_create($brand, $kind, $staff);
+                if ($r['ok']) { $r = se_journey_flow_upload_json($brand, $kind, $staff); }
+                break;
+            case 'upload':
+                $r = se_journey_flow_upload_json($brand, $kind, $staff);
+                break;
+            case 'publish':
+                $r = se_journey_flow_publish($brand, $kind, $staff);
+                break;
+            case 'sync':
+                $r = se_journey_flow_sync($brand, $kind);
+                break;
+            default:
+                $r = ['ok' => false, 'reason' => 'unknown'];
+        }
+        $errs = !empty($r['validation_errors']) ? ' — ' . count($r['validation_errors']) . ' ' . _l('se_journey_flow_validation_errors') : '';
+        set_alert($r['ok'] ? ($errs ? 'warning' : 'success') : 'warning', ($r['ok'] ? _l('se_journey_flow_done_' . $what) : _l('se_journey_blocked') . ': ' . $r['reason']) . $errs);
+        redirect($back);
+    }
+
     public function templates()
     {
         if (!se_journey_can('manage_templates') && !se_journey_is_integration_admin()) {

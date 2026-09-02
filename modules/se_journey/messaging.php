@@ -64,6 +64,10 @@ function se_journey_copy_defaults()
                 "Merhaba {{name}}, değerlendirmeyi tamamlayabilmemiz için ekibimizin birkaç ek bilgiye ihtiyacı var. Danışmanınız sizinle bu mesaj üzerinden iletişime geçecektir.",
             'evaluation_ready' =>
                 "Merhaba {{name}}, ön değerlendirme bilgileriniz ekibimiz tarafından incelendi. Size özel değerlendirme sonucu ve teklifiniz hazır. Ayrıntıları güvenli bağlantıdan görüntüleyebilirsiniz: {{link}}\n\nBu ön değerlendirme, kesin tıbbi uygunluk veya sonuç garantisi değildir. Kararınızı “Teklifi Kabul Et”, “Fiyat Revizyonu” veya “Danışmana Bağlan” seçenekleriyle iletebilirsiniz; teklifi kabul ederseniz klinikte yüz yüze ön görüşme için size uygun bir tarihi takvimden seçebileceksiniz.",
+            'privacy_and_flow' =>
+                "Teşekkürler. Sağlık bilgileriniz özel nitelikli kişisel veridir; aydınlatma metnini ve tercihlerinizi formun ilk adımında göreceksiniz. Formu doğrudan WhatsApp içinde doldurabilirsiniz; yaklaşık 3–5 dakika sürer, yarım bırakırsanız kaldığınız yerden devam edebilirsiniz.",
+            'booking_flow' =>
+                "Teşekkürler {{name}}, teklifi kabul ettiğinizi kaydettik. Klinikte yüz yüze ön görüşme için size uygun gün ve saati doğrudan WhatsApp içinde seçebilirsiniz.",
             'quote_options' =>
                 "Teklifinizle ilgili kararınızı aşağıdaki seçeneklerden biriyle iletebilirsiniz. Sorunuz varsa danışmanımız bu mesaj üzerinden sizinle ilgilenecektir.",
             'quote_accepted_ack' =>
@@ -357,7 +361,12 @@ function se_journey_send($j, array $spec)
         // and the cron, where there is no staff session at all.
         $msg  = ['kind' => $kind, 'body' => (string) ($spec['body'] ?? ''), 'origin' => $origin, 'dedup_salt' => $salt, 'system' => true];
         if ($kind === 'interactive') {
-            $msg['buttons'] = (array) ($spec['buttons'] ?? []);
+            if ((string) ($spec['interactive_type'] ?? '') === 'flow') {
+                $msg['interactive_type'] = 'flow';        // a WhatsApp Flow CTA (see flows.php)
+                $msg['flow'] = (array) ($spec['flow'] ?? []);
+            } else {
+                $msg['buttons'] = (array) ($spec['buttons'] ?? []);
+            }
             if (!empty($spec['footer'])) { $msg['footer'] = (string) $spec['footer']; }
         }
         if ($sendAfter > time()) {
@@ -391,6 +400,9 @@ function se_journey_send($j, array $spec)
             // Quick-reply payloads: the tap comes back as interactive_id (the
             // same ids the in-window reply buttons use), not as a label.
             $msg['quick_replies'] = array_values(array_map('strval', (array) $spec['template_quick_replies']));
+        }
+        if (!empty($spec['template_flow']) && is_array($spec['template_flow'])) {
+            $msg['flow_button'] = $spec['template_flow'];   // the FLOW button's per-message flow_token
         }
         if ($sendAfter > time()) {
             $msg['send_after'] = $sendAfter;
@@ -505,13 +517,21 @@ function se_journey_send_privacy_and_link($j, $correlation = '', $actor_type = '
         return ['ok' => false, 'mode' => 'blocked', 'reason' => 'health_consent_text_unconfigured', 'outbound_id' => 0];
     }
 
-    $token = se_journey_issue_token($j, 'intake', $actor_id ? (int) $actor_id : 0);
-    if (!$token['ok']) {
-        return ['ok' => false, 'mode' => 'blocked', 'reason' => $token['reason'], 'outbound_id' => 0];
+    // Inside WhatsApp (a Flow) when the brand has one published; else the secure link.
+    $r = ['ok' => false, 'mode' => 'blocked', 'reason' => 'flow_unavailable', 'outbound_id' => 0];
+    if (function_exists('se_journey_flow_ready') && se_journey_flow_ready($brand, 'intake')['ready']) {
+        $r = se_journey_send_flow($j, 'intake', se_journey_copy($brand, 'privacy_and_flow', ['name' => se_journey_first_name($j)], (string) $j->language), $correlation,
+            ['purpose' => 'privacy_and_flow', 'issued_by' => $actor_id ? (int) $actor_id : 0]);
     }
-    $link = se_journey_public_url('se_journey/intake/' . $token['token']);
-    $r = se_journey_send_copy($j, 'privacy_and_link', ['link' => $link], ['purpose' => 'privacy_and_link', 'correlation' => $correlation,
-        'template' => 'eyebrow_intake_resume_tr', 'template_vars' => [se_journey_template_name($j), $link]]);
+    if (!$r['ok']) {
+        $token = se_journey_issue_token($j, 'intake', $actor_id ? (int) $actor_id : 0);
+        if (!$token['ok']) {
+            return ['ok' => false, 'mode' => 'blocked', 'reason' => $token['reason'], 'outbound_id' => 0];
+        }
+        $link = se_journey_public_url('se_journey/intake/' . $token['token']);
+        $r = se_journey_send_copy($j, 'privacy_and_link', ['link' => $link], ['purpose' => 'privacy_and_link', 'correlation' => $correlation,
+            'template' => 'eyebrow_intake_resume_tr', 'template_vars' => [se_journey_template_name($j), $link]]);
+    }
 
     if ($r['ok']) {
         if ($j->state === 'welcome_sent') {
@@ -728,6 +748,20 @@ function se_journey_template_definitions()
             'body' => 'Merhaba {{1}}, klinikte yüz yüze ön görüşme için size uygun tarih ve saati güvenli bağlantıdan seçebilirsiniz: {{2}}. Bağlantı yalnızca size özeldir; yardım isterseniz bu mesaja yanıt verebilirsiniz.',
             'samples' => ['Ayşe', 'https://crm.example.com/se_journey/intake/abc/book'],
         ],
+        'eyebrow_intake_flow_tr' => [
+            // The intake INSIDE WhatsApp (a Flow), for a window that has closed.
+            // The FLOW button needs the published flow id — resolved at submission.
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, kaş ekimi ön değerlendirme formunuzu doğrudan WhatsApp içinde doldurabilirsiniz. Sağlık bilgileriniz şifrelenerek yalnızca değerlendirme amacıyla işlenir. Yardım isterseniz bu mesaja yanıt verebilir, iletişim almak istemiyorsanız İPTAL yazabilirsiniz.',
+            'samples' => ['Ayşe'],
+            'buttons' => [['type' => 'FLOW', 'text' => 'Formu Doldur', 'flow_kind' => 'intake', 'flow_action' => 'data_exchange', 'navigate_screen' => 'CONSENT']],
+        ],
+        'eyebrow_booking_flow_tr' => [
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, klinikte yüz yüze ön görüşme için size uygun gün ve saati doğrudan WhatsApp içinde seçebilirsiniz. Yardım isterseniz bu mesaja yanıt verebilirsiniz.',
+            'samples' => ['Ayşe'],
+            'buttons' => [['type' => 'FLOW', 'text' => 'Tarih Seç', 'flow_kind' => 'booking', 'flow_action' => 'data_exchange', 'navigate_screen' => 'DAY']],
+        ],
         'eyebrow_consultation_confirmation_tr' => [
             'category' => 'UTILITY', 'language' => 'tr',
             'body' => 'Merhaba {{1}}, {{2}} tarihli {{3}} görüşmeniz oluşturuldu. Değişiklik veya iptal için bu mesaja yanıt verebilirsiniz.',
@@ -916,6 +950,9 @@ function se_journey_submit_template($brand_id, $logical, $staff_id = 0)
         }
     }
     $definition = se_journey_template_meta_definition($row);
+    if ($definition === null) {
+        return ['ok' => false, 'reason' => 'flow_not_created'];   // a FLOW button without a flow id yet
+    }
     try {
         $r = call_user_func($GLOBALS['SE_JOURNEY_TEMPLATE_SUBMITTER'], $waba, $definition);
     } catch (Throwable $e) {
@@ -961,7 +998,18 @@ function se_journey_template_meta_definition($row)
         foreach ($buttons as $b) {
             $text = trim((string) ($b['text'] ?? ''));
             if ($text === '') { continue; }
-            $list[] = ['type' => 'QUICK_REPLY', 'text' => mb_substr($text, 0, 25)];   // only quick replies are used (URL/phone buttons are not)
+            if (strtoupper((string) ($b['type'] ?? '')) === 'FLOW') {
+                // The flow id is per brand and only exists once the flow was created at Meta.
+                $flowId = function_exists('se_journey_flow_id') ? se_journey_flow_id((int) $row->brand_id, (string) ($b['flow_kind'] ?? '')) : '';
+                if ($flowId === '') {
+                    return null;   // caller reports flow_not_created
+                }
+                $list[] = ['type' => 'FLOW', 'text' => mb_substr($text, 0, 25), 'flow_id' => $flowId,
+                           'flow_action' => (string) ($b['flow_action'] ?? 'navigate') === 'data_exchange' ? 'data_exchange' : 'navigate',
+                           'navigate_screen' => (string) ($b['navigate_screen'] ?? '')];
+                continue;
+            }
+            $list[] = ['type' => 'QUICK_REPLY', 'text' => mb_substr($text, 0, 25)];   // URL/phone buttons are not used
         }
         if ($list) {
             $components[] = ['type' => 'BUTTONS', 'buttons' => $list];

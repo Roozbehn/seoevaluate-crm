@@ -50,6 +50,9 @@ function se_secret_providers()
         // Patient-journey data key: seals health answers, check-in replies and
         // photographs at rest (libsodium secretbox). 32 random bytes, base64.
         'journey_key'   => ['label' => 'Patient-journey encryption key (32 bytes, base64)', 'per_brand' => false],
+        // WhatsApp Flows Data Endpoint: the business RSA private key (PEM). Meta
+        // encrypts every flow request to its public half; see se_journey/flows.php.
+        'flow_key'      => ['label' => 'WhatsApp Flows endpoint private key (RSA 2048, PEM)', 'per_brand' => false],
     ];
 }
 
