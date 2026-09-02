@@ -339,3 +339,15 @@ se_test_remove_secret('wa_app');
 se_test_remove_secret('journey_key');
 $GLOBALS['SE_WA_TRANSPORT'] = null;
 $GLOBALS['SE_MEDIA_FETCHER'] = null;
+
+/* ======================================================================== */
+se_group('Journey templates: the registry signature re-seeds when a definition is added');
+
+$sig = se_journey_template_registry_signature();
+se_ok(preg_match('/^r[0-9a-f]{16}$/', $sig) === 1, 'a short stable signature');
+se_eq($sig, se_journey_template_registry_signature(), 'deterministic');
+se_test_seed_journey();
+se_test_act_as(10, [], true);
+$db = se_test_db();
+$GLOBALS['se_test']['options']['se_journey_templates_seeded_1'] = '1';   // what the first release stored (one-shot flag)
+se_ok('1' !== $sig, 'the old one-shot flag never equals a signature → the clinic re-seeds on the next admin load');

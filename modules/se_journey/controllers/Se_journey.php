@@ -345,6 +345,7 @@ class Se_journey extends AdminController
         $data['title'] = _l('se_journey_templates');
         $data['brand'] = $brand;
         if ($brand > 0) {
+            se_journey_seed_templates($brand);   // registers definitions added since the last release (idempotent)
             se_journey_seed_templates($brand);
             se_journey_sync_template_status($brand);
         }

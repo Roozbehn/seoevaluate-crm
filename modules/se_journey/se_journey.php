@@ -52,16 +52,22 @@ function se_journey_permissions()
     register_staff_capabilities(SE_JOURNEY_FEATURE, ['capabilities' => $caps], _l('se_journeys'));
 }
 
-/** Seed the template registry for the sole clinic brand (idempotent, cheap). */
+/**
+ * Seed the template registry for the sole clinic brand (idempotent, cheap).
+ * Keyed on the registry's signature (names + content versions), so a
+ * definition added or bumped in a later release is registered on the next
+ * admin page load — the first version used a one-shot flag and left new
+ * definitions unregistered.
+ */
 function se_journey_seed_for_clinic()
 {
     if (!function_exists('se_clinic_sole_brand_id')) {
         return;
     }
     $brand = (int) se_clinic_sole_brand_id();
-    if ($brand > 0 && (int) get_option('se_journey_templates_seeded_' . $brand) !== 1) {
+    if ($brand > 0 && (string) get_option('se_journey_templates_seeded_' . $brand) !== se_journey_template_registry_signature()) {
         se_journey_seed_templates($brand);
-        update_option('se_journey_templates_seeded_' . $brand, 1);
+        update_option('se_journey_templates_seeded_' . $brand, se_journey_template_registry_signature());
     }
 }
 

@@ -761,6 +761,17 @@ function se_journey_template_definitions()
     ];
 }
 
+/** A short signature of the shipped definitions (logical names + content versions). */
+function se_journey_template_registry_signature()
+{
+    $parts = [];
+    foreach (se_journey_template_definitions() as $name => $d) {
+        $parts[] = $name . ':' . (int) ($d['content_version'] ?? 1);
+    }
+
+    return 'r' . substr(hash('sha256', implode(',', $parts)), 0, 16);
+}
+
 /** Seed/refresh the registry rows for a brand (idempotent; never downgrades a Meta status). */
 function se_journey_seed_templates($brand_id)
 {
