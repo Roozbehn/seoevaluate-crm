@@ -314,6 +314,30 @@ function se_integration_health($brand_id)
         'webhook_state'          => function_exists('se_webhook_state') ? se_webhook_state('wa') : null,
     ];
 
+    // Instagram Direct (se_instagram): same evidence model as WhatsApp.
+    $igAccounts = [];
+    if (function_exists('se_ig_accounts_for')) {
+        $CI->db->where('brand_id', $brand_id);
+        foreach ($CI->db->get(db_prefix() . 'se_ig_accounts')->result_array() as $a) {
+            $igAccounts[] = ['ig_account_id' => $a['ig_account_id'], 'username' => $a['username'], 'state' => $a['state']];
+        }
+    }
+    $ig = [
+        'implemented'            => function_exists('se_ig_send_blocked_reason'),
+        'identifiers_configured' => !empty($igAccounts),
+        'app_secret'             => function_exists('se_ig_app_secret') ? se_ig_app_secret() !== '' : false,
+        'app_secret_inherited'   => function_exists('se_ig_app_secret_inherited') ? se_ig_app_secret_inherited() : false,
+        'token'                  => function_exists('se_ig_token') ? se_ig_token($brand_id) !== '' : false,
+        'token_inherited'        => function_exists('se_ig_token_inherited') ? se_ig_token_inherited($brand_id) : false,
+        'scopes_verified'        => (int) get_option('se_ig_scopes_verified') === 1,
+        'scopes_verified_at'     => get_option('se_ig_scopes_verified_at') ?: null,
+        'send_blocked_reason'    => function_exists('se_ig_send_blocked_reason') ? se_ig_send_blocked_reason($brand_id) : 'not_implemented',
+        'last_inbound_at'        => get_option('se_ig_last_inbound_at_' . $brand_id) ?: (get_option('se_ig_last_inbound_at') ?: null),
+        'last_status_at'         => get_option('se_ig_last_status_at_' . $brand_id) ?: (get_option('se_ig_last_status_at') ?: null),
+        'accounts'               => $igAccounts,
+        'webhook_state'          => function_exists('se_webhook_state') ? se_webhook_state('ig') : null,
+    ];
+
     $freshness = [
         'ga4'            => get_option('se_report_last_import_ga4') ?: null,
         'search_console' => get_option('se_report_last_import_search_console') ?: null,
@@ -410,6 +434,29 @@ function se_integration_health($brand_id)
              'Generate a system-user token with whatsapp_business_management and whatsapp_business_messaging and install it as wa_token',
              se_health_link('se_core/se_credentials'));
     }
+    // Instagram Direct — exact per-gate blockers.
+    if (!empty($ig['implemented'])) {
+        if (empty($ig['identifiers_configured'])) {
+            $blk('instagram_account', 'No Instagram account configured for brand ' . $brand_id,
+                 'Instagram Direct conversations cannot be routed to this brand',
+                 'Configure the Instagram professional account id for this brand',
+                 se_health_link('se_instagram/se_instagram/inbox'));
+        } elseif (empty($ig['webhook_state']['verify_token_installed'])) {
+            $blk('instagram_verify', 'Instagram verify token missing',
+                 'The Instagram webhook cannot complete Meta subscription verification',
+                 'Install the ig_verify credential', se_health_link('se_core/se_credentials'));
+        } elseif (empty($ig['app_secret'])) {
+            $blk('instagram_app_secret', 'Meta App Secret missing; Instagram verify token installed',
+                 'Signed Instagram POSTs cannot be validated', 'Install the meta_app credential',
+                 se_health_link('se_core/se_credentials'));
+        } elseif (empty($ig['scopes_verified'])) {
+            $blk('instagram_scopes', 'Instagram messaging scopes not verified on the access token',
+                 'Inbound webhooks validate, but the CRM cannot reply on Instagram until the token carries instagram_basic + instagram_manage_messages',
+                 'Regenerate the system-user token with instagram_basic and instagram_manage_messages, install it as meta_page_22, then run the Instagram scope check',
+                 se_health_link('se_core/se_credentials'));
+        }
+    }
+
     if (!empty($google['externally_gated'])) {
         $blk('google_dm', 'Google service-account credential missing',
              'Offline conversion upload to Google is unavailable (optional; does not affect Meta)',
@@ -434,6 +481,7 @@ function se_integration_health($brand_id)
             'sent'    => (int) ($outbox['sent'] ?? 0),
             'dead'    => (int) ($outbox['dead'] ?? 0),
         ],
+        'instagram'       => $ig,
         'whatsapp_numbers' => $quality,   // back-compat
         'cron_age_seconds' => $cronAge,
         'cron_state'      => $cronState,

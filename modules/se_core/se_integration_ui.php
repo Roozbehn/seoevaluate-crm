@@ -119,6 +119,25 @@ function se_integration_provider_progress($brand_id, $store)
         'enabled' => null, 'enabled_label' => null,
     ];
 
+    // Instagram Direct: verify token + inherited App Secret + inherited token +
+    // verified messaging scopes.
+    if (function_exists('se_ig_verify_token')) {
+        $igVer   = se_ig_verify_token() !== '';
+        $igTok   = se_ig_token($brand_id) !== '';
+        $igScope = (int) get_option('se_ig_scopes_verified') === 1;
+        $igState = (!$igVer) ? 'missing' : (($metaApp && $igTok && $igScope) ? 'complete' : 'partial');
+        $igParts = [];
+        $igParts[] = $igVer ? 'verify token installed' : 'verify token missing';
+        $igParts[] = $metaApp ? 'App Secret inherited from Meta App Secret' : 'shared App Secret missing';
+        $igParts[] = $igTok ? 'token inherited from meta_page' : 'token missing';
+        $igParts[] = $igScope ? 'messaging scopes verified' : 'messaging scopes NOT verified (instagram_manage_messages)';
+        $rows[] = [
+            'key' => 'instagram', 'label' => 'Instagram Direct',
+            'state' => $igState, 'detail' => implode('; ', $igParts),
+            'enabled' => null, 'enabled_label' => null,
+        ];
+    }
+
     $rows[] = [
         'key' => 'google', 'label' => 'Google',
         'state' => $googleSa ? 'complete' : 'missing',

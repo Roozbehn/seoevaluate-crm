@@ -73,8 +73,8 @@ function se_test_clinic_sidebar_fixture()
     foreach (['dashboard' => 1, 'customers' => 5, 'sales' => 10, 'subscriptions' => 15, 'expenses' => 20,
               'contracts' => 25, 'projects' => 30, 'tasks' => 35, 'support' => 40, 'leads' => 45,
               'estimate_request' => 46, 'knowledge-base' => 50, 'utilities' => 55, 'reports' => 60,
-              'se-patients' => 3, 'se-appointments' => 4, 'se-whatsapp' => 5, 'se-reports' => 7,
-              'se-integrations' => 8] as $slug => $pos) {
+              'se-patients' => 3, 'se-appointments' => 4, 'se-whatsapp' => 5, 'se-instagram' => 6,
+              'se-reports' => 8, 'se-integrations' => 9] as $slug => $pos) {
         $items[$slug] = ['slug' => $slug, 'name' => $slug, 'href' => '/admin/' . $slug, 'position' => $pos, 'children' => []];
     }
     $items['dashboard']['href'] = '/admin/';
@@ -129,11 +129,11 @@ $out = se_clinic_filter_sidebar(se_test_clinic_sidebar_fixture());
 foreach (se_clinic_hidden_sidebar_slugs() as $slug) {
     se_ok(!isset($out[$slug]), "core '{$slug}' is removed");
 }
-foreach (['dashboard', 'customers', 'leads', 'se-patients', 'se-appointments', 'se-whatsapp', 'se-reports', 'se-integrations'] as $slug) {
+foreach (['dashboard', 'customers', 'leads', 'se-patients', 'se-appointments', 'se-whatsapp', 'se-instagram', 'se-reports', 'se-integrations'] as $slug) {
     se_ok(isset($out[$slug]), "'{$slug}' survives");
 }
 se_eq(2, $out['leads']['position'], 'Leads moves up to position 2');
-se_eq(6, $out['customers']['position'], 'Customers moves after the clinic screens');
+se_eq(7, $out['customers']['position'], 'Customers moves after the clinic screens (incl. Instagram)');
 se_eq('/admin/se_core/se_dashboard', $out['dashboard']['href'], 'Dashboard points at the clinic dashboard for a clinic role');
 
 se_test_act_as(99, []);
@@ -266,15 +266,15 @@ se_ok(se_clinic_can_manage_consent(), 'brand configuration still implies consent
 se_group('Clinic: navigation visibility per role');
 
 se_test_act_as(1, [], true);
-se_eq(['se-patients', 'se-appointments', 'se-whatsapp', 'se-reports'], se_test_clinic_slugs(se_nav_visible_items()), 'admin: all four clinic items');
+se_eq(['se-patients', 'se-appointments', 'se-whatsapp', 'se-instagram', 'se-reports'], se_test_clinic_slugs(se_nav_visible_items()), 'admin: all five clinic items');
 se_eq(['se-meta-leadgen', 'se-outbox', 'se-google', 'se-health', 'se-credentials', 'se-consent'], se_test_clinic_slugs(se_nav_visible_integration_items()), 'admin: all six integration items');
 
 se_test_act_as(30, se_test_clinic_caps('Clinic Owner'));
-se_eq(['se-patients', 'se-appointments', 'se-whatsapp', 'se-reports'], se_test_clinic_slugs(se_nav_visible_items()), 'owner: patients, appointments, WhatsApp, reports');
+se_eq(['se-patients', 'se-appointments', 'se-whatsapp', 'se-instagram', 'se-reports'], se_test_clinic_slugs(se_nav_visible_items()), 'owner: patients, appointments, WhatsApp, Instagram, reports');
 se_eq(['se-consent'], se_test_clinic_slugs(se_nav_visible_integration_items()), 'owner: only Consent Settings in Integrations');
 
 se_test_act_as(40, se_test_clinic_caps('Sales'));
-se_eq(['se-patients', 'se-appointments', 'se-whatsapp'], se_test_clinic_slugs(se_nav_visible_items()), 'sales: patients, appointments, WhatsApp — no reports');
+se_eq(['se-patients', 'se-appointments', 'se-whatsapp', 'se-instagram'], se_test_clinic_slugs(se_nav_visible_items()), 'sales: patients, appointments, WhatsApp, Instagram — no reports');
 se_eq([], se_test_clinic_slugs(se_nav_visible_integration_items()), 'sales: no Integrations group at all');
 
 se_test_act_as(60, ['se_reports.view']);
@@ -286,7 +286,7 @@ se_eq([], se_test_clinic_slugs(se_nav_visible_items()), 'no capability: nothing'
 
 $positions = [];
 foreach (se_nav_items() as $item) { $positions[$item['slug']] = $item['position']; }
-se_eq(['se-patients' => 3, 'se-appointments' => 4, 'se-whatsapp' => 5, 'se-reports' => 7], $positions, 'clinic items interleave with Dashboard (1), Leads (2) and Customers (6)');
+se_eq(['se-patients' => 3, 'se-appointments' => 4, 'se-whatsapp' => 5, 'se-instagram' => 6, 'se-reports' => 8], $positions, 'clinic items interleave with Dashboard (1), Leads (2) and Customers (7)');
 foreach (se_nav_items() as $item) {
     se_eq($item['position'], se_clinic_sidebar_positions()[$item['slug']], "position of {$item['slug']} agrees with the sidebar filter");
 }

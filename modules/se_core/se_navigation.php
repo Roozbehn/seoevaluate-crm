@@ -55,11 +55,19 @@ function se_nav_items()
             'can'      => function () { return staff_can('view', 'se_whatsapp'); },
         ],
         [
+            'slug'     => 'se-instagram',
+            'label'    => 'se_instagram',
+            'href'     => 'se_instagram/se_instagram/inbox',
+            'icon'     => 'fab fa-instagram',
+            'position' => 6,
+            'can'      => function () { return staff_can('view', 'se_instagram'); },
+        ],
+        [
             'slug'     => 'se-reports',
             'label'    => 'se_reports',
             'href'     => 'se_core/se_reports/index',
             'icon'     => 'fa fa-bar-chart',
-            'position' => 7,
+            'position' => 8,
             'can'      => function () { return se_staff_can_report(); },
         ],
     ];

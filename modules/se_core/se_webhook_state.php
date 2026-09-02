@@ -31,6 +31,14 @@ defined('BASEPATH') or exit('No direct script access allowed');
 /** Resolve the provider's secret booleans (never a value). */
 function se_webhook_provider_secrets($provider)
 {
+    if ($provider === 'ig') {
+        return [
+            'verify'               => function_exists('se_ig_verify_token') ? se_ig_verify_token() !== '' : false,
+            'app_secret'           => function_exists('se_ig_app_secret') ? se_ig_app_secret() !== '' : false,
+            'app_secret_inherited' => function_exists('se_ig_app_secret_inherited') ? se_ig_app_secret_inherited() : false,
+        ];
+    }
+
     if ($provider === 'wa') {
         return [
             'verify'               => function_exists('se_wa_verify_token') ? se_wa_verify_token() !== '' : false,
@@ -49,7 +57,7 @@ function se_webhook_provider_secrets($provider)
 /** The full six-state snapshot for a provider. Pure reads; no external calls. */
 function se_webhook_state($provider)
 {
-    $provider = $provider === 'wa' ? 'wa' : 'meta';
+    $provider = in_array($provider, ['wa', 'ig'], true) ? $provider : 'meta';
     $s = se_webhook_provider_secrets($provider);
     $p = 'se_' . $provider . '_';
 
@@ -97,7 +105,7 @@ function se_webhook_record($provider, $event, $args = [])
 {
     if (!function_exists('update_option')) { return; }
 
-    $provider = $provider === 'wa' ? 'wa' : 'meta';
+    $provider = in_array($provider, ['wa', 'ig'], true) ? $provider : 'meta';
     $p   = 'se_' . $provider . '_';
     $now = function_exists('se_db_now') ? se_db_now() : date('Y-m-d H:i:s');
 

@@ -136,6 +136,20 @@
      });
      var wa=card('WhatsApp',waState,waRows);
 
+     // Instagram Direct (se_instagram) — same six-state evidence chain.
+     var ig=d.instagram||{};
+     var igState=!ig.implemented?'disabled':(!ig.identifiers_configured?'blocked':((ig.send_blocked_reason==='')?'ready':'warning'));
+     var igRows=[
+       ['Account configured', yn(ig.identifiers_configured)],
+       ['Token', ig.token?('Yes'+(ig.token_inherited?' <small>(inherited from meta_page)</small>':'')):'No'],
+       ['Messaging scopes verified', ig.scopes_verified?('Yes <small>'+ts(ig.scopes_verified_at)+'</small>'):'No'],
+       ['Send capability', ig.send_blocked_reason===''?'<span class="se-badge se-ready">Ready</span>':('<span class="se-badge se-warn">'+esc(ig.send_blocked_reason)+'</span>')],
+       ['Last inbound', ts(ig.last_inbound_at)],
+       ['Last read receipt', ts(ig.last_status_at)]
+     ].concat(wstateRows(ig.webhook_state));
+     (ig.accounts||[]).forEach(function(a){ igRows.push(['Account '+esc(a.username||a.ig_account_id), esc(a.state)]); });
+     var igc=card('Instagram Direct',igState,igRows);
+
      // Google Data Manager (optional)
      var gState=g.externally_gated?'disabled':(g.credential_failing?'error':(g.status_polling?'ready':'warning'));
      var goog=card('Google Data Manager',gState,[
@@ -151,7 +165,7 @@
        ['Last status', esc(g.last_request_status||'—')]
      ]);
 
-     var h='<div class="se-health-grid">'+sys+capi+la+wa+goog+'</div>';
+     var h='<div class="se-health-grid">'+sys+capi+la+wa+igc+goog+'</div>';
 
      // Optional Google properties freshness (deliberately-disabled != unhealthy)
      h+='<div class="se-checked">Optional data freshness — GA4: '+ts((d.data_freshness||{}).ga4)

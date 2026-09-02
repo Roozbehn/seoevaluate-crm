@@ -290,6 +290,19 @@ function se_core_migration_statements()
      */
     $stmts[] = "ALTER TABLE `{$p}se_wa_messages` ADD COLUMN IF NOT EXISTS `source` varchar(24) DEFAULT NULL";
 
+    /* --- v13: Instagram Direct inbox (se_instagram) ----------------------- *
+     * Same idempotent DDL the module's install.php runs, registered here so a
+     * host that never toggles the module still gets the tables on admin_init.
+     */
+    if (!function_exists('se_ig_schema_statements') && is_file(__DIR__ . '/../se_instagram/helpers.php')) {
+        require_once __DIR__ . '/../se_instagram/helpers.php';
+    }
+    if (function_exists('se_ig_schema_statements')) {
+        foreach (se_ig_schema_statements($p) as $igSql) {
+            $stmts[] = $igSql;
+        }
+    }
+
     /* --- v8.8: brand-scoping index coverage for tenant queries ------------- */
     $stmts[] = "ALTER TABLE `{$p}se_staff_brands` ADD INDEX IF NOT EXISTS `staff_id` (`staff_id`)";
 

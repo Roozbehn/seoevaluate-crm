@@ -149,7 +149,8 @@ function se_clinic_can_open_dashboard()
         || se_staff_can_configure_brands()
         || staff_can('view', 'se_patients')
         || staff_can('view', 'se_appointments')
-        || staff_can('view', 'se_whatsapp');
+        || staff_can('view', 'se_whatsapp')
+        || staff_can('view', 'se_instagram');
 }
 
 /** May the current staff member see the integration cards and system warnings? */
@@ -183,10 +184,11 @@ function se_clinic_sidebar_positions()
         'se-patients'     => 3,
         'se-appointments' => 4,
         'se-whatsapp'     => 5,
-        'customers'       => 6,
-        'se-reports'      => 7,
-        'se-integrations' => 8,
-        'se-consent'      => 9, // only when it stands alone (owner)
+        'se-instagram'    => 6,
+        'customers'       => 7,
+        'se-reports'      => 8,
+        'se-integrations' => 9,
+        'se-consent'      => 10, // only when it stands alone (owner)
     ];
 }
 
@@ -448,6 +450,7 @@ function se_clinic_role_definitions()
                 'se_patients'     => ['view', 'create', 'edit', 'delete'],
                 'se_appointments' => ['view', 'create', 'edit', 'delete'],
                 'se_whatsapp'     => ['view', 'create', 'edit', 'delete'],
+                'se_instagram'    => ['view', 'create', 'edit', 'delete'],
                 'se_reports'      => ['view'],
                 SE_FEATURE_CONSENT => [SE_CAP_CONSENT_MANAGE],
             ],
@@ -460,6 +463,7 @@ function se_clinic_role_definitions()
                 'se_patients'     => ['view', 'create', 'edit'],
                 'se_appointments' => ['view', 'create', 'edit'],
                 'se_whatsapp'     => ['view', 'create', 'edit'],
+                'se_instagram'    => ['view', 'create', 'edit'],
             ],
         ],
     ];
