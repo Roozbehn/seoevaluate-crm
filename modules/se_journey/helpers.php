@@ -1166,7 +1166,7 @@ function se_journey_create($brand_id, array $ctx, array $source, $lead_id)
  *
  * @return array{ok:bool,reason:string,mode:string,journey:object|null,created:bool}
  */
-function se_journey_start_from_conversation($conv, $staff_id)
+function se_journey_start_from_conversation($conv, $staff_id, array $opts = [])
 {
     $brand = (int) ($conv->brand_id ?? 0);
     $from  = (string) ($conv->wa_user_id ?? '');
@@ -1180,8 +1180,10 @@ function se_journey_start_from_conversation($conv, $staff_id)
     $j = se_journey_find_by_wa($brand, $from);
     $created = false;
     if (!$j) {
-        $source  = ['source' => 'organic_whatsapp', 'detail' => 'staff_start', 'confidence' => 'none', 'attribution' => []];
-        $lead_id = (int) ($conv->lead_id ?? 0) > 0 ? (int) $conv->lead_id : se_journey_find_lead_by_phone($brand, $from);
+        $source  = ['source' => (string) ($opts['source'] ?? 'organic_whatsapp'), 'detail' => (string) ($opts['detail'] ?? 'staff_start'),
+                    'confidence' => isset($opts['source']) ? 'exact' : 'none', 'attribution' => []];
+        $lead_id = (int) ($opts['lead_id'] ?? 0) > 0 ? (int) $opts['lead_id']
+                 : ((int) ($conv->lead_id ?? 0) > 0 ? (int) $conv->lead_id : se_journey_find_lead_by_phone($brand, $from));
         if ($lead_id <= 0) {
             $lead = se_journey_create_lead($brand, $from, '', $source);
             $lead_id = (int) $lead['lead_id'];
@@ -1207,6 +1209,87 @@ function se_journey_start_from_conversation($conv, $staff_id)
 
     return ['ok' => (bool) $r['ok'], 'reason' => (string) ($r['reason'] ?? ''), 'mode' => (string) ($r['mode'] ?? ''),
             'journey' => se_journey_get_raw((int) $j->id), 'created' => $created];
+}
+
+/**
+ * Staff start from a LEAD that has a phone number but no WhatsApp thread yet —
+ * the website applicant. Rules, in order: brand automation on; a usable
+ * number; the lead's own contact consent (the website form's tick, recorded
+ * as purpose=marketing) — never a cold template; not opted out. Then the
+ * thread row is created for the brand's active number (window closed, so the
+ * approved start template is what goes out) and the thread path takes over.
+ * A lead that already has a thread simply uses it.
+ *
+ * @return array{ok:bool,reason:string,mode:string,journey:object|null,created:bool}
+ */
+function se_journey_start_from_lead($lead_id, $staff_id)
+{
+    $CI = &get_instance();
+    $fail = function ($reason) { return ['ok' => false, 'reason' => $reason, 'mode' => '', 'journey' => null, 'created' => false]; };
+
+    $CI->db->where('id', (int) $lead_id);
+    if (function_exists('se_apply_scope_in')) {
+        se_apply_scope_in('brand_id');
+    }
+    $lead = $CI->db->get(db_prefix() . 'leads')->row();
+    if (!$lead) {
+        return $fail('lead_not_found');
+    }
+    $brand = (int) ($lead->brand_id ?? 0);
+    if ($brand <= 0) {
+        return $fail('lead_without_brand');
+    }
+    if (!se_journey_enabled($brand)) {
+        return $fail('disabled');
+    }
+    $wa = se_journey_normalize_wa_id((string) ($lead->phonenumber ?? ''));
+    if ($wa === '' || strlen($wa) < 10 || strlen($wa) > 15) {
+        return $fail('no_usable_phone');
+    }
+    // Contact consent: the website form's tick is recorded as purpose=marketing
+    // (se_website_lead.php); the lead column mirrors it for imports.
+    $consented = (function_exists('se_consent_granted') && se_consent_granted($brand, 'lead', (int) $lead->id, 'marketing'))
+              || (int) ($lead->consent_marketing ?? 0) === 1;
+    if (!$consented) {
+        return $fail('contact_consent_missing');
+    }
+    $existing = se_journey_find_by_wa($brand, $wa);
+    if ($existing && (string) $existing->state === 'opted_out') {
+        return ['ok' => false, 'reason' => 'opted_out', 'mode' => '', 'journey' => $existing, 'created' => false];
+    }
+
+    // The thread: reuse the brand's row for this number, else create one on
+    // the brand's active WhatsApp number with the window CLOSED (nobody wrote).
+    $CI->db->where('brand_id', $brand)->where('wa_user_id', $wa);
+    $conv = $CI->db->get(db_prefix() . 'se_wa_conversations')->row();
+    if (!$conv) {
+        $CI->db->where('brand_id', $brand)->where('state', 'active')->order_by('id', 'ASC')->limit(1);
+        $number = $CI->db->get(db_prefix() . 'se_wa_numbers')->row();
+        if (!$number || (string) $number->phone_number_id === '') {
+            return $fail('no_active_number');
+        }
+        $now = date('Y-m-d H:i:s');
+        try {
+            $CI->db->insert(db_prefix() . 'se_wa_conversations', [
+                'brand_id' => $brand, 'phone_number_id' => (string) $number->phone_number_id, 'wa_user_id' => $wa,
+                'lead_id' => (int) $lead->id, 'client_id' => 0, 'assigned_staff' => 0, 'unread_count' => 0,
+                'last_inbound_at' => null, 'window_expires_at' => null, 'ctwa_clid' => null, 'referral_json' => null,
+                'state' => 'open', 'date_created' => $now, 'last_updated' => $now,
+            ]);
+        } catch (Exception $e) {
+            return $fail('conversation_create_failed');
+        }
+        $CI->db->where('brand_id', $brand)->where('wa_user_id', $wa);
+        $conv = $CI->db->get(db_prefix() . 'se_wa_conversations')->row();
+        if (!$conv) {
+            return $fail('conversation_create_failed');
+        }
+    } elseif ((int) $conv->lead_id <= 0) {
+        $CI->db->where('id', (int) $conv->id)->update(db_prefix() . 'se_wa_conversations', ['lead_id' => (int) $lead->id]);
+        $conv->lead_id = (int) $lead->id;
+    }
+
+    return se_journey_start_from_conversation($conv, $staff_id, ['source' => 'website_form', 'detail' => 'staff_start_from_lead', 'lead_id' => (int) $lead->id]);
 }
 
 /* ===========================================================================

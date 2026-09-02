@@ -201,6 +201,16 @@ person to reply "Değerlendirme Başlat" — that reply reopens the window and t
 flow continues in-window. Until that template is APPROVED, an out-of-window Start is blocked with a
 visible task, never silently dropped.
 
+Three staff entry points exist: the journey page (**Start**), the WhatsApp thread page (sidebar
+*Patient journey* → **Start evaluation**, for a contact who wrote before the module existed), and the
+**lead page** (*Journeys* panel → **Start WhatsApp evaluation**, for a website applicant who left a
+phone number but never wrote on WhatsApp). The lead path is the only one that creates a thread
+without an inbound message; it refuses without the contact consent the person ticked on the form
+(ledger purpose `marketing`, what `se_website_lead.php` records), without a usable phone, for an
+opted-out person, or while brand automation is off — and it always sends the approved start
+template, since no window is open. Perfex's *Convert to customer* is not part of any path: the
+journey keys on the **lead** and creates the patient record itself at intake.
+
 
 Turkish source copy lives in `se_journey_copy_defaults()`; per-brand overrides via the
 versioned option `se_journey_copy_<brand>` (Settings → copy). Every send records the copy version.

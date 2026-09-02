@@ -219,6 +219,68 @@ se_ok(strpos($html, 'name="kind" value="template"') === false, 'no template form
 ob_start(); se_ui_chat_composer(['mode' => 'template', 'action' => '/reply/1', 'templates' => $tpls]); $html = ob_get_clean();
 se_ok(strpos($html, 'name="kind" value="template"') !== false && strpos($html, 'name="kind" value="text"') === false, 'outside the window only the template form');
 
+/* ======================================================================== */
+se_group('Journey templates: Start from a LEAD (website applicant who never wrote on WhatsApp)');
+
+se_test_seed_journey(['leads' => [
+    ['id' => 501, 'brand_id' => 1, 'name' => 'Web Aday', 'phonenumber' => '+905000000007', 'email' => 'a@example.com', 'status' => 5, 'source' => 7, 'consent_marketing' => 0, 'consent_ads' => 0],
+    ['id' => 502, 'brand_id' => 1, 'name' => 'İzinli Aday', 'phonenumber' => '0 530 000 00 08', 'email' => 'b@example.com', 'status' => 5, 'source' => 7, 'consent_marketing' => 0, 'consent_ads' => 0],
+    ['id' => 503, 'brand_id' => 1, 'name' => 'Telefonsuz', 'phonenumber' => '', 'email' => 'c@example.com', 'status' => 5, 'source' => 7, 'consent_marketing' => 1, 'consent_ads' => 0],
+]]);
+se_test_act_as(10, [], true);
+$db = se_test_db();
+update_option('se_journey_enabled_1', 1);
+se_journey_seed_templates(1);
+foreach ($db->tables['tblse_journey_templates'] as &$row) { if ($row['logical_name'] === 'eyebrow_journey_start_tr') { $row['approval_status'] = 'approved'; } }
+unset($row);
+$db->seed('tblse_wa_templates', [['id' => 1, 'brand_id' => 1, 'name' => 'eyebrow_journey_start_tr', 'language' => 'tr', 'category' => 'UTILITY', 'approval_state' => 'approved', 'variables' => '1']]);
+
+// No contact consent on the form → refused, nothing created, nothing sent.
+$sentBefore = count($GLOBALS['se_wa_sent']);
+$r = se_journey_start_from_lead(501, 10);
+se_eq('contact_consent_missing', $r['reason'], 'a lead without contact consent never receives a template');
+se_eq(0, count($db->rows('tblse_wa_conversations')), 'no thread created');
+se_eq(0, count($db->rows('tblse_journeys')), 'no journey created');
+se_eq($sentBefore, count($GLOBALS['se_wa_sent']), 'nothing sent');
+
+// No phone → refused.
+$r = se_journey_start_from_lead(503, 10);
+se_eq('no_usable_phone', $r['reason'], 'a lead without a phone cannot be started');
+
+// Website form's contact consent recorded in the ledger (what se_website_lead does) → thread + journey + start template.
+se_consent_grant(1, 502, 'marketing', 'website', 'contact_consent', 'true', 0);
+$r = se_journey_start_from_lead(502, 10);
+se_wa_out_drain();
+se_eq(true, $r['ok'], 'started from the lead');
+se_eq(true, $r['created'], 'journey created');
+se_eq('template', $r['mode'], 'the start template went out (no window: the person never wrote)');
+$conv = null; foreach ($db->rows('tblse_wa_conversations') as $c) { $conv = $c; }
+se_eq('905300000008', $conv['wa_user_id'], 'thread created on the normalised number (0 530… → 90530…)');
+se_eq(SE_TEST_PN, $conv['phone_number_id'], "on the brand's active WhatsApp number");
+se_eq(502, (int) $conv['lead_id'], 'linked to the lead');
+se_eq(null, $conv['window_expires_at'], 'window closed — nobody wrote yet');
+$j = $r['journey'];
+se_eq('welcome_sent', $j->state, 'journey at welcome_sent');
+se_eq('website_form', $j->source, 'source is the website form');
+se_eq('staff_start_from_lead', $j->source_detail, 'started by staff from the lead');
+se_eq(502, (int) $j->lead_id, 'the existing lead is reused — no duplicate person');
+$last = end($GLOBALS['se_wa_sent']);
+se_eq('eyebrow_journey_start_tr', $last['template'], 'the start template');
+se_eq(['İzinli'], $last['variables'], "the lead's first name is the placeholder");
+
+// Second press: nothing resent; the reply then continues the normal flow.
+$sentBefore = count($GLOBALS['se_wa_sent']);
+se_eq('already_started', se_journey_start_from_lead(502, 10)['reason'], 'a second Start is refused');
+se_eq($sentBefore, count($GLOBALS['se_wa_sent']), 'nothing resent');
+se_test_wa_deliver(se_test_wa_body('905300000008', 'Değerlendirme Başlat', se_test_wamid()));
+se_eq('consent_pending', se_test_journey_row()->state, "the lead's reply lands on the same thread and the privacy notice + link go out");
+se_eq(1, count($db->rows('tblse_wa_conversations')), 'still one thread (Meta wa_id matched the normalised number)');
+
+// Opted-out person: refused even with consent on file.
+foreach ($db->tables['tblse_journeys'] as &$jr) { if ((int) $jr['lead_id'] === 502) { $jr['state'] = 'opted_out'; } }
+unset($jr);
+se_eq('opted_out', se_journey_start_from_lead(502, 10)['reason'], 'an opted-out person is never re-contacted from the lead page');
+
 /* Leave the shared fixture stores as this suite found them. */
 $GLOBALS['SE_JOURNEY_TEMPLATE_SUBMITTER'] = null;
 se_test_remove_secret('wa_token');

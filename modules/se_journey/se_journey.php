@@ -145,6 +145,19 @@ function se_journey_lead_tab($lead)
     }
     $j = $CI->db->get(db_prefix() . 'se_journeys')->row();
     if (!$j) {
+        // A website applicant who never wrote on WhatsApp: offer the start
+        // template (needs the lead's contact consent + a phone; see helper).
+        $brand = is_array($lead) ? (int) ($lead['brand_id'] ?? 0) : (int) ($lead->brand_id ?? 0);
+        $phone = is_array($lead) ? (string) ($lead['phonenumber'] ?? '') : (string) ($lead->phonenumber ?? '');
+        if (!se_journey_can('edit_review') || $brand <= 0 || !se_journey_enabled($brand) || trim($phone) === '') {
+            return;
+        }
+        echo '<div class="panel_s"><div class="panel-body"><h5>' . _l('se_journeys') . '</h5>'
+           . '<p class="text-muted"><small>' . html_escape(_l('se_journey_lead_start_note')) . '</small></p>'
+           . form_open(admin_url('se_journey/se_journey/start_lead/' . $lead_id))
+           . '<button type="submit" class="btn btn-success btn-sm"><i class="fa fa-whatsapp"></i> ' . html_escape(_l('se_journey_start_whatsapp_evaluation')) . '</button>'
+           . form_close() . '</div></div>';
+
         return;
     }
     echo '<div class="panel_s"><div class="panel-body"><h5>' . _l('se_journeys') . '</h5>'

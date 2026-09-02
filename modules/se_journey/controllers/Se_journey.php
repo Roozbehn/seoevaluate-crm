@@ -110,6 +110,29 @@ class Se_journey extends AdminController
         redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $conv_id));
     }
 
+    /** Start a journey for a lead that has a phone but no WhatsApp thread (website applicant). */
+    public function start_lead($lead_id)
+    {
+        $this->post_only();
+        $this->need('edit_review');
+        $r = se_journey_start_from_lead((int) $lead_id, (int) get_staff_user_id());
+        if ($r['ok'] && $r['mode'] === 'sandbox') {
+            set_alert('warning', _l('se_journey_sandbox_not_sent'));
+        } elseif ($r['ok']) {
+            set_alert('success', _l('se_journey_welcome_queued') . ($r['mode'] === 'template' ? ' (' . _l('se_journey_via_template') . ')' : ''));
+        } elseif ($r['reason'] === 'already_started' && $r['journey']) {
+            set_alert('warning', _l('se_journey_already_started') . ': ' . _l('se_journey_state_' . $r['journey']->state));
+        } else {
+            $key = 'se_journey_start_fail_' . $r['reason'];
+            $txt = _l($key);
+            set_alert('warning', _l('se_journey_blocked') . ': ' . ($txt !== $key ? $txt : $r['reason']));
+        }
+        if ($r['journey']) {
+            redirect(admin_url('se_journey/se_journey/view/' . (int) $r['journey']->id));
+        }
+        redirect(admin_url('leads/index/' . (int) $lead_id));
+    }
+
     public function action($id, $what)
     {
         $this->post_only();
