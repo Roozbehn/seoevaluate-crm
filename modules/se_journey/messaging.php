@@ -1004,9 +1004,12 @@ function se_journey_template_meta_definition($row)
                 if ($flowId === '') {
                     return null;   // caller reports flow_not_created
                 }
-                $list[] = ['type' => 'FLOW', 'text' => mb_substr($text, 0, 25), 'flow_id' => $flowId,
-                           'flow_action' => (string) ($b['flow_action'] ?? 'navigate') === 'data_exchange' ? 'data_exchange' : 'navigate',
-                           'navigate_screen' => (string) ($b['navigate_screen'] ?? '')];
+                $action = (string) ($b['flow_action'] ?? 'navigate') === 'data_exchange' ? 'data_exchange' : 'navigate';
+                $btn = ['type' => 'FLOW', 'text' => mb_substr($text, 0, 25), 'flow_id' => $flowId, 'flow_action' => $action];
+                if ($action === 'navigate' && (string) ($b['navigate_screen'] ?? '') !== '') {
+                    $btn['navigate_screen'] = (string) $b['navigate_screen'];   // Meta: "should be null when flow_action is data_exchange" [2388203]
+                }
+                $list[] = $btn;
                 continue;
             }
             $list[] = ['type' => 'QUICK_REPLY', 'text' => mb_substr($text, 0, 25)];   // URL/phone buttons are not used

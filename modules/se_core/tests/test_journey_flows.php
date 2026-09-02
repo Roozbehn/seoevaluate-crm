@@ -337,7 +337,7 @@ se_journey_register_template_submitter(function ($waba, $definition) use (&$capt
 $r = se_journey_submit_template(1, 'eyebrow_intake_flow_tr', 10);
 se_eq(true, $r['ok'], 'flow template submitted');
 se_eq(['BODY', 'BUTTONS'], array_column($captured['components'], 'type'), 'BODY + BUTTONS');
-se_eq(['type' => 'FLOW', 'text' => 'Formu Doldur', 'flow_id' => '10001', 'flow_action' => 'data_exchange', 'navigate_screen' => 'CONSENT'], $captured['components'][1]['buttons'][0], 'a FLOW button bound to the created flow');
+se_eq(['type' => 'FLOW', 'text' => 'Formu Doldur', 'flow_id' => '10001', 'flow_action' => 'data_exchange'], $captured['components'][1]['buttons'][0], 'a FLOW button bound to the created flow — no navigate_screen with data_exchange (Meta 2388203)');
 $GLOBALS['se_test']['options']['se_journey_flow_id_booking_1'] = '';
 se_eq(['ok' => false, 'reason' => 'flow_not_created'], se_journey_submit_template(1, 'eyebrow_booking_flow_tr', 10), 'no flow id yet → the template cannot be submitted');
 
