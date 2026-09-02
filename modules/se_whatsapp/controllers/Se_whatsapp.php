@@ -55,6 +55,9 @@ class Se_whatsapp extends AdminController
         $data['templates']    = se_wa_approved_templates((int) $conversation->brand_id);
         $data['staff']        = se_appt_selectable_staff((int) $conversation->brand_id);
         $data['queued']       = se_wa_out_health((int) $conversation->brand_id);
+        $data['tracker']      = function_exists('se_outbound_rows')
+            ? se_outbound_rows('se_wa_outbound', (int) $conversation->id, 'wamid') : [];
+        $data['dispatch_eta'] = function_exists('se_outbound_dispatch_eta') ? se_outbound_dispatch_eta() : null;
         $this->load->view('se_whatsapp/conversation', $data);
     }
 

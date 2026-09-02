@@ -159,6 +159,9 @@ $contact_label = $evidence_redacted ? se_wa_redacted_contact($c->wa_user_id) : $
     <div class="panel_s"><div class="panel-body">
       <h5><?php echo html_escape(_l('se_wa_queue_health')); ?></h5>
       <?php se_ui_counters($queued); ?>
+      <?php if (isset($tracker) && function_exists('se_ui_outbound_tracker') && is_array($dispatch_eta)) {
+          se_ui_outbound_tracker($tracker, $dispatch_eta);
+      } ?>
     </div></div>
   </div>
 </div>

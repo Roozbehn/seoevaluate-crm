@@ -46,6 +46,9 @@ class Se_instagram extends AdminController
         $data['policy']       = se_ig_compose_policy($conversation);
         $data['staff']        = function_exists('se_appt_selectable_staff') ? se_appt_selectable_staff((int) $conversation->brand_id) : [];
         $data['queued']       = se_ig_out_health((int) $conversation->brand_id);
+        $data['tracker']      = function_exists('se_outbound_rows')
+            ? se_outbound_rows('se_ig_outbound', (int) $conversation->id, 'mid') : [];
+        $data['dispatch_eta'] = function_exists('se_outbound_dispatch_eta') ? se_outbound_dispatch_eta() : null;
         $this->load->view('se_instagram/conversation', $data);
     }
 
