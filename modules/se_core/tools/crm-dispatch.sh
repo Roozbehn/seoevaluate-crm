@@ -9,4 +9,4 @@ KEY=$(sed -n "s/.*APP_CRON_KEY', *'\([^']*\)'.*/\1/p" "$CFG")
 [ -z "$KEY" ] && { echo "crm-dispatch: APP_CRON_KEY not found in $CFG" >&2; exit 1; }
 curl -sS -m 55 -o /dev/null -w "%{http_code}\n" \
   --resolve "crm.roozbeh.com.tr:443:$ORIGIN" \
-  "https://crm.roozbeh.com.tr/se_core/dispatch/$KEY"
+  "https://crm.roozbeh.com.tr/se_core/dispatch/index/$KEY"

@@ -3,7 +3,7 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 
 /**
- * Fast messaging dispatcher (route: /se_core/dispatch/<APP_CRON_KEY>).
+ * Fast messaging dispatcher (route: /se_core/dispatch/index/<APP_CRON_KEY>).
  *
  * The full Perfex cron (invoices, reminders, IMAP, email queue, every SE hook)
  * runs every 15 minutes, so a WhatsApp/Instagram reply queued from the panel
