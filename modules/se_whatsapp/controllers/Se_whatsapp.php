@@ -51,6 +51,8 @@ class Se_whatsapp extends AdminController
         }
 
         $data['messages']     = $this->se_whatsapp_model->messages((int) $conversation->id);
+        $data['media']        = function_exists('se_media_for_messages')
+            ? se_media_for_messages('wa', array_column($data['messages'], 'id')) : [];
         $data['policy']       = se_wa_compose_policy($conversation);
         $data['templates']    = se_wa_approved_templates((int) $conversation->brand_id);
         $data['staff']        = se_appt_selectable_staff((int) $conversation->brand_id);

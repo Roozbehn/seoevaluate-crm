@@ -329,3 +329,13 @@ $lang['se_credentials_store_path']    = 'Gizli anahtar dizini';
 $lang['se_credentials_diag_hint']     = 'Depoyu güvenle doğrulayın (değer gösterilmez):';
 $lang['se_credentials_expected_file'] = 'Beklenen dosya';
 $lang['se_credentials_inherited']     = 'Meta Uygulama Anahtarından devralındı';
+
+/* --- Sohbet arayüzü + gelen medya (WhatsApp / Instagram) ----------------- */
+$lang['se_chat_placeholder']       = 'Yanıt yazın… (Enter gönderir, Shift+Enter yeni satır)';
+$lang['se_chat_send']              = 'Gönder';
+$lang['se_chat_send_template']     = 'Şablonu gönder';
+$lang['se_chat_enter_hint']        = 'Enter gönderir · Shift+Enter satır ekler · kuyruğa alınır ve dağıtıcı tarafından iletilir';
+$lang['se_media_placeholder']      = 'Ek';
+$lang['se_media_fetching']         = 'Ek alınıyor…';
+$lang['se_media_failed']           = 'Ek alınamadı';
+$lang['se_media_document']         = 'Belge';

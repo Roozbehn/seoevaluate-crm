@@ -37,6 +37,13 @@ function se_net_install_fixtures()
         });
     }
 
+    if (function_exists('se_media_register_fetcher')) {
+        se_media_register_fetcher(function ($row) {
+            $GLOBALS['se_net_attempts'][] = 'media:' . $row['channel'];   // counted => test fails
+            return ['ok' => false, 'bytes' => '', 'mime' => '', 'error' => 'network disabled in tests'];
+        });
+    }
+
     if (function_exists('se_wa_register_template_fetcher')) {
         se_wa_register_template_fetcher(function ($waba_id) {
             $GLOBALS['se_net_attempts'][] = 'wa_templates:' . $waba_id;   // counted => test fails

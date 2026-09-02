@@ -477,8 +477,13 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
     $type = mb_substr((string) ($msg['type'] ?? 'text'), 0, 32);
     $body = $type === 'text' ? mb_substr((string) ($msg['text']['body'] ?? ''), 0, SE_WA_MAX_TEXT_LEN) : null;
     $media_ref = null;
-    if (in_array($type, ['image', 'document', 'audio', 'video'], true) && isset($msg[$type]['id'])) {
+    $media_kinds = ['image', 'document', 'audio', 'video', 'sticker'];
+    if (in_array($type, $media_kinds, true) && isset($msg[$type]['id'])) {
         $media_ref = 'media:' . $msg[$type]['id']; // controlled download happens later, post-validation
+        // A caption travels with the attachment; show it as the message text.
+        if (!empty($msg[$type]['caption'])) {
+            $body = mb_substr((string) $msg[$type]['caption'], 0, SE_WA_MAX_TEXT_LEN);
+        }
     }
 
     $CI->db->insert($msgTable, [
@@ -493,6 +498,15 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
         'received_at'     => $ts,
         'date_created'    => date('Y-m-d H:i:s'),
     ]);
+
+    // Register the attachment for the async fetch (dispatcher / cron). The
+    // media id is all Meta gives us here; the bytes are pulled with the Cloud
+    // API token later, never inside the webhook request.
+    if ($media_ref !== null && function_exists('se_media_enqueue')) {
+        se_media_enqueue('wa', (int) $CI->db->insert_id(), (int) $brand_id,
+            $type === 'sticker' ? 'image' : $type, (string) $msg[$type]['id'],
+            $body, $msg[$type]['filename'] ?? null, $msg[$type]['mime_type'] ?? null);
+    }
 
     // Meter the inbound (service category) once per wamid.
     se_wa_meter((int) $brand_id, 'service', false, 'in:' . $wamid);

@@ -11,140 +11,48 @@ $contact_label = $evidence_redacted ? se_wa_redacted_contact($c->wa_user_id) : $
 <div class="row">
   <div class="col-md-8"><div class="panel_s"><div class="panel-body">
 
-    <?php /* Thread. Direction drives alignment so a scan of the column reads
-             as a conversation rather than a log. */ ?>
-    <?php if (empty($messages)) { se_ui_empty(_l('se_wa_no_messages')); } else { ?>
-      <div style="max-height:520px;overflow-y:auto">
-      <?php foreach ($messages as $m) {
-          $out = ($m['direction'] ?? 'in') === 'out'; ?>
-        <div class="mbot15" style="text-align:<?php echo $out ? 'right' : 'left'; ?>">
-          <div style="display:inline-block;max-width:80%;padding:8px 12px;border-radius:6px;
-                      border:1px solid rgba(128,128,128,.35)">
-            <small class="text-muted">
-              <?php echo html_escape($out ? _l('se_wa_direction_out') : _l('se_wa_direction_in')); ?>
-              <?php if ($out && !empty($m['source'])) {
-                  echo ' &middot; ' . html_escape(_l('se_wa_source_' . $m['source']));
-              } ?>
-              &middot; <?php echo html_escape($m['type'] ?? 'text'); ?>
-              <?php if ($out && !empty($m['delivery_state'])) {
-                  echo ' &middot; ' . se_ui_badge($m['delivery_state']);
-              } ?>
-            </small><br />
-            <?php if (!empty($m['body'])) { ?>
-              <?php echo $evidence_redacted
-                  ? '<span class="text-muted">[message redacted for evidence]</span>'
-                  : nl2br(html_escape($m['body'])); ?>
-            <?php } elseif (!empty($m['template_name'])) { ?>
-              <em><?php echo html_escape(_l('se_wa_template')); ?>: <?php echo html_escape($m['template_name']); ?></em>
-            <?php } elseif (!empty($m['media_ref'])) { ?>
-              <?php /* Media is referenced, never inlined: the file lives on
-                       Meta's CDN and fetching it needs a controlled, validated
-                       download path that does not exist yet. */ ?>
-              <span class="label label-default"><i class="fa fa-paperclip"></i>
-                <?php echo html_escape(_l('se_wa_media_placeholder')); ?></span>
-            <?php } else { ?>
-              <span class="text-muted">&mdash;</span>
-            <?php } ?>
-            <br /><small class="text-muted"><?php echo html_escape((string) ($m['received_at'] ?: $m['sent_at'] ?: $m['date_created'])); ?></small>
-          </div>
-        </div>
-      <?php } ?>
-      </div>
-    <?php } ?>
+    <?php /* Thread + composer are shared with Instagram (se_core/se_chat_ui.php).
+             Which composer is offered is decided by the SERVER from the service
+             window (se_wa_compose_policy), never by the page. */ ?>
+    <?php se_ui_chat_thread($messages, $media ?? [], [
+        'channel'  => 'wa',
+        'redacted' => $evidence_redacted,
+        'empty'    => _l('se_wa_no_messages'),
+    ]); ?>
 
-    <hr />
-
-    <?php /* Composer. Which control is offered is decided by the SERVER from
-             the service window, never by the page. */ ?>
-    <?php if (!$policy['allowed']) { ?>
-      <div class="alert alert-warning">
-        <i class="fa fa-lock"></i>
-        <strong><?php echo html_escape(_l('se_wa_sending_gated')); ?></strong><br />
-        <?php echo html_escape(_l('se_wa_blocked_' . $policy['reason'])); ?>
-      </div>
-      <textarea class="form-control" rows="3" disabled
-                placeholder="<?php echo html_escape(_l('se_wa_composer_disabled')); ?>"></textarea>
-
-    <?php } elseif ($policy['mode'] === 'freeform') { ?>
-      <?php echo form_open(admin_url('se_whatsapp/se_whatsapp/reply/' . (int) $c->id)); ?>
-        <input type="hidden" name="kind" value="text" />
-        <div class="form-group">
-          <label for="body" class="control-label">
-            <?php echo html_escape(_l('se_wa_reply_freeform')); ?>
-            <?php echo se_ui_badge('open', _l('se_wa_window_open')); ?>
-            <small class="text-muted"><?php echo html_escape(_l('se_wa_window_until')); ?>
-              <?php echo html_escape((string) $policy['expires_at']); ?></small>
-          </label>
-          <textarea class="form-control" rows="3" id="body" name="body"
-                    maxlength="4096" required></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary"><?php echo html_escape(_l('se_wa_queue_reply')); ?></button>
-      <?php echo form_close(); ?>
-
-    <?php } else { ?>
-      <div class="alert alert-info">
-        <i class="fa fa-clock"></i> <?php echo html_escape(_l('se_wa_reply_template_required')); ?>
-      </div>
-      <?php if (empty($templates)) { ?>
-        <?php se_ui_empty(_l('se_wa_no_templates')); ?>
-        <?php if (function_exists('se_staff_can_configure_brands') && se_staff_can_configure_brands()
-                  && function_exists('se_wa_waba_for_brand') && se_wa_waba_for_brand((int) $c->brand_id) !== '') { ?>
-          <?php echo form_open(admin_url('se_whatsapp/se_whatsapp/sync_templates'), ['class' => 'mtop10']); ?>
-            <input type="hidden" name="brand" value="<?php echo (int) $c->brand_id; ?>" />
-            <input type="hidden" name="back" value="<?php echo html_escape(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $c->id)); ?>" />
-            <button type="submit" class="btn btn-default btn-sm">
-              <i class="fa fa-refresh"></i> <?php echo html_escape(_l('se_wa_sync_templates')); ?></button>
-            <small class="text-muted mleft10"><?php echo html_escape(_l('se_wa_sync_templates_hint')); ?></small>
-          <?php echo form_close(); ?>
-        <?php } ?>
-      <?php } else { ?>
-        <?php echo form_open(admin_url('se_whatsapp/se_whatsapp/reply/' . (int) $c->id)); ?>
-          <input type="hidden" name="kind" value="template" />
-          <div class="form-group">
-            <label for="template" class="control-label"><?php echo html_escape(_l('se_wa_template')); ?></label>
-            <select class="form-control" id="template" name="template" required
-                    onchange="seWaTemplatePick(this.value)">
-              <?php foreach ($templates as $t) { ?>
-                <option value="<?php echo html_escape($t['name']); ?>">
-                  <?php echo html_escape($t['name'] . ' (' . $t['language'] . ')'); ?>
-                </option>
-              <?php } ?>
-            </select>
-          </div>
-          <?php foreach ($templates as $i => $t) {
-              $vars = function_exists('se_wa_template_variables') ? se_wa_template_variables($t) : []; ?>
-            <div class="se-wa-tpl" data-template="<?php echo html_escape($t['name']); ?>"<?php echo $i === 0 ? '' : ' style="display:none"'; ?>>
-              <?php if ((string) ($t['body'] ?? '') !== '') { ?>
-                <pre class="mbot10" style="white-space:pre-wrap;font-size:12px"><?php echo html_escape($t['body']); ?></pre>
-              <?php } ?>
-              <?php if ($vars) { ?>
-                <p class="text-muted" style="font-size:12px"><?php echo html_escape(_l('se_wa_template_variables_hint')); ?></p>
-                <?php foreach ($vars as $v) { ?>
-                  <div class="form-group">
-                    <label class="control-label">{{<?php echo html_escape($v); ?>}}</label>
-                    <input type="text" class="form-control" maxlength="1024"
-                           name="variables[<?php echo html_escape($t['name']); ?>][<?php echo html_escape($v); ?>]"
-                           <?php echo $i === 0 ? 'required' : 'disabled'; ?> />
-                  </div>
-                <?php } ?>
-              <?php } else { ?>
-                <p class="text-muted" style="font-size:12px"><?php echo html_escape(_l('se_wa_template_no_variables')); ?></p>
-              <?php } ?>
-            </div>
-          <?php } ?>
-          <script>
-            function seWaTemplatePick(name) {
-              document.querySelectorAll('.se-wa-tpl').forEach(function (el) {
-                var on = el.getAttribute('data-template') === name;
-                el.style.display = on ? '' : 'none';
-                el.querySelectorAll('input').forEach(function (inp) { inp.disabled = !on; inp.required = on; });
-              });
-            }
-          </script>
-          <button type="submit" class="btn btn-primary"><?php echo html_escape(_l('se_wa_queue_reply')); ?></button>
-        <?php echo form_close(); ?>
-      <?php } ?>
-    <?php } ?>
+    <?php if (!$policy['allowed']) {
+        se_ui_chat_composer([
+            'mode'   => 'gated',
+            'title'  => _l('se_wa_sending_gated'),
+            'reason' => _l('se_wa_blocked_' . $policy['reason']),
+        ]);
+    } elseif ($policy['mode'] === 'freeform') {
+        se_ui_chat_composer([
+            'mode'         => 'freeform',
+            'action'       => admin_url('se_whatsapp/se_whatsapp/reply/' . (int) $c->id),
+            'window_label' => _l('se_wa_window_open'),
+            'window_text'  => _l('se_wa_window_until') . ' ' . (string) $policy['expires_at'],
+            'maxlength'    => 4096,
+            'placeholder'  => _l('se_chat_placeholder'),
+            'label_send'   => _l('se_chat_send'),
+        ]);
+    } else {
+        $can_sync = function_exists('se_staff_can_configure_brands') && se_staff_can_configure_brands()
+                 && function_exists('se_wa_waba_for_brand') && se_wa_waba_for_brand((int) $c->brand_id) !== '';
+        se_ui_chat_composer([
+            'mode'         => 'template',
+            'action'       => admin_url('se_whatsapp/se_whatsapp/reply/' . (int) $c->id),
+            'window_label' => _l('se_wa_window_closed'),
+            'window_text'  => _l('se_wa_reply_template_required'),
+            'templates'    => $templates,
+            'label_send'   => _l('se_chat_send_template'),
+            'sync'         => $can_sync ? [
+                'action' => admin_url('se_whatsapp/se_whatsapp/sync_templates'),
+                'brand'  => (int) $c->brand_id,
+                'back'   => admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $c->id),
+            ] : null,
+        ]);
+    } ?>
 
   </div></div></div>
 

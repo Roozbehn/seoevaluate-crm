@@ -10,50 +10,34 @@ $contact_label = se_ig_redacted_contact($c->igsid); ?>
 
 <div class="row">
   <div class="col-md-8"><div class="panel_s"><div class="panel-body">
-    <?php if (empty($messages)) { se_ui_empty(_l('se_ig_no_messages')); } else { ?>
-      <div style="max-height:520px;overflow-y:auto">
-      <?php foreach ($messages as $m) { $out = ($m['direction'] ?? 'in') === 'out'; ?>
-        <div class="mbot15" style="text-align:<?php echo $out ? 'right' : 'left'; ?>">
-          <div style="display:inline-block;max-width:80%;padding:8px 12px;border-radius:6px;border:1px solid rgba(128,128,128,.35)">
-            <small class="text-muted">
-              <?php echo html_escape($out ? _l('se_ig_direction_out') : _l('se_ig_direction_in')); ?>
-              <?php if ($out && !empty($m['source'])) { echo ' &middot; ' . html_escape(_l('se_ig_source_' . $m['source'])); } ?>
-              &middot; <?php echo html_escape($m['type'] ?? 'text'); ?>
-              <?php if ($out && !empty($m['delivery_state'])) { echo ' &middot; ' . se_ui_badge($m['delivery_state']); } ?>
-            </small><br />
-            <?php if (!empty($m['body'])) {
-                echo $evidence_redacted ? '<span class="text-muted">[message redacted for evidence]</span>' : nl2br(html_escape($m['body']));
-            } elseif (!empty($m['media_ref'])) { ?>
-              <span class="label label-default"><i class="fa fa-paperclip"></i> <?php echo html_escape(_l('se_ig_media_placeholder')); ?></span>
-            <?php } else { ?><span class="text-muted">&mdash;</span><?php } ?>
-            <br /><small class="text-muted"><?php echo html_escape((string) ($m['received_at'] ?: $m['sent_at'] ?: $m['date_created'])); ?></small>
-          </div>
-        </div>
-      <?php } ?>
-      </div>
-    <?php } ?>
 
-    <hr />
+    <?php /* Thread + composer shared with WhatsApp (se_core/se_chat_ui.php).
+             Instagram has no template mechanism: outside the 24h window the
+             server gates sending and the composer says so. */ ?>
+    <?php se_ui_chat_thread($messages, $media ?? [], [
+        'channel'  => 'ig',
+        'redacted' => $evidence_redacted,
+        'empty'    => _l('se_ig_no_messages'),
+    ]); ?>
 
-    <?php if (!$policy['allowed']) { ?>
-      <div class="alert alert-warning"><i class="fa fa-lock"></i>
-        <strong><?php echo html_escape(_l('se_ig_sending_gated')); ?></strong><br />
-        <?php echo html_escape(_l('se_ig_blocked_' . $policy['reason'])); ?>
-      </div>
-      <textarea class="form-control" rows="3" disabled placeholder="<?php echo html_escape(_l('se_ig_composer_disabled')); ?>"></textarea>
-    <?php } else { ?>
-      <?php echo form_open(admin_url('se_instagram/se_instagram/reply/' . (int) $c->id)); ?>
-        <div class="form-group">
-          <label for="body" class="control-label">
-            <?php echo html_escape(_l('se_ig_reply_freeform')); ?>
-            <?php echo se_ui_badge('open', _l('se_ig_window_open')); ?>
-            <small class="text-muted"><?php echo html_escape(_l('se_ig_window_until')); ?> <?php echo html_escape((string) $policy['expires_at']); ?></small>
-          </label>
-          <textarea class="form-control" rows="3" id="body" name="body" maxlength="1000" required></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary"><?php echo html_escape(_l('se_ig_queue_reply')); ?></button>
-      <?php echo form_close(); ?>
-    <?php } ?>
+    <?php if (!$policy['allowed']) {
+        se_ui_chat_composer([
+            'mode'   => 'gated',
+            'title'  => _l('se_ig_sending_gated'),
+            'reason' => _l('se_ig_blocked_' . $policy['reason']),
+        ]);
+    } else {
+        se_ui_chat_composer([
+            'mode'         => 'freeform',
+            'action'       => admin_url('se_instagram/se_instagram/reply/' . (int) $c->id),
+            'window_label' => _l('se_ig_window_open'),
+            'window_text'  => _l('se_ig_window_until') . ' ' . (string) $policy['expires_at'],
+            'maxlength'    => 1000,
+            'placeholder'  => _l('se_chat_placeholder'),
+            'label_send'   => _l('se_chat_send'),
+        ]);
+    } ?>
+
   </div></div></div>
 
   <div class="col-md-4">

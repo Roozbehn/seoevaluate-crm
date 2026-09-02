@@ -43,6 +43,8 @@ class Se_instagram extends AdminController
         $data['title']        = _l('se_instagram');
         $data['conversation'] = $conversation;
         $data['messages']     = $this->se_instagram_model->messages((int) $conversation->id);
+        $data['media']        = function_exists('se_media_for_messages')
+            ? se_media_for_messages('ig', array_column($data['messages'], 'id')) : [];
         $data['policy']       = se_ig_compose_policy($conversation);
         $data['staff']        = function_exists('se_appt_selectable_staff') ? se_appt_selectable_staff((int) $conversation->brand_id) : [];
         $data['queued']       = se_ig_out_health((int) $conversation->brand_id);

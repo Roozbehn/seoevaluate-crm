@@ -445,16 +445,20 @@ function se_ig_classify_event($m)
         $msg  = $m['message'];
         $type = 'text';
         $media = null;
+        $media_url = null;
         if (!empty($msg['attachments'][0]['type'])) {
             $type  = mb_substr((string) $msg['attachments'][0]['type'], 0, 24);
-            $media = isset($msg['attachments'][0]['payload']['url'])
-                ? 'url:' . mb_substr((string) $msg['attachments'][0]['payload']['url'], 0, 180) : 'attachment';
+            // The full CDN URL is kept for the media store (it is far longer
+            // than media_ref's 191 chars); media_ref holds only a marker.
+            $media_url = isset($msg['attachments'][0]['payload']['url'])
+                ? (string) $msg['attachments'][0]['payload']['url'] : null;
+            $media = $media_url !== null ? 'url:' . mb_substr($media_url, 0, 180) : 'attachment';
         }
 
         return ['kind' => !empty($msg['is_echo']) ? 'echo' : 'inbound',
                 'sender' => $sender, 'recipient' => $recipient, 'ts' => $ts,
                 'mid' => (string) ($msg['mid'] ?? ''), 'type' => $type,
-                'text' => (string) ($msg['text'] ?? ''), 'media' => $media,
+                'text' => (string) ($msg['text'] ?? ''), 'media' => $media, 'media_url' => $media_url,
                 'deleted' => !empty($msg['is_deleted']),
                 'referral' => $m['referral'] ?? ($msg['referral'] ?? null)];
     }
@@ -601,6 +605,15 @@ function se_ig_handle_inbound($brand_id, $account, $e)
         'received_at'     => $ts,
         'date_created'    => date('Y-m-d H:i:s'),
     ]);
+
+    // Attachment → media store (fetched async by the dispatcher / cron).
+    if (!empty($e['media_url']) && function_exists('se_media_enqueue')) {
+        $kind = in_array($e['type'], ['image', 'audio', 'video', 'file'], true)
+            ? ($e['type'] === 'file' ? 'document' : $e['type'])
+            : 'image';   // share / story_mention / reel previews arrive as images
+        se_media_enqueue('ig', (int) $CI->db->insert_id(), (int) $brand_id, $kind, (string) $e['media_url'],
+            $e['text'] !== '' ? $e['text'] : null);
+    }
 }
 
 /**

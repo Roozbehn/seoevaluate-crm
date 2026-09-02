@@ -334,3 +334,13 @@ $lang['se_credentials_store_path']    = 'Secret store path';
 $lang['se_credentials_diag_hint']     = 'Verify the store safely (no values shown):';
 $lang['se_credentials_expected_file'] = 'Expected file';
 $lang['se_credentials_inherited']     = 'Inherited from Meta App Secret';
+
+/* --- Shared chat UI + inbound media (WhatsApp / Instagram threads) ------- */
+$lang['se_chat_placeholder']       = 'Write a reply… (Enter to send, Shift+Enter for a new line)';
+$lang['se_chat_send']              = 'Send';
+$lang['se_chat_send_template']     = 'Send template';
+$lang['se_chat_enter_hint']        = 'Enter sends · Shift+Enter adds a line · queued and delivered by the dispatcher';
+$lang['se_media_placeholder']      = 'Attachment';
+$lang['se_media_fetching']         = 'Fetching attachment…';
+$lang['se_media_failed']           = 'Attachment unavailable';
+$lang['se_media_document']         = 'Document';

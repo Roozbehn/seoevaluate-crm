@@ -21,6 +21,7 @@ function se_dispatch_steps()
         'wa_queue'  => 'se_wa_out_drain',
         'ig_events' => 'se_ig_process_pending',
         'ig_queue'  => 'se_ig_out_drain',
+        'media'     => 'se_media_fetch_pending',   // attachments referenced by the events above
     ];
 }
 
