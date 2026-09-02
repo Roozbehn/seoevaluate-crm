@@ -1,8 +1,9 @@
-# Azin Asgari consent wording — approval draft
+# Azin Asgari consent wording — approved configuration
 
 Date: 2026-09-01  
 Brand: 22  
-Status: **DRAFT — disabled; owner/privacy-counsel approval required before activation**
+Status: **APPROVED by owner on 2026-09-01; activated for brand 22**
+Approved legal/controller name: **Azin Asgari**
 
 ## Why the current stored draft must not be enabled
 
@@ -22,8 +23,9 @@ The website already enforces this separation in code:
 
 `kvkk-2026-09-v1`
 
-Do not activate this version until the legal identity/controller details and
-wording have been reviewed.
+This version was activated after the owner confirmed the legal name and the
+need for marketing consent across email, SMS, WhatsApp, telephone calls and
+other electronic communication channels.
 
 ## Ads measurement (`ads`)
 
@@ -45,20 +47,23 @@ Policy for details.
 
 **TR**
 
-Azin Asgari'den hizmetler ve güncellemeler hakkında tanıtım amaçlı elektronik
-iletiler almak istiyorum. Onayımı dilediğim zaman geri çekebilirim.
+Azin Asgari'den hizmetler, kampanyalar ve güncellemeler hakkında e-posta, SMS,
+WhatsApp, telefon araması ve diğer elektronik iletişim kanalları üzerinden
+tanıtım ve pazarlama iletileri almayı kabul ediyorum. Onayımı dilediğim zaman
+geri çekebilirim.
 
 **EN**
 
-I would like to receive promotional electronic communications from Azin Asgari
-about services and updates. I can withdraw my consent at any time.
+I agree to receive promotional and marketing communications from Azin Asgari
+about services, campaigns and updates by email, SMS, WhatsApp, phone calls and
+other electronic communication channels. I can withdraw my consent at any
+time.
 
-## Approval checklist
+## Approval record
 
-- Confirm the formal data-controller/legal-entity name and contact details.
-- Confirm whether the marketing purpose is needed at all for the first launch.
-- Confirm channels covered by marketing consent (email, SMS, WhatsApp) rather
-  than relying on generic language.
-- Confirm the Turkish wording against KVKK and electronic-commercial-message
-  requirements; this document is operational copy, not legal advice.
-- Keep both purposes disabled until approval is recorded.
+- Legal/controller name confirmed by owner: Azin Asgari.
+- Ads measurement consent approved.
+- Marketing consent approved for email, SMS, WhatsApp, phone calls and other
+  electronic communication channels.
+- Both purposes enabled in production under version `kvkk-2026-09-v1`.
+- This document records the operational approval; it is not legal advice.
