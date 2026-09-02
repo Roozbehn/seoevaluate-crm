@@ -241,7 +241,7 @@ function se_core_deny()
  * se_meta_leadgen.php is wired but its live Graph fetch/send stays gated on a
  * Meta Page token + App Review; se_whatsapp is now its own module.
  */
-foreach (['se_asset_registry.php', 'se_outbox_snapshot.php', 'se_outbox.php', 'se_capi.php', 'se_google_dm.php',
+foreach (['se_asset_registry.php', 'se_outbox_snapshot.php', 'se_outbox.php', 'se_capi.php', 'se_push.php', 'se_push_events.php', 'se_google_dm.php',
           'se_meta_leadgen.php', 'se_webhook_state.php', 'se_reporting.php', 'se_google_auth.php',
           'se_outbox_ui.php', 'se_integration_ui.php', 'se_outbound_tracker.php', 'se_dispatch.php', 'se_media.php', 'se_media_storage.php', 'se_chat_ui.php'] as $__se_b2) {
     $__se_b2_path = __DIR__ . '/' . $__se_b2;
@@ -249,3 +249,39 @@ foreach (['se_asset_registry.php', 'se_outbox_snapshot.php', 'se_outbox.php', 's
         require_once $__se_b2_path;
     }
 }
+
+/**
+ * The installable-app head: manifest link, iOS meta tags, and the registration
+ * script.
+ *
+ * iOS is the reason for the extra tags. Safari ignores the manifest's
+ * `display` for the home-screen icon and reads apple-mobile-web-app-capable
+ * instead, and — the part that actually matters — iOS delivers web push ONLY
+ * to a PWA the user has added to the home screen. Without these, the button
+ * appears, the user taps it, and nothing ever arrives on an iPhone.
+ */
+function se_pwa_admin_head()
+{
+    if (!function_exists('se_staff_session_id') || (int) se_staff_session_id() <= 0) {
+        return;
+    }
+
+    $base = rtrim(site_url(), '/');
+    $name = defined('SE_CLINIC_NAME') ? SE_CLINIC_NAME : 'SEO Evaluate CRM';
+
+    echo '<link rel="manifest" href="' . $base . '/se_core/se_pwa/manifest">' . "\n";
+    echo '<meta name="theme-color" content="#1b1b1b">' . "\n";
+    echo '<meta name="mobile-web-app-capable" content="yes">' . "\n";
+    echo '<meta name="apple-mobile-web-app-capable" content="yes">' . "\n";
+    echo '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">' . "\n";
+    echo '<meta name="apple-mobile-web-app-title" content="' . html_escape(mb_substr($name, 0, 12)) . '">' . "\n";
+    echo '<link rel="apple-touch-icon" href="' . $base . '/modules/se_core/assets/icon-192.png">' . "\n";
+    // The admin theme is Bootstrap 3, which is responsive but assumes a
+    // desktop viewport unless told otherwise.
+    echo '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' . "\n";
+    echo '<script>window.SE_PWA={base:' . json_encode($base) . '};</script>' . "\n";
+    echo '<script defer src="' . $base . '/modules/se_core/assets/pwa.js"></script>' . "\n";
+    echo '<link rel="stylesheet" href="' . $base . '/modules/se_core/assets/pwa.css">' . "\n";
+}
+
+hooks()->add_action('app_admin_head', 'se_pwa_admin_head');

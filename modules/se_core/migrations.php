@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 18);
+define('SE_CORE_SCHEMA_VERSION', 19);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -337,6 +337,38 @@ function se_core_migration_statements()
             $stmts[] = $jSql;
         }
     }
+
+    /* --- v19: web push subscriptions (installable PWA) ---------------------
+     * One row per (staff, browser). A staff member with a phone and a laptop
+     * has two, and both must be pushed to — a clinic that answers on whichever
+     * device is to hand is the entire point.
+     *
+     * `endpoint` is a URL at the browser vendor's push service and is the
+     * natural key, but it runs to hundreds of characters and MySQL cannot
+     * index that at utf8mb4 within 191 bytes. So the UNIQUE key is over a
+     * SHA-256 of it and the endpoint itself is a plain TEXT column.
+     *
+     * p256dh and auth are the subscription's own public key and auth secret.
+     * They are not credentials of ours and are useless without the endpoint,
+     * but they are still per-person data: rows are deleted when the browser
+     * unsubscribes, and pruned automatically when the push service answers
+     * 404/410.
+     */
+    $stmts[] = "CREATE TABLE IF NOT EXISTS `{$p}se_push_subscriptions` (
+        `id` bigint(20) NOT NULL AUTO_INCREMENT,
+        `staff_id` int(11) NOT NULL DEFAULT 0,
+        `endpoint_hash` char(64) NOT NULL,
+        `endpoint` text NOT NULL,
+        `p256dh` varchar(200) NOT NULL,
+        `auth` varchar(64) NOT NULL,
+        `user_agent` varchar(255) DEFAULT NULL,
+        `failures` int(11) NOT NULL DEFAULT 0,
+        `last_success_at` datetime DEFAULT NULL,
+        `date_created` datetime NOT NULL,
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `endpoint_hash` (`endpoint_hash`),
+        KEY `staff_id` (`staff_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     /* --- v8.8: brand-scoping index coverage for tenant queries ------------- */
     $stmts[] = "ALTER TABLE `{$p}se_staff_brands` ADD INDEX IF NOT EXISTS `staff_id` (`staff_id`)";

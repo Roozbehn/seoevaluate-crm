@@ -529,6 +529,15 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
     // Meter the inbound (service category) once per wamid.
     se_wa_meter((int) $brand_id, 'service', false, 'in:' . $wamid);
 
+    /* Push to the staff phone. Placed AFTER the wamid dedup guard, so a Meta
+     * redelivery — which is routine — cannot buzz twice for one message. The
+     * payload carries no sender, no number and no text: it lands on a lock
+     * screen in a room with patients in it. */
+    if (function_exists('se_push_notify_inbound')) {
+        se_push_notify_inbound('wa', (int) $brand_id, $conv_id,
+                               $conv ? (int) $conv->assigned_staff : 0);
+    }
+
     // Downstream automation (se_journey) reacts to NEW inbound messages only —
     // a redelivered wamid returned above and never reaches a listener, which
     // is what makes every listener idempotent for free.

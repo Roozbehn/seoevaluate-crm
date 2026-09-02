@@ -341,6 +341,8 @@ require_once $SE_MODULES . '/se_core/libraries/Se_hash.php';
 require_once $SE_MODULES . '/se_core/se_outbox_snapshot.php';
 require_once $SE_MODULES . '/se_core/se_outbox.php';
 require_once $SE_MODULES . '/se_core/se_capi.php';
+require_once $SE_MODULES . '/se_core/se_push.php';
+require_once $SE_MODULES . '/se_core/se_push_events.php';
 require_once $SE_MODULES . '/se_core/se_google_auth.php';
 require_once $SE_MODULES . '/se_core/se_google_dm.php';
 require_once $SE_MODULES . '/se_core/se_meta_leadgen.php';

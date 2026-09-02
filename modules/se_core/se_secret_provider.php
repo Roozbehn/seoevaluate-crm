@@ -50,6 +50,12 @@ function se_secret_providers()
         // Patient-journey data key: seals health answers, check-in replies and
         // photographs at rest (libsodium secretbox). 32 random bytes, base64.
         'journey_key'   => ['label' => 'Patient-journey encryption key (32 bytes, base64)', 'per_brand' => false],
+        // VAPID keypair for web push, as JSON {public, private}. The PRIVATE
+        // half authorises pushing to every registered subscription, so it
+        // belongs here and never in the options table. The public half is not
+        // a secret but must stay STABLE — regenerating it silently kills every
+        // existing subscription with nothing in any log.
+        'webpush_vapid' => ['label' => 'Web push VAPID keypair (JSON {public, private})', 'per_brand' => false],
     ];
 }
 
