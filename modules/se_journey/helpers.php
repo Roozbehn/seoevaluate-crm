@@ -446,12 +446,16 @@ function se_journey_test_recipients($brand_id)
 {
     $raw = (string) get_option('se_journey_test_recipients_' . (int) $brand_id);
     $out = [];
-    foreach (preg_split('/[\s,;]+/', $raw) as $n) {
-        $n = preg_replace('/\D+/', '', (string) $n);
+    // Numbers are separated by commas/semicolons; spaces inside a number are
+    // allowed ("0 531 000 00 09"), so split on separators only.
+    foreach (preg_split('/[,;]+/', $raw) as $n) {
+        // Same normalisation as inbound wa_ids ("0 5xx" → "90 5xx", "+90…" → "90…")
+        // so a number typed in national format still matches the allow-list.
+        $n = se_journey_normalize_wa_id($n);
         if ($n !== '') { $out[] = $n; }
     }
 
-    return $out;
+    return array_values(array_unique($out));
 }
 
 /** Automation may start on organic (non-prefilled, non-ad) enquiries? Default no. */

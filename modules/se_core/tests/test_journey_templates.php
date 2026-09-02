@@ -281,6 +281,12 @@ foreach ($db->tables['tblse_journeys'] as &$jr) { if ((int) $jr['lead_id'] === 5
 unset($jr);
 se_eq('opted_out', se_journey_start_from_lead(502, 10)['reason'], 'an opted-out person is never re-contacted from the lead page');
 
+/* ======================================================================== */
+se_group('Journey templates: sandbox allow-list accepts national and international spellings');
+
+update_option('se_journey_test_recipients_1', '0 531 000 00 09, +90 532 000 00 10; 905330000011');
+se_eq(['905310000009', '905320000010', '905330000011'], se_journey_test_recipients(1), 'every spelling normalises to the Meta wa_id form');
+
 /* Leave the shared fixture stores as this suite found them. */
 $GLOBALS['SE_JOURNEY_TEMPLATE_SUBMITTER'] = null;
 se_test_remove_secret('wa_token');
