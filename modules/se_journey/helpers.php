@@ -1156,6 +1156,59 @@ function se_journey_create($brand_id, array $ctx, array $source, $lead_id)
     return ['journey' => $j, 'created' => true];
 }
 
+/**
+ * Staff start from the WhatsApp thread: a person who wrote before the module
+ * existed (or before automation was enabled) has no journey row. Create it
+ * from the conversation (same identity rules as the inbound path: reuse the
+ * thread's lead, else the lead that owns the number, else a new lead) and
+ * send the welcome — buttons inside the window, the approved start template
+ * outside it. Never restarts a journey that already moved on.
+ *
+ * @return array{ok:bool,reason:string,mode:string,journey:object|null,created:bool}
+ */
+function se_journey_start_from_conversation($conv, $staff_id)
+{
+    $brand = (int) ($conv->brand_id ?? 0);
+    $from  = (string) ($conv->wa_user_id ?? '');
+    if ($brand <= 0 || $from === '') {
+        return ['ok' => false, 'reason' => 'invalid_conversation', 'mode' => '', 'journey' => null, 'created' => false];
+    }
+    if (!se_journey_enabled($brand)) {
+        return ['ok' => false, 'reason' => 'disabled', 'mode' => '', 'journey' => null, 'created' => false];
+    }
+
+    $j = se_journey_find_by_wa($brand, $from);
+    $created = false;
+    if (!$j) {
+        $source  = ['source' => 'organic_whatsapp', 'detail' => 'staff_start', 'confidence' => 'none', 'attribution' => []];
+        $lead_id = (int) ($conv->lead_id ?? 0) > 0 ? (int) $conv->lead_id : se_journey_find_lead_by_phone($brand, $from);
+        if ($lead_id <= 0) {
+            $lead = se_journey_create_lead($brand, $from, '', $source);
+            $lead_id = (int) $lead['lead_id'];
+        }
+        $ctx = ['from' => $from, 'conversation_id' => (int) ($conv->id ?? 0), 'profile_name' => '', 'body' => '',
+                'received_at' => (string) (!empty($conv->last_inbound_at) ? $conv->last_inbound_at : date('Y-m-d H:i:s')),
+                'wamid' => 'staff:' . (int) $staff_id];
+        $made = se_journey_create($brand, $ctx, $source, $lead_id);
+        $j = $made['journey'];
+        $created = (bool) $made['created'];
+        if (!$j) {
+            return ['ok' => false, 'reason' => 'create_failed', 'mode' => '', 'journey' => null, 'created' => false];
+        }
+        se_journey_event($j, 'staff_started', 'journey created from the WhatsApp thread', [], 'staff', (int) $staff_id, 'wa_conversation', (string) ($conv->id ?? ''), 'staff:' . (int) $staff_id);
+    }
+    if ((string) $j->state !== 'new_whatsapp_enquiry') {
+        return ['ok' => false, 'reason' => 'already_started', 'mode' => '', 'journey' => $j, 'created' => $created];
+    }
+    if (!function_exists('se_journey_send_welcome')) {
+        return ['ok' => false, 'reason' => 'messaging_unavailable', 'mode' => '', 'journey' => $j, 'created' => $created];
+    }
+    $r = se_journey_send_welcome($j, 'staff:' . (int) $staff_id);
+
+    return ['ok' => (bool) $r['ok'], 'reason' => (string) ($r['reason'] ?? ''), 'mode' => (string) ($r['mode'] ?? ''),
+            'journey' => se_journey_get_raw((int) $j->id), 'created' => $created];
+}
+
 /* ===========================================================================
  * Automation control
  * ======================================================================== */

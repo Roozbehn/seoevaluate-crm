@@ -341,6 +341,7 @@ $lang['se_credentials_inherited']     = 'Inherited from Meta App Secret';
 $lang['se_chat_placeholder']       = 'Write a reply… (Enter to send, Shift+Enter for a new line)';
 $lang['se_chat_send']              = 'Send';
 $lang['se_chat_send_template']     = 'Send template';
+$lang['se_chat_send_template_toggle'] = 'Send an approved template instead (allowed while the window is open too)';
 $lang['se_chat_enter_hint']        = 'Enter sends · Shift+Enter adds a line · queued and delivered by the dispatcher';
 $lang['se_media_placeholder']      = 'Attachment';
 $lang['se_media_fetching']         = 'Fetching attachment…';

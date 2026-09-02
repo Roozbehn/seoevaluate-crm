@@ -36,6 +36,8 @@ $contact_label = $evidence_redacted ? se_wa_redacted_contact($c->wa_user_id) : $
             'voice_ogg_ok' => true,   // WhatsApp accepts ogg/opus voice notes (Firefox records ogg)
             'placeholder'  => _l('se_chat_placeholder'),
             'label_send'   => _l('se_chat_send'),
+            'templates'    => $templates,   // approved templates may go inside the window too
+            'label_send_template' => _l('se_chat_send_template'),
         ]);
     } else {
         $can_sync = function_exists('se_staff_can_configure_brands') && se_staff_can_configure_brands()
@@ -73,6 +75,9 @@ $contact_label = $evidence_redacted ? se_wa_redacted_contact($c->wa_user_id) : $
           _l('se_wa_unread')         => (int) $c->unread_count,
       ], true); ?>
     </div></div>
+
+    <?php /* Patient journey (se_journey module, when active): state + Start. */
+    if (function_exists('se_journey_conversation_panel')) { se_journey_conversation_panel($c); } ?>
 
     <?php if (staff_can('edit', 'se_whatsapp')) { ?>
     <div class="panel_s"><div class="panel-body">

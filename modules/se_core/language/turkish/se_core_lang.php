@@ -336,6 +336,7 @@ $lang['se_credentials_inherited']     = 'Meta Uygulama Anahtarından devralınd�
 $lang['se_chat_placeholder']       = 'Yanıt yazın… (Enter gönderir, Shift+Enter yeni satır)';
 $lang['se_chat_send']              = 'Gönder';
 $lang['se_chat_send_template']     = 'Şablonu gönder';
+$lang['se_chat_send_template_toggle'] = 'Bunun yerine onaylı bir şablon gönder (pencere açıkken de gönderilebilir)';
 $lang['se_chat_enter_hint']        = 'Enter gönderir · Shift+Enter satır ekler · kuyruğa alınır ve dağıtıcı tarafından iletilir';
 $lang['se_media_placeholder']      = 'Ek';
 $lang['se_media_fetching']         = 'Ek alınıyor…';

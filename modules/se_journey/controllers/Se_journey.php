@@ -87,6 +87,27 @@ class Se_journey extends AdminController
     /* Actions (POST + CSRF)                                               */
     /* ------------------------------------------------------------------ */
 
+    /** Start (or resume the welcome of) a journey from a WhatsApp thread. */
+    public function start_conversation($conv_id)
+    {
+        $this->post_only();
+        $this->need('edit_review');
+        $this->load->model('se_whatsapp/se_whatsapp_model');
+        $conv = $this->se_whatsapp_model->get_conversation((int) $conv_id);   // brand-scoped
+        if (!$conv) {
+            access_denied('se_journey');
+        }
+        $r = se_journey_start_from_conversation($conv, (int) get_staff_user_id());
+        if ($r['ok']) {
+            set_alert('success', _l('se_journey_welcome_queued') . ($r['mode'] === 'template' ? ' (' . _l('se_journey_via_template') . ')' : ''));
+        } elseif ($r['reason'] === 'already_started' && $r['journey']) {
+            set_alert('warning', _l('se_journey_already_started') . ': ' . _l('se_journey_state_' . $r['journey']->state));
+        } else {
+            set_alert('warning', _l('se_journey_blocked') . ': ' . $r['reason']);
+        }
+        redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $conv_id));
+    }
+
     public function action($id, $what)
     {
         $this->post_only();

@@ -139,6 +139,86 @@ unset($c);
 se_test_wa_deliver(se_test_wa_body('905000000004', 'Değerlendirme Başlat', se_test_wamid()));
 se_eq('consent_pending', se_test_journey_row()->state, 'privacy notice + secure link went out in-window after the reply');
 
+
+/* ======================================================================== */
+se_group('Journey templates: Start from the WhatsApp thread (contact without a journey)');
+
+se_test_seed_journey();
+se_test_act_as(10, [], true);
+$db = se_test_db();
+se_journey_seed_templates(1);
+foreach ($db->tables['tblse_journey_templates'] as &$row) { if ($row['logical_name'] === 'eyebrow_journey_start_tr') { $row['approval_status'] = 'approved'; } }
+unset($row);
+$db->seed('tblse_wa_templates', [['id' => 1, 'brand_id' => 1, 'name' => 'eyebrow_journey_start_tr', 'language' => 'tr', 'category' => 'UTILITY', 'approval_state' => 'approved', 'variables' => '1']]);
+
+// A thread that predates the module: conversation row, no journey row.
+$db->seed('tblse_wa_conversations', [['id' => 77, 'brand_id' => 1, 'phone_number_id' => SE_TEST_PN, 'wa_user_id' => '905000000005', 'lead_id' => 0, 'client_id' => 0,
+    'assigned_staff' => 0, 'unread_count' => 0, 'last_inbound_at' => date('Y-m-d H:i:s', time() - 3 * 86400), 'window_expires_at' => date('Y-m-d H:i:s', time() - 2 * 86400),
+    'ctwa_clid' => null, 'referral_json' => null, 'state' => 'open', 'date_created' => date('Y-m-d H:i:s', time() - 3 * 86400), 'last_updated' => null]]);
+$conv = (object) $db->tables['tblse_wa_conversations'][0];
+se_eq(null, se_journey_find_by_wa(1, '905000000005'), 'no journey for the thread yet');
+
+// Automation off → nothing is created or sent (the reply would go unprocessed).
+update_option('se_journey_enabled_1', 0);
+$r = se_journey_start_from_conversation($conv, 10);
+se_eq('disabled', $r['reason'], 'start refused while the brand automation is off');
+se_eq(0, count($db->rows('tblse_journeys')), 'no journey row created');
+update_option('se_journey_enabled_1', 1);
+
+// Window closed → journey created, lead created, start template sent.
+$sentBefore = count($GLOBALS['se_wa_sent']);
+$r = se_journey_start_from_conversation($conv, 10);
+se_wa_out_drain();
+se_eq(true, $r['ok'], 'started');
+se_eq(true, $r['created'], 'journey row created from the thread');
+se_eq('template', $r['mode'], 'outside the window the start template went out');
+$j = $r['journey'];
+se_eq('welcome_sent', $j->state, 'journey is at welcome_sent');
+se_eq('organic_whatsapp', $j->source, 'source recorded as organic');
+se_eq('staff_start', $j->source_detail, 'with staff_start as the detail');
+se_eq(77, (int) $j->wa_conversation_id, 'linked to the thread');
+se_ok((int) $j->lead_id > 0, 'a lead exists for the number');
+$last = end($GLOBALS['se_wa_sent']);
+se_eq('eyebrow_journey_start_tr', $last['template'], 'the start template');
+se_eq(1, count(array_filter($db->rows('tblse_journey_events'), function ($e) { return $e['kind'] === 'staff_started'; })), 'audit event: staff_started');
+
+// Pressing Start again does not resend.
+$sentBefore = count($GLOBALS['se_wa_sent']);
+$r = se_journey_start_from_conversation($conv, 10);
+se_eq('already_started', $r['reason'], 'a second Start is refused');
+se_eq($sentBefore, count($GLOBALS['se_wa_sent']), 'nothing resent');
+
+// Window open → the interactive welcome instead of the template.
+$db->seed('tblse_wa_conversations', [['id' => 78, 'brand_id' => 1, 'phone_number_id' => SE_TEST_PN, 'wa_user_id' => '905000000006', 'lead_id' => 0, 'client_id' => 0,
+    'assigned_staff' => 0, 'unread_count' => 0, 'last_inbound_at' => date('Y-m-d H:i:s', time() - 600), 'window_expires_at' => date('Y-m-d H:i:s', time() + 80000),
+    'ctwa_clid' => null, 'referral_json' => null, 'state' => 'open', 'date_created' => date('Y-m-d H:i:s', time() - 600), 'last_updated' => null]]);
+$conv2 = null; foreach ($db->rows('tblse_wa_conversations') as $c) { if ((int) $c['id'] === 78) { $conv2 = (object) $c; } }
+$r = se_journey_start_from_conversation($conv2, 10);
+se_wa_out_drain();
+se_eq(true, $r['ok'], 'started in-window');
+se_eq('inwindow', $r['mode'], 'as a normal in-window message');
+$last = end($GLOBALS['se_wa_sent']);
+se_eq('interactive', $last['kind'], 'the welcome with reply buttons');
+
+/* ======================================================================== */
+se_group('Journey templates: the thread composer offers approved templates while the window is open');
+
+if (!function_exists('form_open')) { function form_open($a, $x = []) { return '<form action="' . $a . '">'; } }
+if (!function_exists('form_open_multipart')) { function form_open_multipart($a, $x = []) { return '<form action="' . $a . '" enctype="multipart/form-data">'; } }
+if (!function_exists('form_close')) { function form_close() { return '</form>'; } }
+if (!function_exists('se_ui_empty')) { function se_ui_empty($t) { echo '<p>' . $t . '</p>'; } }
+$tpls = [['name' => 'eyebrow_journey_start_tr', 'language' => 'tr', 'category' => 'UTILITY', 'body' => 'Merhaba {{1}}', 'variables' => '1']];
+ob_start(); se_ui_chat_composer(['mode' => 'freeform', 'action' => '/reply/1', 'templates' => $tpls]); $html = ob_get_clean();
+se_ok(strpos($html, 'name="kind" value="text"') !== false, 'free-form reply form present');
+se_ok(strpos($html, 'se_chat_send_template_toggle') !== false, 'a toggle offers templates');
+se_ok(strpos($html, 'name="kind" value="template"') !== false, 'the template form is rendered too');
+se_ok(strpos($html, 'eyebrow_journey_start_tr') !== false, 'with the approved template listed');
+se_ok(strpos($html, 'id="se-tpl-panel" style="display:none') !== false, 'collapsed by default');
+ob_start(); se_ui_chat_composer(['mode' => 'freeform', 'action' => '/reply/1']); $html = ob_get_clean();
+se_ok(strpos($html, 'name="kind" value="template"') === false, 'no template form when the brand has none (Instagram, or nothing approved)');
+ob_start(); se_ui_chat_composer(['mode' => 'template', 'action' => '/reply/1', 'templates' => $tpls]); $html = ob_get_clean();
+se_ok(strpos($html, 'name="kind" value="template"') !== false && strpos($html, 'name="kind" value="text"') === false, 'outside the window only the template form');
+
 /* Leave the shared fixture stores as this suite found them. */
 $GLOBALS['SE_JOURNEY_TEMPLATE_SUBMITTER'] = null;
 se_test_remove_secret('wa_token');

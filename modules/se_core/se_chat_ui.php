@@ -194,6 +194,16 @@ function se_ui_chat_composer(array $cfg)
            . (int) ($cfg['maxlength'] ?? 4096) . '</span></div>';
         echo form_close();
         se_ui_chat_scripts($maxMb, !empty($cfg['voice_ogg_ok']));
+        // A template may be sent at any time, window open or not (Meta only
+        // restricts free-form text). Offer the approved ones behind a toggle so
+        // the everyday reply box stays uncluttered.
+        if (!empty($cfg['templates'])) {
+            echo '<div class="se-tpl-toggle" style="margin-top:8px"><a href="#" id="se-tpl-toggle" onclick="var p=document.getElementById(\'se-tpl-panel\');p.style.display=p.style.display===\'none\'?\'\':\'none\';return false;">'
+               . '<i class="fa fa-file-text-o"></i> ' . html_escape(_l('se_chat_send_template_toggle')) . '</a></div>';
+            echo '<div id="se-tpl-panel" style="display:none;margin-top:8px">';
+            se_ui_chat_template_form($cfg, $cfg['templates']);
+            echo '</div>';
+        }
         echo '</div>';
         return;
     }
@@ -219,7 +229,18 @@ function se_ui_chat_composer(array $cfg)
         return;
     }
 
-    echo form_open($cfg['action'], ['id' => 'se-compose', 'autocomplete' => 'off']);
+    se_ui_chat_template_form($cfg, $templates);
+    se_ui_chat_scripts();
+    echo '</div>';
+}
+
+/**
+ * The approved-template form (select, preview, one input per placeholder,
+ * send). Used alone outside the window and behind a toggle inside it.
+ */
+function se_ui_chat_template_form(array $cfg, array $templates)
+{
+    echo form_open($cfg['action'], ['id' => 'se-compose-tpl', 'autocomplete' => 'off']);
     echo '<input type="hidden" name="kind" value="template" />';
     echo '<div class="form-group"><select class="form-control" id="se-template" name="template" required onchange="seTplPick(this.value)">';
     foreach ($templates as $t) {
@@ -246,12 +267,10 @@ function se_ui_chat_composer(array $cfg)
         }
         echo '</div>';
     }
-    echo '<button type="submit" class="btn btn-primary btn-send" id="se-send"><i class="fa fa-paper-plane"></i> '
-       . html_escape($cfg['label_send'] ?? _l('se_chat_send_template')) . '</button>';
+    echo '<button type="submit" class="btn btn-primary btn-send" id="se-send-tpl"><i class="fa fa-paper-plane"></i> '
+       . html_escape($cfg['label_send_template'] ?? _l('se_chat_send_template')) . '</button>';
     echo form_close();
     echo '<script>function seTplPick(n){document.querySelectorAll(".se-tpl").forEach(function(el){var on=el.getAttribute("data-template")===n;el.style.display=on?"":"none";el.querySelectorAll("input").forEach(function(i){i.disabled=!on;i.required=on;});});}</script>';
-    se_ui_chat_scripts();
-    echo '</div>';
 }
 
 /** Composer behaviour: auto-grow, Enter to send, counter, attachment chip, emoji picker, double-submit guard. */
