@@ -431,7 +431,7 @@ git pull --ff-only origin main && touch ~/.lsphp_restart.txt
 php modules/se_core/tests/migrate_cli.php --apply
 # 4. Verify
 php modules/se_core/tests/migrate_cli.php --verify
-mysql ... -e "SHOW TABLES LIKE 'tblse_journey%'"            # 13 tables
+mysql ... -e "SHOW TABLES LIKE 'tblse_journey%'"            # 14 tables
 mysql ... -e "SHOW COLUMNS FROM tblse_wa_outbound LIKE 'origin'"
 mysql ... -e "SELECT value FROM tbloptions WHERE name='se_core_schema_version'"   # 17
 ```
@@ -439,7 +439,7 @@ mysql ... -e "SELECT value FROM tbloptions WHERE name='se_core_schema_version'" 
 Rollback: the migration is additive; rolling back the CODE (`docs/ROLLBACK-PROCEDURE.md`,
 checkout the previous commit for `modules/se_core modules/se_whatsapp modules/se_journey`) leaves
 the new tables/columns in place, unused and harmless. To remove them deliberately after a code
-rollback: `DROP TABLE tblse_journey_*` (13 tables) and `ALTER TABLE tblse_wa_messages DROP COLUMN
+rollback: `DROP TABLE tblse_journey_*` (14 tables) and `ALTER TABLE tblse_wa_messages DROP COLUMN
 interactive_id, DROP COLUMN status_error; ALTER TABLE tblse_wa_outbound DROP COLUMN payload_json,
 DROP COLUMN origin;` then set `se_core_schema_version` back to 16 (the inbox media store's
 `tblse_media` and `media_id` columns are upstream's and stay). Backfill: none (no data is
@@ -502,3 +502,35 @@ rewritten; sealed columns start empty).
 | On-call target for urgent alerts | owner | Settings → `urgent_staff_ids` (staff ids 1 / 900021) |
 | Live 390/768 check with the dark theme | owner (browser) | open the six screens once after deploy |
 | Go-live | owner | Sandbox off after the sandbox run-through |
+
+## 16. Production state — 2026-09-02 22:23 CEST (what was actually done on the host)
+
+Deployed from the Mac over the owner's existing SSH host entry; every step below was observed, not
+assumed. Secrets were generated on the host and never displayed.
+
+| Step | Result |
+|---|---|
+| Branch → GitHub | `feat/whatsapp-patient-journey` pushed; `main` fast-forwarded `3f0d799` → `6facbb8` |
+| Host PHP 8.1.34 lint of every changed file | clean |
+| Full suite on the host (worktree, PHP 8.1.34) | **2,635 pass, 0 fail** |
+| `sodium` extension | was **not loaded** for alt-php 8.1 → enabled through the CloudLinux PHP Selector (`selectorctl --enable-user-extensions=sodium --version=8.1`); CLI confirms `sodium:yes` |
+| Pre-deploy DB dump | `~/_deploy_artifacts/backups/db_pre_journey_20260902_201730.sql` (0600, "Dump completed", 145 tables) |
+| Code on host | `~/crm.roozbeh.com.tr` at `6facbb8`, `~/.lsphp_restart.txt` touched |
+| Schema | `migrate_cli.php --apply`: 104/104 statements, v16 → **v17**; `--verify` OK; 14 `tblse_journey_*` tables; `se_journey_media.storage` and `se_wa_outbound.origin` present. A first `--apply` hit a pre-existing upstream fatal (`hooks()` at file scope in `se_media.php` when loaded headless) — fixed in `6facbb8` |
+| Module | `se_journey` registered + active in `tblmodules` (same rows `App_modules::activate()` writes; its `install.php` DDL is the v17 list already applied). Template seeding and the one-shot role grant run on the **first admin login** (`admin_init`) |
+| `journey_key` | installed at `/home/hyundaic/_secrets/journey_key` (0600, 32 random bytes base64, generated on the host) |
+| R2 | already the live inbox driver (`se_media_storage=r2`, `se_media_r2_url` = the `crm-media` Worker, `r2_media_key` present, 6 inbox objects in `azin-media`). Journey driver `auto` → **sealed photos go to R2** from the first photo. Fallback dir `/home/hyundaic/_se_journey_media` created (0700) |
+| `crm-media` Worker | redeployed from the branch with the `DELETE` route (version `2b583795…`); bindings unchanged (`MEDIA` → `azin-media`, `PREFIX` `crm/`); probes: `DELETE` without bearer → 401, `PATCH` → 405, existing inbox object `HEAD` with the CRM's key → 200 |
+| Options set | `se_journey_public_base_url=https://crm.roozbeh.com.tr`, `se_journey_media_storage=auto`; **`se_journey_enabled_22` left OFF**, sandbox default ON |
+| Live checks | `/se_journey/intake/<bad token>` → 404 "Bağlantı geçersiz" (module routed, Turkish); webhook GET → 403 as before; `/admin` behind Cloudflare's challenge for curl (unchanged); no PHP error log touched; per-minute dispatcher summary now `{"wa_events","wa_queue","ig_events","ig_queue","media","journey_media"}` with `errors: []` |
+
+**Not done, by design (owner steps, in order):**
+
+1. Log in once as admin (seeds the 11 template rows, grants the journey capabilities to Clinic Owner / Sales).
+2. Journeys → Settings: enter your own number under *test recipients*, keep **Sandbox ON**, switch **Enabled ON**; send the pre-filled wa.me message from your phone and watch the welcome + buttons arrive. Nothing reaches anyone else while sandbox is on.
+3. Consent Settings → `health_data` TR + EN from counsel (the intake link and photo collection stay blocked until this exists; no text was invented).
+4. Journeys → Templates → *Submit to Meta* (11) → wait for **APPROVED** → *Sync* (out-of-window messages stay blocked until then).
+5. Aftercare protocol text + `approved`, pre-op text/link — clinic decisions.
+6. Sandbox OFF = real go-live. Decide the purge-after-seal switch (§0.1).
+7. On the Mac: remove `.git/index.lock`, `.git/objects/maintenance.lock` and the two `.git/objects/*/tmp_obj_*` files (the linked shell cannot delete on the mount), then `git checkout main && git pull --ff-only` (local `main` is still at `3f0d799`; `origin/main` is `6facbb8`).
+
