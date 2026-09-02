@@ -34,8 +34,12 @@ define('SE_MEDIA_BATCH', 10);
 $GLOBALS['SE_MEDIA_FETCHER'] = $GLOBALS['SE_MEDIA_FETCHER'] ?? null;
 
 // Safety net: the 15-minute Perfex cron also drains attachments, so media
-// still arrives if the per-minute dispatcher is ever down.
-hooks()->add_action('after_cron_run', 'se_media_fetch_pending');
+// still arrives if the per-minute dispatcher is ever down. Guarded so the
+// headless migration runner (tests/migrate_cli.php), which requires this
+// file for its schema statements outside the CI context, can load it.
+if (function_exists('hooks')) {
+    hooks()->add_action('after_cron_run', 'se_media_fetch_pending');
+}
 
 /** callable(array $row): array{ok:bool,bytes:string,mime:string,error:string,filename?:string} */
 function se_media_register_fetcher(callable $f)
