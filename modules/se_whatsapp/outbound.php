@@ -456,12 +456,15 @@ function se_wa_out_process($row)
     $media = null;
     if ($row['kind'] === 'media') {
         $media = function_exists('se_media_sendable') ? se_media_sendable((int) ($row['media_id'] ?? 0), 'wa', (int) $conv->brand_id) : null;
-        $abs   = $media ? se_media_abs_path($media) : '';
+        // A real local file for the multipart upload: the store path for local
+        // rows, a temp download for R2 rows (removed after the attempt).
+        $abs   = $media ? (function_exists('se_media_local_copy') ? se_media_local_copy($media) : se_media_abs_path($media)) : '';
         if ($media === null || $abs === '') {
             return ['status' => 'failed', 'attempts' => (int) $row['attempts'] + 1,
                     'failure_class' => 'permanent', 'last_error' => 'attachment missing'];
         }
         $media['abs_path'] = $abs;
+        $media_tmp = ($media['storage'] ?? 'local') === 'r2' ? $abs : '';
     }
 
     // The template's language comes from the mirror row, never assumed: Meta
@@ -486,6 +489,7 @@ function se_wa_out_process($row)
             'idempotency_key' => $row['idempotency_key'],
         ]);
     } catch (Exception $e) {
+        if (!empty($media_tmp)) { @unlink($media_tmp); }
         $attempts = (int) $row['attempts'] + 1;
 
         return ['status' => $attempts >= SE_WA_OUT_MAX_ATTEMPTS ? 'failed' : 'pending',
@@ -493,6 +497,8 @@ function se_wa_out_process($row)
                 'last_error' => 'transport error',
                 'next_attempt_at' => se_db_now(se_wa_out_backoff_seconds($attempts))];
     }
+
+    if (!empty($media_tmp)) { @unlink($media_tmp); }
 
     if (!empty($result['ok'])) {
         // Provider AUTHENTICATION evidence: the Cloud API token really sent.

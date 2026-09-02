@@ -46,6 +46,7 @@ function se_secret_providers()
         'google_sa'     => ['label' => 'Google service-account key', 'per_brand' => true],
         'landing_token' => ['label' => 'Landing-token HMAC secret', 'per_brand' => false],
         'website_lead'  => ['label' => 'Website lead-ingest token', 'per_brand' => true],
+        'r2_media_key'  => ['label' => 'R2 media gateway key (Cloudflare Worker crm-media)', 'per_brand' => false],
     ];
 }
 

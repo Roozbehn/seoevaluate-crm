@@ -245,11 +245,12 @@ function se_ig_out_process($row)
     $media = null;
     if (($row['kind'] ?? 'text') === 'media') {
         $media = function_exists('se_media_sendable') ? se_media_sendable((int) ($row['media_id'] ?? 0), 'ig', (int) $conv->brand_id) : null;
-        if ($media === null || se_media_abs_path($media) === '') {
+        if ($media === null || !se_media_present($media)) {
             return ['status' => 'failed', 'attempts' => (int) $row['attempts'] + 1,
                     'failure_class' => 'permanent', 'last_error' => 'attachment missing'];
         }
-        $media['url'] = se_media_pub_url($media);
+        // Signed R2 gateway URL for R2 rows; the CRM's own signed route for local ones.
+        $media['url'] = function_exists('se_media_public_url') ? se_media_public_url($media) : se_media_pub_url($media);
     }
 
     try {

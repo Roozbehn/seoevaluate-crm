@@ -55,6 +55,7 @@ function se_media_schema_statements($p)
         `message_id` bigint(20) NOT NULL,
         `brand_id` int(11) NOT NULL DEFAULT 0,
         `direction` varchar(4) NOT NULL DEFAULT 'in',
+        `storage` varchar(8) NOT NULL DEFAULT 'local',
         `outbound_id` bigint(20) DEFAULT NULL,
         `created_by` int(11) NOT NULL DEFAULT 0,
         `kind` varchar(24) NOT NULL DEFAULT 'file',
@@ -263,6 +264,12 @@ function se_media_fetch_pending($limit = SE_MEDIA_BATCH)
 
     se_media_backfill_wa();
 
+    // When R2 is the configured store, drift older local files up to it a few
+    // at a time (verify-then-delete), so the CRM disk empties out by itself.
+    if (function_exists('se_media_storage_driver') && se_media_storage_driver() === 'r2') {
+        se_media_migrate_local_to_r2(10);
+    }
+
     $CI->db->where('state', 'pending')->where('next_attempt_at <=', se_db_now())
            ->order_by('id', 'ASC')->limit($limit);
     $rows = $CI->db->get($table)->result_array();
@@ -313,19 +320,13 @@ function se_media_fetch_one(array $row)
     }
 
     [$kind, $ext] = $allowed[$mime];
-    $sub = $row['channel'] . '/' . (int) $row['brand_id'];
-    if (($err = se_media_ensure_dir($sub)) !== '') {
-        return $fail($err);
+    $rel = $row['channel'] . '/' . (int) $row['brand_id'] . '/' . (int) $row['id'] . '.' . $ext;
+    $put = se_media_storage_put($rel, $bytes, $mime);
+    if (!$put['ok']) {
+        return $fail($put['error']);
     }
 
-    $rel  = $sub . '/' . (int) $row['id'] . '.' . $ext;
-    $path = se_media_dir() . '/' . $rel;
-    if (@file_put_contents($path, $bytes, LOCK_EX) === false) {
-        return $fail('write failed');
-    }
-    @chmod($path, 0600);
-
-    return ['state' => 'stored', 'attempts' => $attempts, 'last_error' => null,
+    return ['state' => 'stored', 'attempts' => $attempts, 'last_error' => null, 'storage' => $put['storage'],
             'mime' => $mime, 'kind' => $kind, 'bytes' => strlen($bytes),
             'sha256' => hash('sha256', $bytes), 'path' => $rel,
             'filename' => $row['filename'] ?: (!empty($r['filename']) ? mb_substr(basename((string) $r['filename']), 0, 191) : null),
@@ -503,6 +504,9 @@ function se_media_schema_statements_v15($p)
         "ALTER TABLE `{$p}se_media` ADD INDEX IF NOT EXISTS `channel_message` (`channel`,`message_id`)",
         "ALTER TABLE `{$p}se_wa_outbound` ADD COLUMN IF NOT EXISTS `media_id` bigint(20) DEFAULT NULL",
         "ALTER TABLE `{$p}se_ig_outbound` ADD COLUMN IF NOT EXISTS `media_id` bigint(20) DEFAULT NULL",
+        // v16: where the bytes live — 'local' (CRM host) or 'r2' (Cloudflare, via crm-media Worker).
+        "ALTER TABLE `{$p}se_media` ADD COLUMN IF NOT EXISTS `storage` varchar(8) NOT NULL DEFAULT 'local'",
+        "ALTER TABLE `{$p}se_media` ADD INDEX IF NOT EXISTS `storage_state` (`storage`,`state`)",
     ];
 }
 
@@ -602,22 +606,18 @@ function se_media_store_upload($channel, $brand_id, array $file, $staff_id = 0)
     ]);
     $id = (int) $CI->db->insert_id();
 
-    $sub = $channel . '/' . (int) $brand_id;
-    if (($e = se_media_ensure_dir($sub)) !== '') {
-        $CI->db->where('id', $id)->update($table, ['state' => 'failed', 'last_error' => $e]);
+    $rel   = $channel . '/' . (int) $brand_id . '/' . $id . '.' . $ext;
+    $bytes = (string) file_get_contents($tmp);
+    $put   = se_media_storage_put($rel, $bytes, $mime);
+    @unlink($tmp);
+    if (!$put['ok']) {
+        $CI->db->where('id', $id)->update($table, ['state' => 'failed', 'last_error' => $put['error']]);
         return ['ok' => false, 'id' => 0, 'error' => 'store_failed', 'kind' => $kind];
     }
-    $rel  = $sub . '/' . $id . '.' . $ext;
-    $dest = se_media_dir() . '/' . $rel;
-    $moved = is_uploaded_file($tmp) ? @move_uploaded_file($tmp, $dest) : @rename($tmp, $dest);
-    if (!$moved) {
-        $CI->db->where('id', $id)->update($table, ['state' => 'failed', 'last_error' => 'write failed']);
-        return ['ok' => false, 'id' => 0, 'error' => 'store_failed', 'kind' => $kind];
-    }
-    @chmod($dest, 0600);
 
     $CI->db->where('id', $id)->update($table, [
-        'state' => 'stored', 'path' => $rel, 'sha256' => hash_file('sha256', $dest), 'fetched_at' => se_db_now(),
+        'state' => 'stored', 'storage' => $put['storage'], 'path' => $rel,
+        'sha256' => hash('sha256', $bytes), 'fetched_at' => se_db_now(),
     ]);
 
     return ['ok' => true, 'id' => $id, 'error' => '', 'kind' => $kind];
@@ -680,4 +680,15 @@ function se_media_pub_verify($id, $exp, $sig, $now = null)
     }
     $row = se_media_get((int) $id);
     return $row && $row['state'] === 'stored' && ($row['direction'] ?? 'in') === 'out' ? $row : null;
+}
+
+/* ---------------------------------------------------------------------------
+ * Storage-neutral helpers used by the transports and the sendable guard.
+ * (The r2 driver lives in se_media_storage.php; these fall back to local.)
+ * ------------------------------------------------------------------------- */
+
+/** Does the row's file exist wherever it is stored? */
+function se_media_present(array $row)
+{
+    return function_exists('se_media_available') ? se_media_available($row) : se_media_abs_path($row) !== '';
 }

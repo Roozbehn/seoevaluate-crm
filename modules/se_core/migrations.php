@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 15);
+define('SE_CORE_SCHEMA_VERSION', 16);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to

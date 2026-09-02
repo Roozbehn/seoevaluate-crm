@@ -24,6 +24,14 @@ class Se_media extends AdminController
             show_404();
         }
 
+        // R2 rows: the staff/brand check above is the authorisation; the bytes
+        // come straight from the gateway on a signed, 10-minute URL.
+        $redirect = function_exists('se_media_view_redirect') ? se_media_view_redirect($row) : '';
+        if ($redirect !== '') {
+            redirect($redirect);
+            return;
+        }
+
         $abs = se_media_abs_path($row);
         if ($abs === '') {
             show_404();

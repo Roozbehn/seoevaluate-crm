@@ -353,6 +353,7 @@ require_once $SE_MODULES . '/se_core/se_reporting.php';
 require_once $SE_MODULES . '/se_core/se_outbound_tracker.php';
 require_once $SE_MODULES . '/se_core/se_dispatch.php';
 require_once $SE_MODULES . '/se_core/se_media.php';
+require_once $SE_MODULES . '/se_core/se_media_storage.php';
 require_once $SE_MODULES . '/se_core/se_chat_ui.php';
 require_once $SE_MODULES . '/se_core/helpers/se_ui_helper.php';
 require_once $SE_MODULES . '/se_core/se_clinic.php';

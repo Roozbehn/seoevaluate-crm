@@ -1,0 +1,16 @@
+{
+  // R2 gateway for CRM conversation media (WhatsApp / Instagram attachments).
+  // The cPanel host has no R2 credentials; this Worker holds the bucket
+  // binding and exposes a tiny HMAC-guarded API under the `crm/` key prefix.
+  // Secret: MEDIA_KEY (wrangler secret put MEDIA_KEY) — same value the CRM
+  // stores as secret provider `r2_media_key`.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "crm-media",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "azin-media" }],
+  "vars": { "PREFIX": "crm/" },
+  "observability": { "enabled": true }
+}
