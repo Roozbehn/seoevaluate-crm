@@ -140,6 +140,20 @@ class Se_whatsapp extends AdminController
             }
             $kind = 'media';
             $media_id = (int) $up['id'];
+
+            // WhatsApp audio cannot carry a caption: send the voice message
+            // first and any typed text as its own message right after.
+            $text = trim((string) $this->input->post('body'));
+            if ($up['kind'] === 'audio' && $text !== '') {
+                $first = se_wa_queue_message((int) $id, ['kind' => 'media', 'media_id' => $media_id], (int) get_staff_user_id());
+                if (!$first['ok']) {
+                    set_alert('warning', _l('se_wa_reply_blocked_' . $first['reason']) ?: _l('se_wa_reply_blocked'));
+                    redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $id));
+                    return;
+                }
+                $kind = 'text';
+                $media_id = 0;
+            }
         }
 
         $result = se_wa_queue_message((int) $id, [

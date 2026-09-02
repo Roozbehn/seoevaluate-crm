@@ -54,6 +54,12 @@ function se_ui_chat_styles()
 .se-emoji .se-emoji-grid{display:flex;flex-wrap:wrap;gap:2px;max-height:160px;overflow-y:auto}
 .se-emoji .se-emoji-grid button{border:0;background:transparent;font-size:20px;line-height:1;padding:4px;border-radius:4px;cursor:pointer}
 .se-emoji .se-emoji-grid button:hover{background:rgba(59,130,246,.2)}
+.se-rec{margin-top:8px;font-size:12px;padding:8px 10px;border:1px solid rgba(239,68,68,.45);border-radius:8px;background:rgba(239,68,68,.08);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.se-rec .se-rec-dot{width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block;animation:se-blink 1s infinite}
+.se-rec.done .se-rec-dot{animation:none;background:#10b981}
+.se-rec.done{border-color:rgba(16,185,129,.45);background:rgba(16,185,129,.08)}
+#se-rec-btn.on{background:#ef4444;color:#fff;border-color:#ef4444}
+@keyframes se-blink{50%{opacity:.2}}
 </style>';
 }
 
@@ -167,17 +173,22 @@ function se_ui_chat_composer(array $cfg)
            . '<button type="button" class="btn btn-default" id="se-emoji-btn" title="' . html_escape(_l('se_chat_emoji')) . '">&#128578;</button>'
            . '<label class="btn btn-default" for="se-file" title="' . html_escape(_l('se_chat_attach')) . '"><i class="fa fa-paperclip"></i></label>'
            . '<input type="file" id="se-file" name="attachment" accept="' . html_escape($accept) . '" style="display:none" />'
+           . '<button type="button" class="btn btn-default" id="se-rec-btn" title="' . html_escape(_l('se_chat_record')) . '"><i class="fa fa-microphone"></i></button>'
            . '</div>'
            . '<textarea class="form-control" id="se-body" name="body" rows="1" required maxlength="'
            . (int) ($cfg['maxlength'] ?? 4096) . '" placeholder="' . html_escape($cfg['placeholder'] ?? _l('se_chat_placeholder')) . '"></textarea>'
            . '<button type="submit" class="btn btn-primary btn-send" id="se-send"><i class="fa fa-paper-plane"></i> '
            . html_escape($cfg['label_send'] ?? _l('se_chat_send')) . '</button></div>';
         echo '<div class="se-emoji" id="se-emoji" style="display:none"></div>';
+        echo '<div class="se-rec" id="se-rec" style="display:none"><span class="se-rec-dot"></span> '
+           . '<span id="se-rec-state">' . html_escape(_l('se_chat_recording')) . '</span> <strong id="se-rec-time">0:00</strong> '
+           . '<button type="button" class="btn btn-default btn-xs" id="se-rec-cancel">' . html_escape(_l('se_chat_record_cancel')) . '</button>'
+           . '<audio id="se-rec-preview" controls style="display:none;vertical-align:middle;margin-left:8px;max-width:260px"></audio></div>';
         echo '<div class="se-hint"><span>' . html_escape(_l('se_chat_enter_hint')) . ' · '
            . html_escape(_l('se_chat_attach_hint', $maxMb)) . '</span><span id="se-count">0 / '
            . (int) ($cfg['maxlength'] ?? 4096) . '</span></div>';
         echo form_close();
-        se_ui_chat_scripts($maxMb);
+        se_ui_chat_scripts($maxMb, !empty($cfg['voice_ogg_ok']));
         echo '</div>';
         return;
     }
@@ -239,7 +250,7 @@ function se_ui_chat_composer(array $cfg)
 }
 
 /** Composer behaviour: auto-grow, Enter to send, counter, attachment chip, emoji picker, double-submit guard. */
-function se_ui_chat_scripts($max_upload_mb = 25)
+function se_ui_chat_scripts($max_upload_mb = 25, $cfg_ogg_ok = true)
 {
     static $done = false;
     if ($done) { return; }
@@ -273,6 +284,34 @@ b.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey&&!e.isC
 if(file){file.addEventListener("change",function(){if(hasFile()){var x=file.files[0];if(x.size>MAX){alert("' . html_escape(_l('se_chat_attach_too_large')) . ' ("+' . (int) $max_upload_mb . '+" MB)");file.value="";chip.style.display="none";syncRequired();return;}chipName.textContent=x.name+" ("+Math.max(1,Math.round(x.size/1024))+" KB)";chip.style.display="";}else{chip.style.display="none";}syncRequired();});
 if(chipClear){chipClear.addEventListener("click",function(e){e.preventDefault();file.value="";chip.style.display="none";syncRequired();b&&b.focus();});}}
 f.addEventListener("submit",function(){if(s){s.disabled=true;s.innerHTML="<i class=\"fa fa-spinner fa-spin\"></i> …";}});
+
+/* voice recorder */
+var rb=document.getElementById("se-rec-btn"),rp=document.getElementById("se-rec"),rt=document.getElementById("se-rec-time"),rs=document.getElementById("se-rec-state"),rc=document.getElementById("se-rec-cancel"),rv=document.getElementById("se-rec-preview");
+if(rb&&rp&&file){
+var OGG_OK=' . ($cfg_ogg_ok ? 'true' : 'false') . ';
+var rec=null,stream=null,chunks=[],t0=0,tick=null,MAXSEC=300;
+function pickType(){var c=["audio/mp4;codecs=mp4a.40.2","audio/mp4"];if(OGG_OK)c.push("audio/ogg;codecs=opus");for(var i=0;i<c.length;i++){if(window.MediaRecorder&&MediaRecorder.isTypeSupported(c[i]))return c[i];}return "";}
+function fmt(s){return Math.floor(s/60)+":"+("0"+(s%60)).slice(-2);}
+function stopStream(){if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}}
+function resetRec(){if(tick){clearInterval(tick);tick=null;}rec=null;chunks=[];rb.classList.remove("on");rb.innerHTML="<i class=\"fa fa-microphone\"></i>";rp.style.display="none";rp.classList.remove("done");rv.style.display="none";rv.removeAttribute("src");rt.textContent="0:00";rs.textContent="' . html_escape(_l('se_chat_recording')) . '";}
+function finish(){if(!chunks.length){resetRec();return;}var type=rec&&rec.mimeType?rec.mimeType:pickType();var base=type.split(";")[0];var ext=base==="audio/ogg"?"ogg":"m4a";
+var blob=new Blob(chunks,{type:base});var d=new Date(),pad=function(n){return ("0"+n).slice(-2);};
+var name="voice-"+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+"-"+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds())+"."+ext;
+try{var dt=new DataTransfer();dt.items.add(new File([blob],name,{type:base}));file.files=dt.files;}catch(e){alert("' . html_escape(_l('se_chat_record_unsupported')) . '");resetRec();return;}
+file.dispatchEvent(new Event("change"));rp.classList.add("done");rs.textContent="' . html_escape(_l('se_chat_record_ready')) . '";rv.src=URL.createObjectURL(blob);rv.style.display="";rb.classList.remove("on");rb.innerHTML="<i class=\"fa fa-microphone\"></i>";if(tick){clearInterval(tick);tick=null;}}
+rb.addEventListener("click",function(){
+if(rec&&rec.state==="recording"){rec.stop();stopStream();return;}
+var type=pickType();if(!type||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){alert("' . html_escape(_l('se_chat_record_unsupported')) . '");return;}
+navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){stream=st;chunks=[];resetRec();
+try{rec=new MediaRecorder(st,{mimeType:type,audioBitsPerSecond:64000});}catch(e){rec=new MediaRecorder(st);}
+rec.ondataavailable=function(e){if(e.data&&e.data.size>0)chunks.push(e.data);};
+rec.onstop=finish;rec.start(1000);t0=Date.now();rb.classList.add("on");rb.innerHTML="<i class=\"fa fa-stop\"></i>";rp.style.display="";
+tick=setInterval(function(){var s=Math.floor((Date.now()-t0)/1000);rt.textContent=fmt(s);if(s>=MAXSEC&&rec&&rec.state==="recording"){rec.stop();stopStream();}},500);
+}).catch(function(){alert("' . html_escape(_l('se_chat_record_denied')) . '");});
+});
+if(rc){rc.addEventListener("click",function(){if(rec&&rec.state==="recording"){rec.onstop=null;rec.stop();}stopStream();file.value="";chip.style.display="none";syncRequired();resetRec();});}
+if(chipClear){chipClear.addEventListener("click",function(){stopStream();resetRec();});}
+}
 
 /* emoji picker */
 var eb=document.getElementById("se-emoji-btn"),ep=document.getElementById("se-emoji");

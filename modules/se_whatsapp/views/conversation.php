@@ -33,6 +33,7 @@ $contact_label = $evidence_redacted ? se_wa_redacted_contact($c->wa_user_id) : $
             'window_label' => _l('se_wa_window_open'),
             'window_text'  => _l('se_wa_window_until') . ' ' . (string) $policy['expires_at'],
             'maxlength'    => 4096,
+            'voice_ogg_ok' => true,   // WhatsApp accepts ogg/opus voice notes (Firefox records ogg)
             'placeholder'  => _l('se_chat_placeholder'),
             'label_send'   => _l('se_chat_send'),
         ]);

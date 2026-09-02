@@ -77,6 +77,20 @@ se_eq('foto.jpg', $waMedia['filename'], 'original name kept (for the WhatsApp do
 se_ok(is_file($dir . '/' . $waMedia['path']), 'bytes moved into the private store');
 se_eq(hash('sha256', $jpeg), $waMedia['sha256'], 'sha256 recorded');
 
+/* A browser-recorded voice message: MP4 container with an AAC audio track.
+ * libmagic calls the container video/mp4; the browser declares audio/mp4. */
+$m4a = "\x00\x00\x00\x18ftypM4A \x00\x00\x00\x00M4A mp42isom" . str_repeat("\x00", 300);
+$r = se_media_store_upload('wa', 1, se_test_tmp_upload('voice-20260902-201500.m4a', $m4a, 'audio/mp4'), 10);
+se_eq(true, $r['ok'], 'a recorded voice message is accepted');
+se_eq('audio', $r['kind'], 'as AUDIO (not video) — the declared audio track wins over the container');
+se_eq('audio/mp4', se_media_get($r['id'])['mime'], 'stored as audio/mp4');
+$r = se_media_store_upload('ig', 1, se_test_tmp_upload('voice.m4a', $m4a, 'audio/mp4'), 10);
+se_eq(true, $r['ok'], 'Instagram accepts the same voice message');
+se_eq('audio', $r['kind'], 'as audio');
+$mp4v = "\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2avc1mp41" . str_repeat("\x00", 300);
+$r = se_media_store_upload('wa', 1, se_test_tmp_upload('clip.mp4', $mp4v, 'video/mp4'), 10);
+se_eq('video', $r['kind'], 'while a file the browser calls video stays video');
+
 $r = se_media_store_upload('ig', 1, se_test_tmp_upload('story.png', $png, 'image/png'), 10);
 se_eq(true, $r['ok'], 'a PNG for Instagram is accepted');
 $igMedia = se_media_get($r['id']);

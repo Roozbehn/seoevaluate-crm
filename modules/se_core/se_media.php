@@ -558,7 +558,14 @@ function se_media_store_upload($channel, $brand_id, array $file, $staff_id = 0)
                 'image/jpg' => 'image/jpeg', 'audio/x-wav' => 'audio/wav', 'audio/vnd.wave' => 'audio/wav'];
     $picked  = '';
     $sawMismatch = false;
-    foreach ([$mime, (string) ($file['type'] ?? '')] as $cand) {
+    $declared = se_media_normalize_mime((string) ($file['type'] ?? ''));
+    // An audio-only MP4 (a recorded voice message, an .m4a) is reported by
+    // libmagic as video/mp4; when the browser says it is audio, believe the
+    // browser about the *track* — the container is the same.
+    if ($mime === 'video/mp4' && strpos($declared, 'audio/') === 0) {
+        $mime = 'audio/mp4';
+    }
+    foreach ([$mime, $declared] as $cand) {
         $cand = se_media_normalize_mime($cand);
         $cand = $alias[$cand] ?? $cand;
         if ($cand === '' || !isset($allowed[$cand])) { continue; }
