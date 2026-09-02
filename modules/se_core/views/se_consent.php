@@ -52,12 +52,12 @@
         <?php echo $configured[$purpose] ? se_ui_badge('ok', _l('se_consent_ready')) : se_ui_badge('warning', _l('se_consent_not_ready')); ?>
       </h5>
 
-      <div class="checkbox">
-        <label>
-          <input type="checkbox" name="purposes[<?php echo $purpose; ?>][enabled]" value="1"
-                 <?php echo !empty($p['enabled']) ? 'checked' : ''; ?> />
-          <?php echo html_escape(_l('se_consent_enable_purpose')); ?>
-        </label>
+      <?php /* Perfex's checkbox skin needs input + sibling label[for]; a label
+               wrapping the input never shows the tick although it saves. */ ?>
+      <div class="checkbox checkbox-primary">
+        <input type="checkbox" id="en_<?php echo $purpose; ?>" name="purposes[<?php echo $purpose; ?>][enabled]" value="1"
+               <?php echo !empty($p['enabled']) ? 'checked' : ''; ?> />
+        <label for="en_<?php echo $purpose; ?>"><?php echo html_escape(_l('se_consent_enable_purpose')); ?></label>
       </div>
 
       <?php foreach ($languages as $code => $label) { ?>

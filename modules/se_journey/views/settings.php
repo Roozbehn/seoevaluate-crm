@@ -38,11 +38,11 @@
       <h5><?php echo html_escape(_l('se_journey_flags')); ?></h5>
       <?php echo form_open(admin_url('se_journey/se_journey/save_settings')); ?>
         <input type="hidden" name="section" value="flags" /><input type="hidden" name="brand" value="<?php echo (int) $brand; ?>" />
-        <div class="checkbox"><label><input type="checkbox" name="enabled" value="1" <?php echo $v['enabled'] ? 'checked' : ''; ?> /> <?php echo html_escape(_l('se_journey_flag_enabled')); ?></label></div>
-        <div class="checkbox"><label><input type="checkbox" name="sandbox" value="1" <?php echo $v['sandbox'] ? 'checked' : ''; ?> /> <strong><?php echo html_escape(_l('se_journey_flag_sandbox')); ?></strong></label></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_enabled" name="enabled" value="1" <?php echo $v['enabled'] ? 'checked' : ''; ?> /><label for="cb_enabled"><?php echo html_escape(_l('se_journey_flag_enabled')); ?></label></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_sandbox" name="sandbox" value="1" <?php echo $v['sandbox'] ? 'checked' : ''; ?> /><label for="cb_sandbox"><strong><?php echo html_escape(_l('se_journey_flag_sandbox')); ?></strong></label></div>
         <div class="form-group"><label><?php echo html_escape(_l('se_journey_test_recipients')); ?></label><input class="form-control" name="test_recipients" value="<?php echo html_escape($v['test_recipients']); ?>" placeholder="9053…, 9054…" /></div>
-        <div class="checkbox"><label><input type="checkbox" name="interactive" value="1" <?php echo $v['interactive'] ? 'checked' : ''; ?> /> <?php echo html_escape(_l('se_journey_flag_interactive')); ?></label></div>
-        <div class="checkbox"><label><input type="checkbox" name="auto_organic" value="1" <?php echo $v['auto_organic'] ? 'checked' : ''; ?> /> <?php echo html_escape(_l('se_journey_flag_auto_organic')); ?></label></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_interactive" name="interactive" value="1" <?php echo $v['interactive'] ? 'checked' : ''; ?> /><label for="cb_interactive"><?php echo html_escape(_l('se_journey_flag_interactive')); ?></label></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_auto_organic" name="auto_organic" value="1" <?php echo $v['auto_organic'] ? 'checked' : ''; ?> /><label for="cb_auto_organic"><?php echo html_escape(_l('se_journey_flag_auto_organic')); ?></label></div>
         <div class="row">
           <div class="col-sm-4"><div class="form-group"><label><?php echo html_escape(_l('se_journey_intake_ttl')); ?></label><input type="number" class="form-control" name="intake_ttl_hours" value="<?php echo (int) $v['intake_ttl_hours']; ?>" min="1" max="336" /></div></div>
           <div class="col-sm-4"><div class="form-group"><label><?php echo html_escape(_l('se_journey_reminder_hours')); ?></label><input class="form-control" name="reminder_hours" value="<?php echo html_escape($v['reminder_hours']); ?>" /></div></div>
@@ -54,12 +54,12 @@
           <div class="col-sm-4"><div class="form-group"><label><?php echo html_escape(_l('se_journey_amount_policy')); ?></label><select name="quote_amount_policy" class="form-control"><?php foreach (['hidden', 'range', 'exact'] as $p) { ?><option value="<?php echo $p; ?>"<?php echo $v['quote_amount_policy'] === $p ? ' selected' : ''; ?>><?php echo html_escape(_l('se_journey_amount_policy_' . $p)); ?></option><?php } ?></select></div></div>
         </div>
         <div class="form-group"><label><?php echo html_escape(_l('se_journey_public_base_url')); ?></label><input class="form-control" name="public_base_url" value="<?php echo html_escape($v['public_base_url']); ?>" placeholder="https://crm.roozbeh.com.tr" /></div>
-        <div class="checkbox"><label><input type="checkbox" name="technical_fields" value="1" <?php echo $v['technical_fields'] ? 'checked' : ''; ?> /> <?php echo html_escape(_l('se_journey_flag_technical')); ?></label></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_technical_fields" name="technical_fields" value="1" <?php echo $v['technical_fields'] ? 'checked' : ''; ?> /><label for="cb_technical_fields"><?php echo html_escape(_l('se_journey_flag_technical')); ?></label></div>
         <div class="row">
           <div class="col-sm-6"><div class="form-group"><label><?php echo html_escape(_l('se_journey_media_storage')); ?></label>
             <select name="media_storage" class="form-control"><?php foreach (['auto', 'r2', 'local'] as $p) { ?><option value="<?php echo $p; ?>"<?php echo $v['media_storage'] === $p ? ' selected' : ''; ?>><?php echo html_escape(_l('se_journey_media_storage_' . $p)); ?></option><?php } ?></select>
             <small class="text-muted"><?php echo html_escape(_l('se_journey_media_storage_now')); ?>: <strong><?php echo html_escape($v['media_storage_status']['driver']); ?></strong><?php if (!$v['media_storage_status']['r2_ready']) { echo ' · ' . html_escape(_l('se_journey_media_r2_not_ready')); } ?></small></div></div>
-          <div class="col-sm-6"><div class="checkbox" style="margin-top:28px"><label><input type="checkbox" name="purge_inbox_copy" value="1" <?php echo $v['purge_inbox_copy'] ? 'checked' : ''; ?> /> <?php echo html_escape(_l('se_journey_flag_purge_inbox')); ?></label></div></div>
+          <div class="col-sm-6"><div class="checkbox checkbox-primary" style="margin-top:28px"><input type="checkbox" id="cb_purge_inbox_copy" name="purge_inbox_copy" value="1" <?php echo $v['purge_inbox_copy'] ? 'checked' : ''; ?> /><label for="cb_purge_inbox_copy"><?php echo html_escape(_l('se_journey_flag_purge_inbox')); ?></label></div></div>
         </div>
         <button class="btn btn-primary" type="submit"><?php echo html_escape(_l('submit')); ?></button>
       <?php echo form_close(); ?>
@@ -71,9 +71,9 @@
       <p class="text-muted"><small><?php echo html_escape(_l('se_journey_clinical_note')); ?></small></p>
       <?php echo form_open(admin_url('se_journey/se_journey/save_settings')); ?>
         <input type="hidden" name="section" value="clinical" /><input type="hidden" name="brand" value="<?php echo (int) $brand; ?>" />
-        <div class="checkbox"><label><input type="checkbox" name="preop_text_approved" value="1" <?php echo $v['preop_text_approved'] ? 'checked' : ''; ?> /> <?php echo html_escape(_l('se_journey_preop_approved')); ?></label></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_preop_text_approved" name="preop_text_approved" value="1" <?php echo $v['preop_text_approved'] ? 'checked' : ''; ?> /><label for="cb_preop_text_approved"><?php echo html_escape(_l('se_journey_preop_approved')); ?></label></div>
         <div class="form-group"><label><?php echo html_escape(_l('se_journey_preop_url')); ?></label><input class="form-control" name="preop_info_url" value="<?php echo html_escape($v['preop_info_url']); ?>" placeholder="https://…" /></div>
-        <div class="checkbox"><label><input type="checkbox" name="ask_infectious" value="1" <?php echo $v['ask_infectious'] ? 'checked' : ''; ?> /> <?php echo html_escape(_l('se_journey_ask_infectious')); ?></label></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_ask_infectious" name="ask_infectious" value="1" <?php echo $v['ask_infectious'] ? 'checked' : ''; ?> /><label for="cb_ask_infectious"><?php echo html_escape(_l('se_journey_ask_infectious')); ?></label></div>
         <div class="form-group"><label><?php echo html_escape(_l('se_journey_protocols')); ?></label>
           <textarea class="form-control" name="protocols_json" rows="10" style="font-family:monospace;font-size:11px"><?php echo html_escape($v['protocols_json']); ?></textarea>
           <small class="text-muted"><?php echo html_escape(_l('se_journey_protocols_hint')); ?></small></div>
@@ -98,7 +98,7 @@
       <p class="text-muted"><small><?php echo html_escape(_l('se_journey_bypass_note')); ?></small></p>
       <?php echo form_open(admin_url('se_journey/se_journey/save_settings')); ?>
         <input type="hidden" name="section" value="bypass" /><input type="hidden" name="brand" value="<?php echo (int) $brand; ?>" />
-        <div class="checkbox"><label><input type="checkbox" name="consent_bypass" value="1" <?php echo $v['consent_bypass'] ? 'checked' : ''; ?> /> <?php echo html_escape(_l('se_journey_bypass_enable')); ?></label></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_consent_bypass" name="consent_bypass" value="1" <?php echo $v['consent_bypass'] ? 'checked' : ''; ?> /><label for="cb_consent_bypass"><?php echo html_escape(_l('se_journey_bypass_enable')); ?></label></div>
         <div class="form-group"><input class="form-control" name="consent_bypass_reason" value="<?php echo html_escape($v['consent_bypass_reason']); ?>" placeholder="<?php echo html_escape(_l('se_journey_bypass_reason')); ?>" /></div>
         <button class="btn btn-warning" type="submit"><?php echo html_escape(_l('submit')); ?></button>
       <?php echo form_close(); ?>
