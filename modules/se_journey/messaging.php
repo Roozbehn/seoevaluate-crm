@@ -812,7 +812,11 @@ function se_journey_sync_template_status($brand_id)
                 'paused' => 'paused', 'disabled' => 'disabled'];
         $new = $map[$status] ?? ($status !== '' ? $status : 'pending');
         $CI->db->where('id', (int) $r['id'])->update(db_prefix() . 'se_journey_templates', [
-            'approval_status' => $new, 'category_meta' => $m['category'] ?? null, 'last_sync_at' => $now, 'last_updated' => $now,
+            'approval_status' => $new,
+            // The mirror does not always carry a category; keep the one Meta
+            // returned at submission rather than blanking it.
+            'category_meta' => !empty($m['category']) ? mb_substr((string) $m['category'], 0, 24) : ($r['category_meta'] ?? null),
+            'last_sync_at' => $now, 'last_updated' => $now,
         ]);
         $updated++;
     }
