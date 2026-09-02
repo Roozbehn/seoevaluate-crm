@@ -241,7 +241,7 @@ function se_core_deny()
  * se_meta_leadgen.php is wired but its live Graph fetch/send stays gated on a
  * Meta Page token + App Review; se_whatsapp is now its own module.
  */
-foreach (['se_asset_registry.php', 'se_outbox_snapshot.php', 'se_outbox.php', 'se_capi.php', 'se_google_dm.php',
+foreach (['se_asset_registry.php', 'se_outbox_snapshot.php', 'se_outbox.php', 'se_capi.php', 'se_capi_messaging.php', 'se_google_dm.php',
           'se_meta_leadgen.php', 'se_webhook_state.php', 'se_reporting.php', 'se_google_auth.php',
           'se_outbox_ui.php', 'se_integration_ui.php', 'se_outbound_tracker.php', 'se_dispatch.php', 'se_media.php', 'se_media_storage.php', 'se_chat_ui.php'] as $__se_b2) {
     $__se_b2_path = __DIR__ . '/' . $__se_b2;

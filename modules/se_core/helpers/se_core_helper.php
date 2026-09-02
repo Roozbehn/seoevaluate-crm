@@ -413,19 +413,31 @@ function se_brand_name($brand_id)
  * @param string $destination meta_capi|google_dm
  * @param string $event_name  pipeline stage name, treatment-agnostic
  */
-function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $payload = [], $event_time = null)
+function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $payload = [], $event_time = null, $dedup_extra = '')
 {
     $CI = &get_instance();
 
     $event_time = $event_time ?: se_db_now();
 
-    $dedup = implode(':', [
+    /* $dedup_extra discriminates events that are genuinely different but land
+     * on the same (brand, lead, destination, name, day).
+     *
+     * Found by a test: one patient who answers a WhatsApp ad AND an Instagram
+     * ad on the same day produces two messaging conversions with identical
+     * keys, so the second was silently dropped — the channel is what makes
+     * them different, and it was nowhere in the key. Empty for every existing
+     * caller, so their keys are byte-identical to before. */
+    $parts = [
         (int) $brand_id,
         (int) $lead_id,
         $destination,
         $event_name,
         date('Y-m-d', strtotime($event_time)),
-    ]);
+    ];
+    if ((string) $dedup_extra !== '') {
+        $parts[] = (string) $dedup_extra;
+    }
+    $dedup = implode(':', $parts);
 
     $CI->db->where('dedup_key', $dedup);
 
