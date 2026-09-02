@@ -143,6 +143,14 @@ function se_journey_copy_version($brand_id)
 }
 
 /** Patient first name for greetings — from the lead, else the WhatsApp profile, else empty. */
+/** First name for a template {{1}} — never empty (Meta refuses empty parameters), never "Merhaba Merhaba". */
+function se_journey_template_name($j)
+{
+    $n = se_journey_first_name($j);
+
+    return $n !== '' ? $n : 'değerli danışanımız';
+}
+
 function se_journey_first_name($j)
 {
     $CI = &get_instance();
@@ -428,13 +436,18 @@ function se_journey_send_welcome($j, $correlation = '')
     $name  = se_journey_first_name($j);
     $body  = se_journey_copy($brand, 'welcome', ['name' => $name], $lang);
 
+    // Outside the 24-hour window (an enquiry from days ago, an Instagram
+    // hand-off, staff pressing Start later) only the approved start template
+    // can go; it asks for a reply, which reopens the window for the buttons.
+    $tpl = ['template' => 'eyebrow_journey_start_tr', 'template_vars' => [se_journey_template_name($j)]];
+
     if (!se_journey_interactive_enabled($brand)) {
-        $r = se_journey_send($j, ['purpose' => 'welcome', 'kind' => 'text', 'body' => $body, 'correlation' => $correlation]);
+        $r = se_journey_send($j, ['purpose' => 'welcome', 'kind' => 'text', 'body' => $body, 'correlation' => $correlation] + $tpl);
     } elseif (mb_strlen($body) <= 1024) {
         $r = se_journey_send($j, ['purpose' => 'welcome', 'kind' => 'interactive', 'body' => $body,
-                                  'buttons' => se_journey_buttons($brand, $lang), 'correlation' => $correlation]);
+                                  'buttons' => se_journey_buttons($brand, $lang), 'correlation' => $correlation] + $tpl);
     } else {
-        $r = se_journey_send($j, ['purpose' => 'welcome', 'kind' => 'text', 'body' => $body, 'correlation' => $correlation]);
+        $r = se_journey_send($j, ['purpose' => 'welcome', 'kind' => 'text', 'body' => $body, 'correlation' => $correlation] + $tpl);
         if ($r['ok']) {
             se_journey_send($j, ['purpose' => 'welcome_buttons', 'kind' => 'interactive',
                 'body' => se_journey_copy($brand, 'welcome_buttons_prompt', [], $lang),
@@ -480,7 +493,7 @@ function se_journey_send_privacy_and_link($j, $correlation = '', $actor_type = '
     }
     $link = se_journey_public_url('se_journey/intake/' . $token['token']);
     $r = se_journey_send_copy($j, 'privacy_and_link', ['link' => $link], ['purpose' => 'privacy_and_link', 'correlation' => $correlation,
-        'template' => 'eyebrow_intake_resume_tr', 'template_vars' => [se_journey_first_name($j) ?: 'Merhaba', $link]]);
+        'template' => 'eyebrow_intake_resume_tr', 'template_vars' => [se_journey_template_name($j), $link]]);
 
     if ($r['ok']) {
         if ($j->state === 'welcome_sent') {
@@ -512,7 +525,7 @@ function se_journey_send_photo_request($j, $correlation = '')
     $token = se_journey_issue_token($j, 'upload', 0);
     $link  = $token['ok'] ? se_journey_public_url('se_journey/intake/' . $token['token'] . '/photos') : '';
     $r = se_journey_send_copy($j, 'photos_request', ['link' => $link], ['purpose' => 'photos_request', 'correlation' => $correlation,
-        'template' => 'eyebrow_photos_request_tr', 'template_vars' => [se_journey_first_name($j) ?: 'Merhaba', $link]]);
+        'template' => 'eyebrow_photos_request_tr', 'template_vars' => [se_journey_template_name($j), $link]]);
     if ($r['ok'] && $j->state === 'intake_submitted') {
         se_journey_transition($j, 'photos_requested', 'photos_requested', 'system', null, $correlation);
     }
@@ -609,7 +622,7 @@ function se_journey_run_reminders($now = null, $limit = 100)
             $link = $t['ok'] ? se_journey_public_url('se_journey/intake/' . $t['token'] . '/photos') : '';
         }
         $r = se_journey_send_copy($j, $copyKey, ['link' => $link], ['purpose' => 'reminder_' . ($count + 1), 'schedulable' => true,
-            'template' => $plan['template'], 'template_vars' => [se_journey_first_name($j) ?: 'Merhaba', $link], 'dedup_salt' => 'r' . ($count + 1)]);
+            'template' => $plan['template'], 'template_vars' => [se_journey_template_name($j), $link], 'dedup_salt' => 'r' . ($count + 1)]);
 
         // Count the attempt whether it went out, was sandboxed, or was blocked:
         // a blocked reminder must not be retried every cron tick (loop).
@@ -639,6 +652,15 @@ function se_journey_run_reminders($now = null, $limit = 100)
 function se_journey_template_definitions()
 {
     return [
+        'eyebrow_journey_start_tr' => [
+            // Welcome for an enquiry whose 24-hour window has closed (an older
+            // "details/price" message, an Instagram hand-off, staff pressing Start
+            // the next day). Asks the person to reply, which reopens the window;
+            // the normal button/privacy/link flow then runs in-window.
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, kaş ekimi hakkında bilgi ve fiyat talebiniz için teşekkür ederiz. Kişiye özel ön değerlendirmeye başlamak için bu mesaja "Değerlendirme Başlat" yazmanız yeterli; doğrudan danışmanımızla görüşmek isterseniz "Danışmana Bağlan" yazabilirsiniz. İletişim almak istemiyorsanız İPTAL yazabilirsiniz.',
+            'samples' => ['Ayşe'],
+        ],
         'eyebrow_intake_resume_tr' => [
             'category' => 'UTILITY', 'language' => 'tr',
             'body' => 'Merhaba {{1}}, kaş ekimi ön değerlendirme formunuz henüz tamamlanmadı. Güvenli bağlantı üzerinden devam edebilirsiniz: {{2}}. Yardım isterseniz bu mesaja yanıt verebilirsiniz. İletişim almak istemiyorsanız İPTAL yazabilirsiniz.',
@@ -655,9 +677,12 @@ function se_journey_template_definitions()
             'samples' => ['Ayşe', 'https://crm.example.com/se_journey/intake/abc/photos'],
         ],
         'eyebrow_photos_retake_tr' => [
+            // v2: Meta refused v1 ("Invalid parameter") — four variables in a short
+            // body, one of them the last token. Now three, with a closing sentence.
             'category' => 'UTILITY', 'language' => 'tr',
-            'body' => 'Merhaba {{1}}, değerlendirmeyi tamamlayabilmemiz için {{2}} fotoğrafını yeniden göndermenizi rica ediyoruz. {{3}} Güvenli yükleme bağlantısı: {{4}}',
-            'samples' => ['Ayşe', 'sol kaş yakın plan', 'Fotoğraf net değildi; lütfen odaklanmasını bekleyin.', 'https://crm.example.com/se_journey/intake/abc/photos'],
+            'body' => 'Merhaba {{1}}, ön değerlendirmeyi tamamlayabilmemiz için bir fotoğrafı yeniden göndermenizi rica ediyoruz. İstenen fotoğraf ve not: {{2}}. Fotoğrafı bu mesaja yanıt olarak ya da güvenli yükleme bağlantısından gönderebilirsiniz: {{3}}. Yardım isterseniz bu mesaja yanıt verebilirsiniz; iletişim almak istemiyorsanız İPTAL yazabilirsiniz.',
+            'samples' => ['Ayşe', 'sol kaş yakın plan — fotoğraf net değildi, lütfen odaklanmasını bekleyin', 'https://crm.example.com/se_journey/intake/abc/photos'],
+            'content_version' => 2,
         ],
         'eyebrow_evaluation_ready_tr' => [
             'category' => 'UTILITY', 'language' => 'tr',
@@ -705,13 +730,27 @@ function se_journey_seed_templates($brand_id)
     $now = date('Y-m-d H:i:s');
     $n = 0;
     foreach (se_journey_template_definitions() as $name => $d) {
+        $version = (int) ($d['content_version'] ?? 1);
         $CI->db->where('brand_id', (int) $brand_id)->where('logical_name', $name)->where('language', $d['language']);
-        if ($CI->db->count_all_results($t) > 0) {
+        $row = $CI->db->get($t)->row();
+        if ($row) {
+            // A newer definition replaces the registry copy only while Meta has
+            // not accepted the old one (not submitted / refused / rejected):
+            // an approved or pending template is what Meta holds — untouched.
+            if ((int) $row->content_version < $version
+                && in_array((string) $row->approval_status, ['not_submitted', 'submit_failed', 'rejected'], true)) {
+                $CI->db->where('id', (int) $row->id)->update($t, [
+                    'body' => $d['body'], 'placeholders_json' => json_encode($d['samples']), 'content_version' => $version,
+                    'approval_status' => 'not_submitted', 'rejection_reason' => null, 'meta_template_id' => null,
+                    'category_meta' => null, 'submitted_at' => null, 'last_updated' => $now,
+                ]);
+                $n++;
+            }
             continue;
         }
         $CI->db->insert($t, [
             'brand_id' => (int) $brand_id, 'logical_name' => $name, 'language' => $d['language'],
-            'category_requested' => $d['category'], 'meta_name' => $name, 'content_version' => 1,
+            'category_requested' => $d['category'], 'meta_name' => $name, 'content_version' => $version,
             'body' => $d['body'], 'placeholders_json' => json_encode($d['samples']),
             'approval_status' => 'not_submitted', 'fallback' => 'staff_task', 'date_created' => $now,
         ]);
@@ -873,7 +912,13 @@ function se_journey_graph_submit_template($waba_id, array $definition)
         return ['ok' => true, 'id' => (string) $body['id'], 'status' => (string) ($body['status'] ?? 'PENDING'), 'category' => (string) ($body['category'] ?? '')];
     }
 
-    return ['ok' => false, 'error' => mb_substr((string) ($body['error']['message'] ?? 'http ' . $code), 0, 180)];
+    $err = (array) ($body['error'] ?? []);
+    $detail = trim((string) ($err['error_user_msg'] ?? ''));
+    $msg = (string) ($err['message'] ?? ('http ' . $code))
+         . (!empty($err['error_subcode']) ? ' [' . (int) $err['error_subcode'] . ']' : '')
+         . ($detail !== '' ? ' — ' . $detail : '');
+
+    return ['ok' => false, 'error' => mb_substr($msg, 0, 300)];
 }
 
 /* ===========================================================================

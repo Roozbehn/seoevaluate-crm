@@ -114,7 +114,7 @@ function se_journey_review_save($j, array $data, $staff_id)
         se_journey_task($j, 'more_info', 'Reviewer needs more information — contact the patient', 'normal', null, $now);
         if (!empty($data['notify_patient']) && function_exists('se_journey_send_copy')) {
             se_journey_send_copy($j, 'more_info_request', [], ['purpose' => 'more_info_request', 'bypass_pause' => true,
-                'template' => 'eyebrow_intake_resume_tr', 'template_vars' => [se_journey_first_name($j) ?: 'Merhaba', se_journey_public_url('')]]);
+                'template' => 'eyebrow_intake_resume_tr', 'template_vars' => [se_journey_template_name($j), se_journey_public_url('')]]);
         }
     } elseif ($decision === 'consultation_required') {
         se_journey_task($j, 'book_consultation', 'Consultation recommended — book a slot', 'normal', null, $now);
@@ -325,7 +325,7 @@ function se_journey_quote_send($quote_id, $staff_id)
     }
     $link = se_journey_public_url('se_journey/intake/' . $token['token'] . '/quote');
     $r = se_journey_send_copy($j, 'evaluation_ready', ['link' => $link], ['purpose' => 'evaluation_ready', 'bypass_pause' => true,
-        'template' => 'eyebrow_evaluation_ready_tr', 'template_vars' => [se_journey_first_name($j) ?: 'Merhaba', $link], 'dedup_salt' => 'q' . (int) $q->id]);
+        'template' => 'eyebrow_evaluation_ready_tr', 'template_vars' => [se_journey_template_name($j), $link], 'dedup_salt' => 'q' . (int) $q->id]);
     if (!$r['ok']) {
         se_journey_revoke_tokens($j, 'quote', 'send_blocked');
 

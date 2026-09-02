@@ -480,7 +480,8 @@ se_eq(1, count(array_filter($db->rows('tblse_journey_tasks'), function ($t) { re
 se_eq('welcome_sent', $j->state, 'the journey did not pretend the step happened');
 
 // Registry says approved but the WABA mirror does not: still blocked.
-$db->tables['tblse_journey_templates'][0]['approval_status'] = 'approved';
+foreach ($db->tables['tblse_journey_templates'] as &$tplRow) { if ($tplRow['logical_name'] === 'eyebrow_intake_resume_tr') { $tplRow['approval_status'] = 'approved'; } }
+unset($tplRow);
 se_journey_resume(se_test_journey_row(), 10);
 $r = se_journey_send_privacy_and_link(se_test_journey_row(), 'c2', 'staff', 10);
 se_eq('template_not_in_waba_mirror', $r['reason'], 'registry status alone is not enough — Meta must hold the approved template');

@@ -756,7 +756,7 @@ function se_journey_media_request_retake($j, $kind, $reason, $staff_id)
     $token  = se_journey_issue_token($j, 'upload', (int) $staff_id);
     $link   = $token['ok'] ? se_journey_public_url('se_journey/intake/' . $token['token'] . '/photos') : '';
     $r = se_journey_send_copy($j, 'photo_retake', ['which' => $which, 'reason' => $why], ['purpose' => 'photo_retake', 'bypass_pause' => true,
-        'template' => 'eyebrow_photos_retake_tr', 'template_vars' => [se_journey_first_name($j) ?: 'Merhaba', $which, $why, $link], 'dedup_salt' => $kind . ':' . $reason . ':' . date('YmdH')]);
+        'template' => 'eyebrow_photos_retake_tr', 'template_vars' => [se_journey_template_name($j), trim($which . ' — ' . rtrim($why, '.'), ' —'), $link], 'dedup_salt' => $kind . ':' . $reason . ':' . date('YmdH')]);
 
     if (in_array((string) $j->state, ['photos_requested', 'photos_incomplete', 'ready_for_review', 'under_review', 'more_information_required', 'photo_retake_requested'], true)) {
         se_journey_transition($j, 'photo_retake_requested', 'retake_' . $kind, 'staff', $staff_id, null, $reason);
@@ -771,8 +771,12 @@ function se_journey_media_request_donor($j, $staff_id)
     $CI->db->where('id', (int) $j->id)->update(db_prefix() . 'se_journeys', ['photos_required_json' => json_encode(['donor'])]);
     $j->photos_required_json = json_encode(['donor']);
     se_journey_audit((int) $j->brand_id, (int) $j->id, 'photo_donor_request', null, null, null);
+    // Outside the window the photo-request template carries the upload link;
+    // Meta refuses an empty parameter, so a real token link is issued.
+    $token = se_journey_issue_token($j, 'upload', (int) $staff_id);
+    $link  = $token['ok'] ? se_journey_public_url('se_journey/intake/' . $token['token'] . '/photos') : se_journey_public_url('');
     $r = se_journey_send_copy($j, 'donor_request', [], ['purpose' => 'donor_request', 'bypass_pause' => true,
-        'template' => 'eyebrow_photos_request_tr', 'template_vars' => [se_journey_first_name($j) ?: 'Merhaba', '']]);
+        'template' => 'eyebrow_photos_request_tr', 'template_vars' => [se_journey_template_name($j), $link]]);
     if (in_array((string) $j->state, ['ready_for_review', 'under_review', 'photos_requested'], true)) {
         se_journey_transition($j, 'photo_retake_requested', 'donor_requested', 'staff', $staff_id);
     }

@@ -186,7 +186,21 @@ Existing tables gain nullable columns only: `se_wa_messages.interactive_id`, `.s
 `se_wa_outbound.payload_json`, `.origin`. Nothing is renamed or dropped; `se_patients.retention_state`
 untouched.
 
+
 ## 3. Conversation behaviour and copy
+**Which message starts a journey — and when a template is involved.** A journey starts from an
+inbound WhatsApp message, never from an outbound one. The welcome (copy key `welcome`, Turkish,
+with the three reply buttons) is a normal in-window message, so it needs **no template** — the
+patient has just written, the 24-hour window is open. It is sent automatically for the pre-filled
+Instagram/ad message and for ad referrals; for an organic "details / price" question the journey is
+created in `new_whatsapp_enquiry`, staff get the task *"start evaluation?"* and press **Start** (or
+switch on *auto-start organic* in Settings). If Start is pressed after the window has closed (the
+enquiry was days ago, or the person was handed off from Instagram and has not written on WhatsApp
+yet), the welcome falls back to the approved template **`eyebrow_journey_start_tr`**, which asks the
+person to reply "Değerlendirme Başlat" — that reply reopens the window and the button/privacy/link
+flow continues in-window. Until that template is APPROVED, an out-of-window Start is blocked with a
+visible task, never silently dropped.
+
 
 Turkish source copy lives in `se_journey_copy_defaults()`; per-brand overrides via the
 versioned option `se_journey_copy_<brand>` (Settings → copy). Every send records the copy version.
@@ -404,7 +418,7 @@ session could not query Meta/CRM (no credentials in the build environment, by de
 | Permanent system-user token `wa_token` on the host | **verified installed** 2026-08-31 | `secret_diag.php` |
 | App Secret `meta_app`, verify token `wa_verify` | **verified installed** | Integration Credentials |
 | Template `azin_reengagement_tr` (MARKETING) | **verified APPROVED** in mirror 2026-09-02 | WhatsApp → Readiness |
-| 11 logical `eyebrow_*_tr` templates (UTILITY) | **not submitted** — rows seeded `not_submitted` | Journeys → Templates → Submit to Meta (needs `wa_token` + WABA), then Sync; approval is Meta's decision |
+| 12 logical `eyebrow_*_tr` templates (UTILITY) | 11 **submitted by the owner 2026-09-02 evening** (Meta status pending — only Meta's answer counts); `eyebrow_photos_retake_tr` v1 was refused ("Invalid parameter": four variables in a short body, the last token a variable) → **v2** (three variables, closing sentence) replaces the refused row on the next admin page load and needs a fresh Submit; `eyebrow_journey_start_tr` is **new** (out-of-window welcome) and also needs Submit | Journeys → Templates → Submit (retake v2 + start), then Sync; approval is Meta's decision |
 | WhatsApp Flows (`eyebrow_pre_evaluation_tr`) | **not implemented** (no Flow endpoint, RSA key upload, AES-GCM data exchange, ping/421 handling in this repo) | secure CRM form + interactive messages are the fallback (implemented). Flow work is a separate, gated project |
 | Business verification | deferred (not required so far) | — |
 | `journey_key` secret | **not installed** (new) | `se-secret-install.sh journey_key` with 32 random bytes base64 |
@@ -452,7 +466,7 @@ rewritten; sealed columns start empty).
 3. Install `journey_key`; confirm on Journeys → Settings that storage says **Currently: r2** (else set option `se_media_r2_url` to the crm-media Worker URL, install `r2_media_key`, and set `se_media_storage=r2` so inbox voice/video/documents go to R2 too); redeploy the Worker (`cd services/crm-media && npx wrangler deploy`) for the `DELETE` route; create the fallback dir `/home/hyundaic/_se_journey_media` (0700, PHP user).
 4. Run `php modules/se_core/tests/run.php` on the host (expect 2,635 pass) and `php modules/se_core/tests/secret_diag.php`.
 5. Consent Settings → `health_data` (counsel-approved TR+EN, version, enabled); optionally `photo_publication`.
-6. Journeys → Templates → Submit the 11 templates → wait for APPROVED → Sync.
+6. Journeys → Templates → Submit the 12 templates → wait for APPROVED → Sync.
 7. Journeys → Settings: Enabled = on, **Sandbox = on**, test recipients = the owner's personal number.
 8. Owner sends the pre-filled wa.me message from the test number: welcome → button → link → form →
    photos → review → quote → consultation. Check the timeline and Integration Health.
@@ -496,7 +510,7 @@ rewritten; sealed columns start empty).
 | R2 for sealed photos | owner (SSH + wrangler) | verify `se_media_r2_url` / `r2_media_key` / `se_media_storage=r2` on the host; `npx wrangler deploy` in `services/crm-media` (DELETE route) |
 | Local fallback directory | owner (SSH) | `mkdir -m 700 /home/hyundaic/_se_journey_media` |
 | Inbox copy of patient photos (plain, thread-visible — upstream design, §0.1) | owner | Journeys → Settings → purge-after-seal on, or leave off |
-| Template approval | owner + Meta | Journeys → Templates → Submit (11) → wait → Sync |
+| Template approval | owner + Meta | Journeys → Templates → Submit retake v2 + start (the other 10 are pending at Meta) → wait → Sync |
 | Aftercare protocol content | clinic medical director | write instruction texts, set `approved: 1` in Settings → protocols |
 | Pre-op information text/link | counsel + medical director | Settings → clinical: approved + URL |
 | On-call target for urgent alerts | owner | Settings → `urgent_staff_ids` (staff ids 1 / 900021) |
@@ -529,7 +543,7 @@ assumed. Secrets were generated on the host and never displayed.
 1. Log in once as admin (seeds the 11 template rows, grants the journey capabilities to Clinic Owner / Sales).
 2. Journeys → Settings: enter your own number under *test recipients*, keep **Sandbox ON**, switch **Enabled ON**; send the pre-filled wa.me message from your phone and watch the welcome + buttons arrive. Nothing reaches anyone else while sandbox is on.
 3. Consent Settings → `health_data` TR + EN from counsel (the intake link and photo collection stay blocked until this exists; no text was invented).
-4. Journeys → Templates → *Submit to Meta* (11) → wait for **APPROVED** → *Sync* (out-of-window messages stay blocked until then).
+4. Journeys → Templates → *Submit to Meta* for `eyebrow_photos_retake_tr` (v2) and `eyebrow_journey_start_tr` (the other 10 were submitted 2026-09-02) → wait for **APPROVED** → *Sync* (out-of-window messages stay blocked until then).
 5. Aftercare protocol text + `approved`, pre-op text/link — clinic decisions.
 6. Sandbox OFF = real go-live. Decide the purge-after-seal switch (§0.1).
 7. On the Mac: remove `.git/index.lock`, `.git/objects/maintenance.lock` and the two `.git/objects/*/tmp_obj_*` files (the linked shell cannot delete on the mount), then `git checkout main && git pull --ff-only` (local `main` is still at `3f0d799`; `origin/main` is `6facbb8`).

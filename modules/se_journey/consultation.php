@@ -95,7 +95,7 @@ function se_journey_book_appointment($j, array $data, $staff_id, $type = 'consul
         if (function_exists('se_journey_send_copy')) {
             se_journey_send_copy($j, 'consultation_confirmation', ['when' => date('d.m.Y H:i', strtotime($start)), 'format' => $format === 'online' ? 'online' : 'klinikte'],
                 ['purpose' => 'consultation_confirmation', 'bypass_pause' => true, 'template' => 'eyebrow_consultation_confirmation_tr',
-                 'template_vars' => [se_journey_first_name($j) ?: 'Merhaba', date('d.m.Y H:i', strtotime($start)), $format === 'online' ? 'online' : 'klinikte'],
+                 'template_vars' => [se_journey_template_name($j), date('d.m.Y H:i', strtotime($start)), $format === 'online' ? 'online' : 'klinikte'],
                  'dedup_salt' => 'a' . (int) $id]);
         }
     } else {
@@ -115,7 +115,7 @@ function se_journey_book_appointment($j, array $data, $staff_id, $type = 'consul
         if (function_exists('se_journey_send_copy')) {
             se_journey_send_copy($j, 'procedure_confirmation', ['when' => date('d.m.Y H:i', strtotime($start))],
                 ['purpose' => 'procedure_confirmation', 'bypass_pause' => true, 'template' => 'eyebrow_procedure_confirmation_tr',
-                 'template_vars' => [se_journey_first_name($j) ?: 'Merhaba', date('d.m.Y H:i', strtotime($start))], 'dedup_salt' => 'a' . (int) $id]);
+                 'template_vars' => [se_journey_template_name($j), date('d.m.Y H:i', strtotime($start))], 'dedup_salt' => 'a' . (int) $id]);
         }
     }
 
@@ -224,7 +224,7 @@ function se_journey_preop_start($j, $staff_id)
     $link = trim((string) get_option('se_journey_preop_info_url_' . (int) $j->brand_id));
     if ($approved && $link !== '' && function_exists('se_journey_send_copy')) {
         se_journey_send_copy($j, 'preop_information', ['link' => $link], ['purpose' => 'preop_information', 'bypass_pause' => true,
-            'template' => 'eyebrow_preop_information_tr', 'template_vars' => [se_journey_first_name($j) ?: 'Merhaba', $link]]);
+            'template' => 'eyebrow_preop_information_tr', 'template_vars' => [se_journey_template_name($j), $link]]);
     } else {
         se_journey_task($j, 'preop_text_unapproved', 'Pre-op information text/link is not approved by counsel/medical director — send instructions manually', 'normal', null, '');
     }

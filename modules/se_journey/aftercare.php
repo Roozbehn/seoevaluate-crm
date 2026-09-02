@@ -181,7 +181,7 @@ function se_journey_run_aftercare($now = null, $limit = 100)
             foreach ($protocol['steps'] as $s) { if ($s['key'] === $e['step_key']) { $step = $s; break; } }
         }
         $day = max(1, (int) round((strtotime((string) $e['due_at']) - strtotime((string) $plan->anchor_at)) / 86400));
-        $name = se_journey_first_name($j) ?: 'Merhaba';
+        $name = se_journey_template_name($j);
         $update = ['state' => 'sent', 'sent_at' => date('Y-m-d H:i:s', $now)];
 
         switch ((string) $e['kind']) {

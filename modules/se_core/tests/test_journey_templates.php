@@ -1,0 +1,148 @@
+<?php
+/**
+ * Patient journey (se_journey) — the logical template registry.
+ *
+ *   - every definition is shaped the way Meta accepts: sequential {{n}},
+ *     samples = placeholders, no variable as the very last token, a sane
+ *     variable-to-word ratio, ≤ 1024 characters, no forbidden copy
+ *   - the registry refreshes a definition that changed while Meta had not
+ *     accepted the old one (submit_failed / rejected / not_submitted) and
+ *     never touches an approved or pending row
+ *   - the welcome falls back to the start template outside the 24h window
+ *   - Meta's error detail is kept (bounded) when a submission is refused
+ */
+
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+
+require_once __DIR__ . '/journey_fixtures.php';
+
+/* ======================================================================== */
+se_group('Journey templates: every definition is Meta-shaped');
+
+$defs = se_journey_template_definitions();
+se_eq(12, count($defs), 'twelve logical templates (11 + the out-of-window start)');
+se_ok(isset($defs['eyebrow_journey_start_tr']), 'the start template exists for enquiries whose window closed');
+se_eq(2, (int) ($defs['eyebrow_photos_retake_tr']['content_version'] ?? 1), 'the retake template is v2 (v1 was refused by Meta)');
+
+foreach ($defs as $tplName => $d) {   // not $name: test files run inside the runner's scope
+    $body = (string) $d['body'];
+    preg_match_all('/\{\{(\d+)\}\}/', $body, $m);
+    $vars = array_map('intval', $m[1]);
+    se_eq(range(1, count($vars)), $vars, "$tplName: placeholders are sequential from 1");
+    se_eq(count($vars), count($d['samples']), "$tplName: one sample per placeholder");
+    foreach ($d['samples'] as $i => $sample) { se_ok(trim((string) $sample) !== '', "$tplName: sample " . ($i + 1) . " is not empty"); }
+    se_ok(!preg_match('/\{\{\d+\}\}\s*$/u', $body), "$tplName: body does not end with a variable");
+    se_ok(!preg_match('/^\s*\{\{\d+\}\}/u', $body), "$tplName: body does not start with a variable");
+    se_ok(!preg_match('/\}\}\s*\{\{/u', $body), "$tplName: no two variables adjacent");
+    $words = count(preg_split('/\s+/u', trim(preg_replace('/\{\{\d+\}\}/', '', $body))));
+    // Meta accepted 11 words / 2 vars and 13 words / 3 vars (consultation templates, 2026-09-02) and
+    // refused 13 words / 4 vars ending in a variable; the floor here keeps new copy clearly inside that.
+    se_ok(count($vars) === 0 || $words / count($vars) >= 4, "$tplName: at least 4 words per variable ({$words} words / " . count($vars) . " vars)");
+    se_ok(mb_strlen($body) <= 1024, "$tplName: ≤ 1024 characters");
+    se_ok(preg_match('/^[a-z0-9_]+$/', $tplName) === 1 && mb_strlen($tplName) <= 512, "$tplName: Meta-safe name");
+    se_eq('tr', $d['language'], "$tplName: Turkish");
+    se_ok(!preg_match('/garantili|garanti eder|kalıcı|\bDr\.|Doktor/iu', $body), "$tplName: no guarantee/permanent/doctor wording (a 'not a guarantee' disclaimer is fine)");
+}
+
+/* ======================================================================== */
+se_group('Journey templates: a changed definition refreshes a refused row, never an accepted one');
+
+se_test_seed_journey();
+se_test_act_as(10, [], true);
+$db = se_test_db();
+$n = se_journey_seed_templates(1);
+se_eq(12, $n, 'first seeding registers all twelve');
+se_eq(12, count($db->rows('tblse_journey_templates')), 'twelve rows');
+se_eq(0, se_journey_seed_templates(1), 'a second run changes nothing');
+
+// Simulate what production holds: the v1 retake refused by Meta, another template pending.
+foreach ($db->tables['tblse_journey_templates'] as &$row) {
+    if ($row['logical_name'] === 'eyebrow_photos_retake_tr') {
+        $row['content_version'] = 1; $row['body'] = 'old v1 body {{1}} {{2}} {{3}} {{4}}'; $row['approval_status'] = 'submit_failed'; $row['rejection_reason'] = 'Invalid parameter';
+    }
+    if ($row['logical_name'] === 'eyebrow_intake_resume_tr') {
+        $row['content_version'] = 0; $row['body'] = 'stale body {{1}} {{2}}'; $row['approval_status'] = 'pending'; $row['meta_template_id'] = '123';
+    }
+}
+unset($row);
+se_eq(1, se_journey_seed_templates(1), 'exactly one row refreshed');
+$retake = null; $resume = null;
+foreach ($db->rows('tblse_journey_templates') as $r) { if ($r['logical_name'] === 'eyebrow_photos_retake_tr') { $retake = $r; } if ($r['logical_name'] === 'eyebrow_intake_resume_tr') { $resume = $r; } }
+se_eq(2, (int) $retake['content_version'], 'the refused retake row is now v2');
+se_eq($defs['eyebrow_photos_retake_tr']['body'], $retake['body'], 'with the v2 body');
+se_eq('not_submitted', $retake['approval_status'], 'ready to submit again');
+se_eq(null, $retake['rejection_reason'], 'old refusal cleared');
+se_eq(3, count(json_decode($retake['placeholders_json'], true)), 'three samples now');
+se_eq('stale body {{1}} {{2}}', $resume['body'], 'a PENDING row is what Meta holds — untouched');
+se_eq('pending', $resume['approval_status'], 'still pending');
+
+/* ======================================================================== */
+se_group('Journey templates: Meta refusal keeps the user-facing detail, bounded');
+
+se_journey_register_template_submitter(function ($waba, $definition) {
+    return ['ok' => false, 'error' => 'Invalid parameter [2388042] — Template body has too many variable parameters relative to the message length.'];
+});
+$r = se_journey_submit_template(1, 'eyebrow_photos_retake_tr', 10);
+se_eq(false, $r['ok'], 'refused');
+foreach ($db->rows('tblse_journey_templates') as $row) { if ($row['logical_name'] === 'eyebrow_photos_retake_tr') { $retake = $row; } }
+se_eq('submit_failed', $retake['approval_status'], 'status submit_failed');
+se_ok(strpos((string) $retake['rejection_reason'], '2388042') !== false && strpos((string) $retake['rejection_reason'], 'relative to the message length') !== false, 'the reason carries subcode and detail');
+
+// The submitted definition is what Meta expects: name, language, category, one BODY with examples.
+$captured = null;
+se_journey_register_template_submitter(function ($waba, $definition) use (&$captured) { $captured = $definition; return ['ok' => true, 'id' => '999', 'status' => 'PENDING', 'category' => 'UTILITY']; });
+$r = se_journey_submit_template(1, 'eyebrow_journey_start_tr', 10);
+se_eq(true, $r['ok'], 'start template submitted');
+se_eq('eyebrow_journey_start_tr', $captured['name'], 'meta name');
+se_eq('tr', $captured['language'], 'language');
+se_eq('UTILITY', $captured['category'], 'category');
+se_eq('BODY', $captured['components'][0]['type'], 'one BODY component');
+se_eq([['Ayşe']], $captured['components'][0]['example']['body_text'], 'example values = samples');
+
+/* ======================================================================== */
+se_group('Journey templates: the welcome uses the start template outside the window');
+
+se_test_seed_journey();
+se_test_act_as(10, [], true);
+se_test_wa_deliver(se_test_wa_body('905000000004', 'kaş ekimi fiyat bilgisi alabilir miyim', se_test_wamid(), ['name' => 'Elif']));
+$j = se_test_journey_row();
+se_eq('new_whatsapp_enquiry', $j->state, 'an organic price question waits for staff (auto-start organic is off)');
+se_eq(1, count(array_filter($db->rows('tblse_journey_tasks'), function ($t) { return $t['kind'] === 'organic_enquiry'; })), 'staff task: start evaluation?');
+
+// Two days later staff press Start: the window is closed.
+foreach ($db->tables['tblse_wa_conversations'] as &$c) { $c['window_expires_at'] = date('Y-m-d H:i:s', time() - 86400); }
+unset($c);
+se_journey_seed_templates(1);
+$before = count($GLOBALS['se_wa_sent']);
+$r = se_journey_send_welcome(se_test_journey_row(), 'staff:10');
+se_eq(false, $r['ok'], 'not approved yet → blocked, not silently dropped');
+se_eq('template_not_submitted', $r['reason'], 'names the start template status');
+se_eq('new_whatsapp_enquiry', se_test_journey_row()->state, 'state unchanged');
+
+// Approved in the registry AND mirrored from Meta: the template goes out and the journey advances.
+foreach ($db->tables['tblse_journey_templates'] as &$row) { if ($row['logical_name'] === 'eyebrow_journey_start_tr') { $row['approval_status'] = 'approved'; } }
+unset($row);
+$db->seed('tblse_wa_templates', [['id' => 1, 'brand_id' => 1, 'name' => 'eyebrow_journey_start_tr', 'language' => 'tr', 'category' => 'UTILITY', 'approval_state' => 'approved', 'variables' => '1']]);
+se_journey_resume(se_test_journey_row(), 10);
+$r = se_journey_send_welcome(se_test_journey_row(), 'staff:10');
+se_wa_out_drain();
+se_eq(true, $r['ok'], 'queued');
+se_eq('template', $r['mode'], 'as a template');
+$last = end($GLOBALS['se_wa_sent']);
+se_eq('eyebrow_journey_start_tr', $last['template'], 'the start template');
+se_eq(['Elif'], $last['variables'], 'first name as the only variable');
+se_eq('welcome_sent', se_test_journey_row()->state, 'journey moved to welcome_sent');
+
+// The patient replies with the typed keyword → window reopens → normal in-window flow continues.
+foreach ($db->tables['tblse_wa_conversations'] as &$c) { $c['window_expires_at'] = date('Y-m-d H:i:s', time() + 86400); }
+unset($c);
+se_test_wa_deliver(se_test_wa_body('905000000004', 'Değerlendirme Başlat', se_test_wamid()));
+se_eq('consent_pending', se_test_journey_row()->state, 'privacy notice + secure link went out in-window after the reply');
+
+/* Leave the shared fixture stores as this suite found them. */
+$GLOBALS['SE_JOURNEY_TEMPLATE_SUBMITTER'] = null;
+se_test_remove_secret('wa_token');
+se_test_remove_secret('wa_app');
+se_test_remove_secret('journey_key');
+$GLOBALS['SE_WA_TRANSPORT'] = null;
+$GLOBALS['SE_MEDIA_FETCHER'] = null;
