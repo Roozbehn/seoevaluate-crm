@@ -78,9 +78,14 @@ function se_ig_live_transport(array $m)
     return ['ok' => false, 'mid' => '', 'code' => $code, 'error' => mb_substr($msg, 0, 180) . $sub];
 }
 
-function se_ig_maybe_register_live_transport()
+/**
+ * Register the live transport when a usable token exists for THIS brand (a
+ * brand-scoped meta_page_<brand> counts — checking only the shared brand-0
+ * file left the gate reporting no_transport while every credential passed).
+ */
+function se_ig_maybe_register_live_transport($brand_id = 0)
 {
-    if (!se_ig_transport_available() && function_exists('se_secret_read') && se_ig_token(0) !== '') {
+    if (!se_ig_transport_available() && function_exists('se_secret_read') && se_ig_token((int) $brand_id) !== '') {
         se_ig_register_transport('se_ig_live_transport');
     }
 }

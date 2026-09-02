@@ -29,7 +29,7 @@ function se_ig_transport_available()          { return is_callable($GLOBALS['SE_
 function se_ig_send_blocked_reason($brand_id)
 {
     if (function_exists('se_ig_maybe_register_live_transport')) {
-        se_ig_maybe_register_live_transport();
+        se_ig_maybe_register_live_transport((int) $brand_id);   // brand-scoped token counts
     }
 
     if (!se_ig_can_send($brand_id)) {

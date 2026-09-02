@@ -191,6 +191,18 @@ se_eq('crm_api', end($msgs)['source'], 'the sent message is mirrored as CRM-sent
 $db->update('tblse_ig_conversations', ['window_expires_at' => date('Y-m-d H:i:s', time() - 60)]);
 se_eq('window_closed', se_ig_queue_message((int) $conv->id, ['body' => 'late'])['reason'], 'outside the window Instagram offers no template fallback');
 
+/* REGRESSION: only a BRAND-SCOPED token exists (meta_page_1, no shared
+ * meta_page). The lazy live-transport registration used to check brand 0 only,
+ * so the authoritative gate reported no_transport although every credential
+ * gate had passed — the drain then held every reply as gated. */
+$GLOBALS['SE_IG_TRANSPORT'] = null;
+se_test_remove_secret('meta_page');
+se_test_install_secret('meta_page_1', 'fixture-brand-scoped-token');
+require_once __DIR__ . '/../../se_instagram/transport.php';
+se_eq('', se_ig_send_blocked_reason(1), 'a brand-scoped token alone lets the gate lazily register the live transport');
+se_ok(se_ig_transport_available(), 'the live transport is registered from the brand-scoped token');
+se_test_remove_secret('meta_page_1');
+
 se_test_remove_secret('meta_page');
 se_test_remove_secret('meta_app');
 se_test_remove_secret('ig_verify');
