@@ -85,6 +85,7 @@ function se_test_wa_body($from, $text, $wamid, $extra = [], $ts = null)
     $msg = ['from' => $from, 'id' => $wamid, 'timestamp' => (string) ($ts ?? time()), 'type' => 'text', 'text' => ['body' => $text]];
     if (isset($extra['referral'])) { $msg['referral'] = $extra['referral']; }
     if (isset($extra['interactive'])) { $msg['type'] = 'interactive'; unset($msg['text']); $msg['interactive'] = $extra['interactive']; }
+    if (isset($extra['button'])) { $msg['type'] = 'button'; unset($msg['text']); $msg['button'] = $extra['button']; }   // template quick reply
     if (isset($extra['image'])) { $msg['type'] = 'image'; unset($msg['text']); $msg['image'] = $extra['image']; }
     $value = ['messaging_product' => 'whatsapp', 'metadata' => ['display_phone_number' => '905471207070', 'phone_number_id' => SE_TEST_PN],
               'contacts' => [['profile' => ['name' => $extra['name'] ?? 'Test Hasta'], 'wa_id' => $from]], 'messages' => [$msg]];

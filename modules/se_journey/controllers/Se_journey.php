@@ -243,6 +243,13 @@ class Se_journey extends AdminController
                 $r = se_journey_book_appointment($j, $this->input->post(), $staff, $type);
                 $msg = $r['ok'] ? ['success', _l('se_journey_booked')] : ['warning', _l('se_journey_blocked') . ': ' . _l('se_journey_reason_' . $r['reason'])];
                 break;
+            case 'book_link':
+                // The calendar link (face-to-face consultation slot picker), by hand.
+                $this->need('manage_consultation');
+                $r = se_journey_send_booking_link($j, $staff, '', 'booking_link_repeat');
+                $msg = $r['ok'] ? ['success', _l('se_journey_book_link_sent') . ($r['mode'] === 'sandbox' ? ' — ' . _l('se_journey_sandbox_not_sent') : '')]
+                                : ['warning', _l('se_journey_blocked') . ': ' . $r['reason']];
+                break;
             case 'appointment':
                 $this->need('manage_consultation');
                 $r = se_journey_appointment_update($j, (int) $this->input->post('appointment_id'), $this->input->post(), $staff);
@@ -417,6 +424,8 @@ class Se_journey extends AdminController
             'media_storage' => (string) get_option('se_journey_media_storage') ?: 'auto',
             'media_storage_status' => se_journey_media_storage_status(),
             'purge_inbox_copy' => (int) get_option('se_journey_purge_inbox_copy_' . $brand),
+            'booking' => se_journey_booking_settings($brand),
+            'booking_staff_options' => $brand > 0 && function_exists('se_appt_selectable_staff') ? se_appt_selectable_staff($brand) : [],
             'ask_infectious' => (int) get_option('se_journey_ask_infectious_' . $brand),
             'consent_bypass' => se_journey_consent_bypass_active($brand) ? 1 : 0,
             'consent_bypass_reason' => (string) get_option('se_journey_consent_bypass_reason_' . $brand),
@@ -452,6 +461,16 @@ class Se_journey extends AdminController
             update_option('se_journey_technical_fields_' . $brand, (int) $this->input->post('technical_fields') === 1 ? 1 : 0);
             update_option('se_journey_media_storage', in_array((string) $this->input->post('media_storage'), ['auto', 'r2', 'local'], true) ? (string) $this->input->post('media_storage') : 'auto');
             update_option('se_journey_purge_inbox_copy_' . $brand, (int) $this->input->post('purge_inbox_copy') === 1 ? 1 : 0);
+            // Patient self-booking calendar (face-to-face consultation after an accepted quote).
+            update_option('se_journey_booking_staff_' . $brand, max(0, (int) $this->input->post('booking_staff')));
+            update_option('se_journey_booking_slot_' . $brand, max(15, min(180, (int) $this->input->post('booking_slot'))));
+            update_option('se_journey_booking_horizon_' . $brand, max(1, min(60, (int) $this->input->post('booking_horizon'))));
+            update_option('se_journey_booking_notice_' . $brand, max(0, min(168, (int) $this->input->post('booking_notice'))));
+            $hours = trim((string) $this->input->post('booking_hours'));
+            update_option('se_journey_booking_hours_' . $brand, preg_match('/^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/', $hours) ? $hours : SE_JOURNEY_BOOKING_DEFAULT_HOURS);
+            $days = array_values(array_unique(array_filter(array_map('intval', (array) $this->input->post('booking_days')), function ($d) { return $d >= 0 && $d <= 6; })));
+            update_option('se_journey_booking_days_' . $brand, $days ? implode(',', $days) : SE_JOURNEY_BOOKING_DEFAULT_DAYS);
+            update_option('se_journey_booking_location_' . $brand, mb_substr(trim((string) $this->input->post('booking_location')), 0, 191));
             se_journey_audit($brand, 0, 'settings_saved', null, null, 'flags');
         } elseif ($section === 'clinical') {
             if (!se_journey_can('manage_consent')) { access_denied('se_journey'); }

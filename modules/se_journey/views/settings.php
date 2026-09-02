@@ -61,6 +61,28 @@
             <small class="text-muted"><?php echo html_escape(_l('se_journey_media_storage_now')); ?>: <strong><?php echo html_escape($v['media_storage_status']['driver']); ?></strong><?php if (!$v['media_storage_status']['r2_ready']) { echo ' · ' . html_escape(_l('se_journey_media_r2_not_ready')); } ?></small></div></div>
           <div class="col-sm-6"><div class="checkbox checkbox-primary" style="margin-top:28px"><input type="checkbox" id="cb_purge_inbox_copy" name="purge_inbox_copy" value="1" <?php echo $v['purge_inbox_copy'] ? 'checked' : ''; ?> /><label for="cb_purge_inbox_copy"><?php echo html_escape(_l('se_journey_flag_purge_inbox')); ?></label></div></div>
         </div>
+        <hr />
+        <h5><?php echo html_escape(_l('se_journey_booking_settings')); ?></h5>
+        <p class="text-muted"><small><?php echo html_escape(_l('se_journey_booking_note')); ?></small></p>
+        <?php $bk = $v['booking']; ?>
+        <div class="row">
+          <div class="col-sm-4"><div class="form-group"><label><?php echo html_escape(_l('se_journey_booking_staff')); ?></label>
+            <select name="booking_staff" class="form-control"><option value="0"><?php echo html_escape(_l('se_journey_booking_staff_auto')); ?></option>
+              <?php foreach ($v['booking_staff_options'] as $s) { ?><option value="<?php echo (int) $s['staffid']; ?>"<?php echo (int) $bk['staff_id'] === (int) $s['staffid'] ? ' selected' : ''; ?>><?php echo html_escape(trim($s['firstname'] . ' ' . $s['lastname'])); ?></option><?php } ?>
+            </select></div></div>
+          <div class="col-sm-2"><div class="form-group"><label><?php echo html_escape(_l('se_journey_booking_slot')); ?></label><input type="number" class="form-control" name="booking_slot" value="<?php echo (int) $bk['slot_minutes']; ?>" min="15" max="180" step="5" /></div></div>
+          <div class="col-sm-3"><div class="form-group"><label><?php echo html_escape(_l('se_journey_booking_horizon')); ?></label><input type="number" class="form-control" name="booking_horizon" value="<?php echo (int) $bk['days_ahead']; ?>" min="1" max="60" /></div></div>
+          <div class="col-sm-3"><div class="form-group"><label><?php echo html_escape(_l('se_journey_booking_notice')); ?></label><input type="number" class="form-control" name="booking_notice" value="<?php echo (int) $bk['notice_hours']; ?>" min="0" max="168" /></div></div>
+        </div>
+        <div class="row">
+          <div class="col-sm-4"><div class="form-group"><label><?php echo html_escape(_l('se_journey_booking_hours')); ?></label><input class="form-control" name="booking_hours" value="<?php echo html_escape($bk['hours']); ?>" placeholder="10:00-18:00" /></div></div>
+          <div class="col-sm-8"><div class="form-group"><label><?php echo html_escape(_l('se_journey_booking_days')); ?></label><div>
+            <?php foreach ([1 => 'Mon', 2 => 'Tue', 3 => 'Wed', 4 => 'Thu', 5 => 'Fri', 6 => 'Sat', 0 => 'Sun'] as $dn => $dl) { ?>
+              <div class="checkbox checkbox-primary checkbox-inline"><input type="checkbox" id="cb_bday_<?php echo $dn; ?>" name="booking_days[]" value="<?php echo $dn; ?>" <?php echo in_array($dn, $bk['days'], true) ? 'checked' : ''; ?> /><label for="cb_bday_<?php echo $dn; ?>"><?php echo html_escape(_l('se_journey_day_' . $dn)); ?></label></div>
+            <?php } ?>
+          </div></div></div>
+        </div>
+        <div class="form-group"><label><?php echo html_escape(_l('se_journey_booking_location')); ?></label><input class="form-control" name="booking_location" value="<?php echo html_escape($bk['location']); ?>" maxlength="191" /></div>
         <button class="btn btn-primary" type="submit"><?php echo html_escape(_l('submit')); ?></button>
       <?php echo form_close(); ?>
     </div></div>

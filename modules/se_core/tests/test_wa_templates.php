@@ -196,6 +196,16 @@ se_eq(true, $q['ok'], 'keyed values in any order are accepted');
 $row = null; foreach (se_test_db()->rows('tblse_wa_outbound') as $r) { if ((int) $r['id'] === (int) $q['id']) { $row = $r; } }
 se_eq(['Ayşe', '10 Eylül'], json_decode($row['variables_json'], true), 'and stored as an ordered list matching the placeholders');
 
+// A plain LIST is positional. With numeric placeholders PHP reads the key '1'
+// as index 1, which used to hand {{1}} the second value and {{2}} the same one
+// — every automated (journey) template with two or more variables went out
+// with its name replaced by the link.
+$q = se_wa_queue_message(901, ['kind' => 'template', 'template' => 'azin_reengagement_tr',
+    'variables' => ['Zeynep', '11 Eylül'], 'dedup_salt' => 'list'], 10);
+se_eq(true, $q['ok'], 'a plain list is accepted');
+$row = null; foreach (se_test_db()->rows('tblse_wa_outbound') as $r) { if ((int) $r['id'] === (int) $q['id']) { $row = $r; } }
+se_eq(['Zeynep', '11 Eylül'], json_decode($row['variables_json'], true), 'a plain list maps positionally: {{1}} = first value, {{2}} = second');
+
 $sent = [];
 se_wa_out_drain();
 se_eq(['Ayşe', '10 Eylül'], $sent[0]['variables'] ?? null, 'the transport receives the ordered values');

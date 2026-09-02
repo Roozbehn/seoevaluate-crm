@@ -20,7 +20,9 @@ require_once __DIR__ . '/journey_fixtures.php';
 se_group('Journey templates: every definition is Meta-shaped');
 
 $defs = se_journey_template_definitions();
-se_eq(12, count($defs), 'twelve logical templates (11 + the out-of-window start)');
+se_eq(14, count($defs), 'fourteen logical templates (11 + the out-of-window start + the quote with quick replies + the calendar link)');
+se_ok(isset($defs['eyebrow_quote_ready_tr']) && count($defs['eyebrow_quote_ready_tr']['buttons']) === 3, 'the quote template carries three quick-reply buttons');
+foreach ($defs['eyebrow_quote_ready_tr']['buttons'] as $qb) { se_ok(mb_strlen($qb['text']) <= 25 && $qb['type'] === 'QUICK_REPLY' && strpos($qb['payload'], 'jr_') === 0, 'quick reply "' . $qb['text'] . '": ≤ 25 chars, QUICK_REPLY, jr_* payload'); }
 se_ok(isset($defs['eyebrow_journey_start_tr']), 'the start template exists for enquiries whose window closed');
 se_eq(2, (int) ($defs['eyebrow_photos_retake_tr']['content_version'] ?? 1), 'the retake template is v2 (v1 was refused by Meta)');
 
@@ -51,8 +53,8 @@ se_test_seed_journey();
 se_test_act_as(10, [], true);
 $db = se_test_db();
 $n = se_journey_seed_templates(1);
-se_eq(12, $n, 'first seeding registers all twelve');
-se_eq(12, count($db->rows('tblse_journey_templates')), 'twelve rows');
+se_eq(14, $n, 'first seeding registers all fourteen');
+se_eq(14, count($db->rows('tblse_journey_templates')), 'fourteen rows');
 se_eq(0, se_journey_seed_templates(1), 'a second run changes nothing');
 
 // Simulate what production holds: the v1 retake refused by Meta, another template pending.
@@ -98,6 +100,15 @@ se_eq('tr', $captured['language'], 'language');
 se_eq('UTILITY', $captured['category'], 'category');
 se_eq('BODY', $captured['components'][0]['type'], 'one BODY component');
 se_eq([['Ayşe']], $captured['components'][0]['example']['body_text'], 'example values = samples');
+se_eq(1, count($captured['components']), 'no BUTTONS component when the definition has none');
+
+// A definition with quick replies submits a BUTTONS component (text only — payloads are a send-time concern).
+$r = se_journey_submit_template(1, 'eyebrow_quote_ready_tr', 10);
+se_eq(true, $r['ok'], 'quote template submitted');
+se_eq(['BODY', 'BUTTONS'], array_column($captured['components'], 'type'), 'BODY then BUTTONS');
+se_eq([['type' => 'QUICK_REPLY', 'text' => 'Teklifi Kabul Et'], ['type' => 'QUICK_REPLY', 'text' => 'Fiyat Revizyonu'], ['type' => 'QUICK_REPLY', 'text' => 'Danışmana Bağlan']],
+      $captured['components'][1]['buttons'], 'three quick-reply buttons, no payload field');
+se_eq([['Ayşe', 'https://crm.example.com/se_journey/intake/abc/quote']], $captured['components'][0]['example']['body_text'], 'two samples');
 
 /* ======================================================================== */
 se_group('Journey templates: the welcome uses the start template outside the window');

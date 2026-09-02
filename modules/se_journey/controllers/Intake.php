@@ -12,6 +12,9 @@ defined('BASEPATH') or exit('No direct script access allowed');
  *   GET  se_journey/intake/<token>/photos     secure photo upload
  *   POST se_journey/intake/<token>/photos
  *   GET  se_journey/intake/<token>/quote      frozen quote snapshot
+ *   POST se_journey/intake/<token>/quote      the patient's answer (accept / revision / human)
+ *   GET  se_journey/intake/<token>/book       face-to-face consultation slot picker (calendar)
+ *   POST se_journey/intake/<token>/book       book the chosen slot
  *
  * The token is the ONLY identity; nothing else in the URL. Every request
  * re-verifies it (purpose, expiry, revocation, opt-out), rate-limits by IP,
@@ -29,7 +32,22 @@ class Intake extends App_Controller
         $ua = (string) $this->input->user_agent();
 
         if ($sub === 'quote') {
+            if ($method === 'post') {
+                if (se_journey_throttle_hit('post:' . hash('sha256', $ip), 120, 600)) {
+                    return $this->fail('rate_limited');
+                }
+
+                return $this->quote_post($token, $ip, $ua);
+            }
+
             return $this->quote($token, $ip, $ua);
+        }
+        if ($sub === 'book') {
+            if ($method === 'post' && se_journey_throttle_hit('post:' . hash('sha256', $ip), 120, 600)) {
+                return $this->fail('rate_limited');
+            }
+
+            return $this->book($token, $ip, $ua, $method === 'post');
         }
         if ($sub === 'photos') {
             return $method === 'post' ? $this->photos_post($token, $ip, $ua) : $this->photos_get($token, $ip, $ua);
@@ -191,13 +209,71 @@ class Intake extends App_Controller
         ];
     }
 
-    private function quote($token, $ip, $ua)
+    private function quote($token, $ip, $ua, $notice = '')
     {
         $r = se_journey_quote_public($token, $ip, $ua);
         if (!$r['ok']) {
             return $this->fail($r['reason']);
         }
-        $this->load->view('se_journey/public/quote', ['snapshot' => $r['snapshot']]);
+        $this->load->view('se_journey/public/quote', [
+            'snapshot' => $r['snapshot'], 'response' => $r['response'], 'booking' => $r['booking'], 'notice' => $notice,
+            'state' => (string) $r['journey']->state,
+            'csrf_name' => $this->security->get_csrf_token_name(), 'csrf_hash' => $this->security->get_csrf_hash(),
+            'action' => se_journey_public_url('se_journey/intake/' . $token . '/quote'),
+        ]);
+    }
+
+    /** The three answers, from the page (works whatever the WhatsApp window state). */
+    private function quote_post($token, $ip, $ua)
+    {
+        $v = se_journey_verify_token($token, 'quote', $ip, $ua);
+        if (!$v['ok']) {
+            return $this->fail($v['reason']);
+        }
+        $j = $v['journey'];
+        $action = (string) $this->input->post('action');
+        if ($action === 'accept' || $action === 'book') {
+            $r = se_journey_quote_respond($j, 'accept', 'page');
+            if ($r['ok'] && $r['book_link'] !== '') {
+                redirect($r['book_link']);   // straight to the calendar
+            }
+
+            return $this->quote($token, $ip, $ua, $r['ok'] ? 'accepted' : 'failed');
+        }
+        if ($action === 'revise') {
+            $r = se_journey_quote_respond($j, 'revise', 'page');
+
+            return $this->quote($token, $ip, $ua, $r['ok'] ? 'revision' : 'failed');
+        }
+        if ($action === 'handoff') {
+            se_journey_handle_handoff($j, ['wamid' => '', 'body' => 'quote page: handoff']);
+
+            return $this->quote($token, $ip, $ua, 'handoff');
+        }
+
+        return $this->fail('unknown');
+    }
+
+    /** Calendar: free face-to-face slots; POST books one. */
+    private function book($token, $ip, $ua, $post)
+    {
+        $v = se_journey_verify_token($token, 'book', $ip, $ua);
+        if (!$v['ok']) {
+            return $this->fail($v['reason']);
+        }
+        $j = $v['journey'];
+        $result = null;
+        if ($post) {
+            $result = se_journey_booking_pick($j, (string) $this->input->post('slot'), 'page');
+            $j = se_journey_get_raw((int) $j->id);
+        }
+        $avail = se_journey_booking_slots((int) $j->brand_id);
+        $this->load->view('se_journey/public/book', [
+            'token' => $token, 'j' => $j, 'avail' => $avail, 'result' => $result,
+            'booking' => se_journey_consultation_upcoming($j),
+            'csrf_name' => $this->security->get_csrf_token_name(), 'csrf_hash' => $this->security->get_csrf_hash(),
+            'action' => se_journey_public_url('se_journey/intake/' . $token . '/book'),
+        ]);
     }
 
     /* ---------------------------------------------------------------- */

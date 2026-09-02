@@ -16,6 +16,7 @@ function se_journey_ui_state_tone($state)
         'photos_requested' => 'processing', 'photos_incomplete' => 'skipped', 'photo_retake_requested' => 'skipped',
         'ready_for_review' => 'ok', 'under_review' => 'processing', 'more_information_required' => 'skipped',
         'consultation_recommended' => 'submitted', 'quote_pending_staff_approval' => 'warning', 'quote_sent' => 'sent',
+        'quote_accepted' => 'ok', 'quote_revision_requested' => 'warning',
         'consultation_booked' => 'scheduled', 'consultation_completed' => 'held', 'procedure_booked' => 'scheduled',
         'preop_pending' => 'processing', 'procedure_completed' => 'completed', 'aftercare_active' => 'active',
         'followup_due' => 'warning', 'completed' => 'completed', 'not_suitable' => 'closed', 'closed_lost' => 'closed',

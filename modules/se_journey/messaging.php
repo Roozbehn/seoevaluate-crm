@@ -63,7 +63,15 @@ function se_journey_copy_defaults()
             'more_info_request' =>
                 "Merhaba {{name}}, değerlendirmeyi tamamlayabilmemiz için ekibimizin birkaç ek bilgiye ihtiyacı var. Danışmanınız sizinle bu mesaj üzerinden iletişime geçecektir.",
             'evaluation_ready' =>
-                "Merhaba {{name}}, ön değerlendirme bilgileriniz ekibimiz tarafından incelendi. Size özel değerlendirme sonucu ve teklifiniz hazır. Ayrıntıları güvenli bağlantıdan görüntüleyebilirsiniz: {{link}}\n\nBu ön değerlendirme, kesin tıbbi uygunluk veya sonuç garantisi değildir. Sorularınız için bu mesaja yanıt verebilir ya da danışmanınızla görüşebilirsiniz.",
+                "Merhaba {{name}}, ön değerlendirme bilgileriniz ekibimiz tarafından incelendi. Size özel değerlendirme sonucu ve teklifiniz hazır. Ayrıntıları güvenli bağlantıdan görüntüleyebilirsiniz: {{link}}\n\nBu ön değerlendirme, kesin tıbbi uygunluk veya sonuç garantisi değildir. Kararınızı “Teklifi Kabul Et”, “Fiyat Revizyonu” veya “Danışmana Bağlan” seçenekleriyle iletebilirsiniz; teklifi kabul ederseniz klinikte yüz yüze ön görüşme için size uygun bir tarihi takvimden seçebileceksiniz.",
+            'quote_options' =>
+                "Teklifinizle ilgili kararınızı aşağıdaki seçeneklerden biriyle iletebilirsiniz. Sorunuz varsa danışmanımız bu mesaj üzerinden sizinle ilgilenecektir.",
+            'quote_accepted_ack' =>
+                "Teşekkürler {{name}}, teklifi kabul ettiğinizi kaydettik. Klinikte yüz yüze ön görüşme için size uygun tarih ve saati güvenli bağlantıdan seçebilirsiniz: {{link}}\n\nBağlantı yalnızca size özeldir. Yardım isterseniz bu mesaja yanıt verebilirsiniz.",
+            'booking_link_repeat' =>
+                "Merhaba {{name}}, klinikte yüz yüze ön görüşme için size uygun tarih ve saati güvenli bağlantıdan seçebilirsiniz: {{link}}\n\nYardım isterseniz bu mesaja yanıt verebilirsiniz.",
+            'quote_revision_ack' =>
+                "Talebinizi aldık {{name}}. Danışmanınız teklifinizi gözden geçirip en kısa sürede bu numaradan sizinle iletişime geçecektir. Bu arada sorularınızı bu mesaja yanıt olarak yazabilirsiniz.",
             'consultation_confirmation' =>
                 "Merhaba {{name}}, {{when}} tarihli {{format}} görüşmeniz oluşturuldu. Değişiklik veya iptal için bu mesaja yanıt verebilirsiniz.",
             'consultation_reminder' =>
@@ -95,6 +103,8 @@ function se_journey_copy_defaults()
             'btn_start'   => 'Değerlendirme Başlat',   // Meta reply-button titles are capped at 20 chars; the brief's 21-char label is accepted when typed
             'btn_handoff' => 'Danışmana Bağlan',
             'btn_stop'    => 'İPTAL',
+            'btn_quote_accept' => 'Teklifi Kabul Et',
+            'btn_quote_revise' => 'Fiyat Revizyonu',
             'photo_kind_frontal' => 'tam karşıdan (iki kaş)',
             'photo_kind_left'    => 'sol kaş yakın plan',
             'photo_kind_right'   => 'sağ kaş yakın plan',
@@ -377,6 +387,11 @@ function se_journey_send($j, array $spec)
         }
         $msg = ['kind' => 'template', 'template' => $tpl['meta_name'], 'variables' => array_values((array) ($spec['template_vars'] ?? [])),
                 'origin' => $origin, 'dedup_salt' => $salt, 'system' => true];
+        if (!empty($spec['template_quick_replies'])) {
+            // Quick-reply payloads: the tap comes back as interactive_id (the
+            // same ids the in-window reply buttons use), not as a label.
+            $msg['quick_replies'] = array_values(array_map('strval', (array) $spec['template_quick_replies']));
+        }
         if ($sendAfter > time()) {
             $msg['send_after'] = $sendAfter;
         }
@@ -692,6 +707,27 @@ function se_journey_template_definitions()
             'body' => "Merhaba {{1}}, ön değerlendirme bilgileriniz ekibimiz tarafından incelendi. Size özel değerlendirme sonucu ve teklifiniz hazır. Ayrıntıları güvenli bağlantıdan görüntüleyebilirsiniz: {{2}}\n\nBu ön değerlendirme, kesin tıbbi uygunluk veya sonuç garantisi değildir. Sorularınız için bu mesaja yanıt verebilir ya da danışmanınızla görüşebilirsiniz.",
             'samples' => ['Ayşe', 'https://crm.example.com/se_journey/quote/abc'],
         ],
+        'eyebrow_quote_ready_tr' => [
+            // The quote, with the three answers as quick-reply buttons, for a
+            // window that has closed by the time the review is done (the
+            // usual case). Preferred over eyebrow_evaluation_ready_tr once
+            // Meta approves it; a tap reopens the window for the follow-ups.
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => "Merhaba {{1}}, ön değerlendirme bilgileriniz ekibimiz tarafından incelendi. Size özel değerlendirme sonucu ve teklifiniz hazır; ayrıntıları güvenli bağlantıdan görüntüleyebilirsiniz: {{2}}\n\nBu ön değerlendirme, kesin tıbbi uygunluk veya sonuç garantisi değildir. Kararınızı aşağıdaki seçeneklerden biriyle iletebilirsiniz; teklifi kabul ederseniz klinikte yüz yüze ön görüşme için size uygun bir tarihi seçebileceksiniz.",
+            'samples' => ['Ayşe', 'https://crm.example.com/se_journey/intake/abc/quote'],
+            'buttons' => [
+                ['type' => 'QUICK_REPLY', 'text' => 'Teklifi Kabul Et', 'payload' => 'jr_quote_accept'],
+                ['type' => 'QUICK_REPLY', 'text' => 'Fiyat Revizyonu', 'payload' => 'jr_quote_revise'],
+                ['type' => 'QUICK_REPLY', 'text' => 'Danışmana Bağlan', 'payload' => 'jr_handoff'],
+            ],
+        ],
+        'eyebrow_booking_link_tr' => [
+            // The calendar link (face-to-face consultation) when the window has
+            // closed: a repeat requested days later, or staff sending it by hand.
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, klinikte yüz yüze ön görüşme için size uygun tarih ve saati güvenli bağlantıdan seçebilirsiniz: {{2}}. Bağlantı yalnızca size özeldir; yardım isterseniz bu mesaja yanıt verebilirsiniz.',
+            'samples' => ['Ayşe', 'https://crm.example.com/se_journey/intake/abc/book'],
+        ],
         'eyebrow_consultation_confirmation_tr' => [
             'category' => 'UTILITY', 'language' => 'tr',
             'body' => 'Merhaba {{1}}, {{2}} tarihli {{3}} görüşmeniz oluşturuldu. Değişiklik veya iptal için bu mesaja yanıt verebilirsiniz.',
@@ -744,6 +780,7 @@ function se_journey_seed_templates($brand_id)
                 && in_array((string) $row->approval_status, ['not_submitted', 'submit_failed', 'rejected'], true)) {
                 $CI->db->where('id', (int) $row->id)->update($t, [
                     'body' => $d['body'], 'placeholders_json' => json_encode($d['samples']), 'content_version' => $version,
+                    'buttons_json' => !empty($d['buttons']) ? json_encode(array_values($d['buttons']), JSON_UNESCAPED_UNICODE) : null,
                     'approval_status' => 'not_submitted', 'rejection_reason' => null, 'meta_template_id' => null,
                     'category_meta' => null, 'submitted_at' => null, 'last_updated' => $now,
                 ]);
@@ -755,6 +792,7 @@ function se_journey_seed_templates($brand_id)
             'brand_id' => (int) $brand_id, 'logical_name' => $name, 'language' => $d['language'],
             'category_requested' => $d['category'], 'meta_name' => $name, 'content_version' => $version,
             'body' => $d['body'], 'placeholders_json' => json_encode($d['samples']),
+            'buttons_json' => !empty($d['buttons']) ? json_encode(array_values($d['buttons']), JSON_UNESCAPED_UNICODE) : null,
             'approval_status' => 'not_submitted', 'fallback' => 'staff_task', 'date_created' => $now,
         ]);
         $n++;
@@ -859,15 +897,7 @@ function se_journey_submit_template($brand_id, $logical, $staff_id = 0)
             return ['ok' => false, 'reason' => 'no_token'];
         }
     }
-    $definition = [
-        'name'       => (string) $row->meta_name,
-        'language'   => (string) $row->language,
-        'category'   => (string) $row->category_requested,
-        'components' => [[
-            'type' => 'BODY', 'text' => (string) $row->body,
-            'example' => ['body_text' => [array_values(json_decode((string) $row->placeholders_json, true) ?: [])]],
-        ]],
-    ];
+    $definition = se_journey_template_meta_definition($row);
     try {
         $r = call_user_func($GLOBALS['SE_JOURNEY_TEMPLATE_SUBMITTER'], $waba, $definition);
     } catch (Throwable $e) {
@@ -893,6 +923,39 @@ function se_journey_submit_template($brand_id, $logical, $staff_id = 0)
     se_journey_audit($brand_id, 0, 'template_submitted', 'template', (string) $logical, 'status=' . $status);
 
     return ['ok' => true, 'reason' => '', 'status' => $status];
+}
+
+/**
+ * The Meta message-template definition for a registry row: BODY with the
+ * sample values, plus a BUTTONS component when the definition carries
+ * quick-reply buttons (payloads are a send-time concern, not part of the
+ * template).
+ */
+function se_journey_template_meta_definition($row)
+{
+    $components = [[
+        'type' => 'BODY', 'text' => (string) $row->body,
+        'example' => ['body_text' => [array_values(json_decode((string) $row->placeholders_json, true) ?: [])]],
+    ]];
+    $buttons = json_decode((string) ($row->buttons_json ?? ''), true);
+    if (is_array($buttons) && $buttons) {
+        $list = [];
+        foreach ($buttons as $b) {
+            $text = trim((string) ($b['text'] ?? ''));
+            if ($text === '') { continue; }
+            $list[] = ['type' => 'QUICK_REPLY', 'text' => mb_substr($text, 0, 25)];   // only quick replies are used (URL/phone buttons are not)
+        }
+        if ($list) {
+            $components[] = ['type' => 'BUTTONS', 'buttons' => $list];
+        }
+    }
+
+    return [
+        'name'       => (string) $row->meta_name,
+        'language'   => (string) $row->language,
+        'category'   => (string) $row->category_requested,
+        'components' => $components,
+    ];
 }
 
 /** Live Graph submitter: POST /{waba}/message_templates. Token in a header only. */

@@ -274,6 +274,9 @@ function se_journey_schema_statements($p)
         `snapshot_json` mediumtext DEFAULT NULL,
         `snapshot_hash` varchar(64) DEFAULT NULL,
         `wa_outbound_id` bigint(20) NOT NULL DEFAULT 0,
+        `patient_response` varchar(24) DEFAULT NULL,
+        `patient_response_at` datetime DEFAULT NULL,
+        `patient_response_via` varchar(16) DEFAULT NULL,
         `date_created` datetime NOT NULL,
         `last_updated` datetime DEFAULT NULL,
         PRIMARY KEY (`id`),
@@ -330,6 +333,7 @@ function se_journey_schema_statements($p)
         `content_version` int(11) NOT NULL DEFAULT 1,
         `body` text DEFAULT NULL,
         `placeholders_json` text DEFAULT NULL,
+        `buttons_json` text DEFAULT NULL,
         `approval_status` varchar(24) NOT NULL DEFAULT 'not_submitted',
         `rejection_reason` varchar(500) DEFAULT NULL,
         `fallback` varchar(24) NOT NULL DEFAULT 'staff_task',
@@ -385,6 +389,14 @@ function se_journey_schema_statements($p)
         PRIMARY KEY (`id`),
         UNIQUE KEY `bucket` (`bucket`)
     ) ENGINE=InnoDB DEFAULT CHARSET={$cs} COLLATE=utf8mb4_unicode_ci";
+
+    /* v18 (additive, idempotent): the patient's answer to a sent quote, and
+     * quick-reply buttons on a template definition. CREATE TABLE above carries
+     * them for fresh installs; these bring an existing v17 schema level. */
+    $s[] = "ALTER TABLE `{$p}se_journey_quotes` ADD COLUMN IF NOT EXISTS `patient_response` varchar(24) DEFAULT NULL";
+    $s[] = "ALTER TABLE `{$p}se_journey_quotes` ADD COLUMN IF NOT EXISTS `patient_response_at` datetime DEFAULT NULL";
+    $s[] = "ALTER TABLE `{$p}se_journey_quotes` ADD COLUMN IF NOT EXISTS `patient_response_via` varchar(16) DEFAULT NULL";
+    $s[] = "ALTER TABLE `{$p}se_journey_templates` ADD COLUMN IF NOT EXISTS `buttons_json` text DEFAULT NULL";
 
     return $s;
 }
@@ -483,6 +495,7 @@ function se_journey_states()
         'intake_submitted', 'photos_requested', 'photos_incomplete', 'photo_retake_requested',
         'ready_for_review', 'under_review', 'more_information_required',
         'consultation_recommended', 'quote_pending_staff_approval', 'quote_sent',
+        'quote_accepted', 'quote_revision_requested',
         'consultation_booked', 'consultation_completed', 'procedure_booked', 'preop_pending',
         'procedure_completed', 'aftercare_active', 'followup_due', 'completed',
         'not_suitable', 'closed_lost', 'opted_out',
@@ -517,7 +530,12 @@ function se_journey_allowed_transitions()
         'more_information_required' => ['ready_for_review', 'under_review', 'intake_started', 'photo_retake_requested'],
         'consultation_recommended'  => ['consultation_booked', 'quote_pending_staff_approval'],
         'quote_pending_staff_approval' => ['quote_sent', 'under_review', 'consultation_recommended'],
-        'quote_sent'                => ['consultation_booked', 'consultation_recommended', 'procedure_booked', 'quote_pending_staff_approval'],
+        'quote_sent'                => ['consultation_booked', 'consultation_recommended', 'procedure_booked', 'quote_pending_staff_approval',
+                                        'quote_accepted', 'quote_revision_requested'],
+        // The patient answered the quote (WhatsApp button/keyword or the quote page).
+        'quote_accepted'            => ['consultation_booked', 'procedure_booked', 'consultation_recommended', 'quote_pending_staff_approval',
+                                        'quote_revision_requested'],
+        'quote_revision_requested'  => ['quote_pending_staff_approval', 'quote_sent', 'under_review', 'consultation_recommended', 'consultation_booked'],
         'consultation_booked'       => ['consultation_completed', 'consultation_recommended', 'consultation_booked'],
         'consultation_completed'    => ['procedure_booked', 'quote_pending_staff_approval', 'not_suitable', 'consultation_recommended'],
         'procedure_booked'          => ['preop_pending', 'procedure_booked', 'consultation_completed'],
@@ -842,6 +860,23 @@ function se_journey_handoff_keywords()
 function se_journey_start_keywords()
 {
     return ['degerlendirmeye basla', 'degerlendirme baslat', 'degerlendirme basla', 'basla', 'baslat', 'devam', 'evet', 'start'];
+}
+
+/**
+ * Answers to a sent quote, typed instead of tapped (a template quick-reply
+ * arrives with the button TEXT as its payload when Meta gets no payload; the
+ * labels are therefore keywords too). Normalised spellings.
+ */
+function se_journey_quote_accept_keywords()
+{
+    return ['teklifi kabul et', 'teklifi kabul ediyorum', 'kabul', 'kabul ediyorum', 'kabul ediyoruz', 'onayliyorum', 'onay', 'onaylandi',
+            'teklifi onayliyorum', 'randevu almak istiyorum', 'accept', 'i accept', 'approve'];
+}
+
+function se_journey_quote_revise_keywords()
+{
+    return ['fiyat revizyonu', 'fiyat revize', 'revizyon', 'revize', 'fiyat revizyonu istiyorum', 'fiyati revize edin', 'indirim', 'indirim var mi',
+            'daha uygun fiyat', 'fiyat yuksek', 'pahali', 'price revision', 'revise price', 'discount'];
 }
 
 /** Urgent symptom keywords — a trigger for ESCALATION, never a diagnosis. */
@@ -1603,6 +1638,45 @@ function se_journey_route_step($j, array $ctx, $created)
         se_journey_task($j, 'question_during_photos', 'Patient wrote while photos are pending', 'normal', null, $corr);
 
         return ['handled' => true, 'reason' => 'photo_phase_text', 'journey_id' => (int) $j->id];
+    }
+
+    /* The quote is out: the patient answers with a reply button (in-window
+     * interactive or template quick-reply — both arrive as interactive_id),
+     * or types it. Accept → booking link; revision → staff; anything else →
+     * staff, and the options are repeated once. */
+    $quotePhase = in_array($state, ['quote_sent', 'quote_accepted', 'quote_revision_requested'], true);
+    if ($quotePhase && function_exists('se_journey_quote_respond')) {
+        if ($button === 'jr_quote_accept' || ($body !== '' && se_journey_matches_keyword($body, se_journey_quote_accept_keywords()))) {
+            se_journey_quote_respond($j, 'accept', 'whatsapp', $corr);   // idempotent: repeats the booking link
+
+            return ['handled' => true, 'reason' => 'quote_accepted', 'journey_id' => (int) $j->id];
+        }
+        if ($button === 'jr_quote_revise' || ($body !== '' && se_journey_matches_keyword($body, se_journey_quote_revise_keywords()))) {
+            se_journey_quote_respond($j, 'revise', 'whatsapp', $corr);
+
+            return ['handled' => true, 'reason' => 'quote_revision_requested', 'journey_id' => (int) $j->id];
+        }
+    }
+    if ($state === 'quote_sent') {
+        se_journey_task($j, 'question_after_quote', 'Patient replied to the quote with a question — see WhatsApp thread', 'normal', null, $corr);
+        if (function_exists('se_journey_send_quote_options')) {
+            se_journey_send_quote_options($j, $corr);   // deduplicated: once per quote
+        }
+
+        return ['handled' => true, 'reason' => 'quote_question', 'journey_id' => (int) $j->id];
+    }
+
+    if ($state === 'quote_accepted') {
+        // "link / randevu": the booking link again; anything else is for staff.
+        if ($body !== '' && se_journey_matches_keyword($body, ['link', 'baglanti', 'randevu', 'randevu linki', 'tekrar gonder', 'gorusme', 'tarih'])
+            && function_exists('se_journey_send_booking_link')) {
+            se_journey_send_booking_link($j, 0, $corr);
+
+            return ['handled' => true, 'reason' => 'booking_link_resent', 'journey_id' => (int) $j->id];
+        }
+        se_journey_task($j, 'question_after_accept', 'Patient wrote after accepting the quote — see WhatsApp thread', 'normal', null, $corr);
+
+        return ['handled' => true, 'reason' => 'accepted_phase_text', 'journey_id' => (int) $j->id];
     }
 
     // Review / quote / consultation / procedure phases: a human conversation.

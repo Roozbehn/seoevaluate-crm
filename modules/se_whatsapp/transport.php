@@ -25,24 +25,7 @@ function se_wa_live_transport(array $m)
     }
 
     if ($m['kind'] === 'template') {
-        $components = [];
-        $vars = array_values((array) ($m['variables'] ?? []));
-        if ($vars) {
-            $components[] = ['type' => 'body', 'parameters' => array_map(function ($v) {
-                return ['type' => 'text', 'text' => (string) $v];
-            }, $vars)];
-        }
-        $payload = [
-            'messaging_product' => 'whatsapp',
-            'to'                => (string) $m['to'],
-            'type'              => 'template',
-            'template'          => [
-                'name'     => (string) $m['template'],
-                'language' => ['code' => (string) ($m['template_language'] ?? '') !== ''
-                    ? (string) $m['template_language'] : 'tr'],
-                'components' => $components,
-            ],
-        ];
+        $payload = se_wa_template_send_payload($m);
     } elseif ($m['kind'] === 'media' && !empty($m['media'])) {
         // Two steps: upload the bytes (multipart) to get a media id, then send
         // a message referencing it. The upload is repeated on every attempt —

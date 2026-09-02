@@ -150,13 +150,14 @@ function se_journey_set_consent_bypass($brand_id, $on, $reason, $staff_id)
 
 function se_journey_token_purposes()
 {
-    return ['intake', 'upload', 'quote', 'checkin', 'info'];
+    return ['intake', 'upload', 'quote', 'checkin', 'info', 'book'];
 }
 
 function se_journey_token_ttl_seconds($purpose)
 {
     switch ($purpose) {
         case 'quote':   return 14 * 86400;
+        case 'book':    return 14 * 86400;   // consultation slot picker after an accepted quote
         case 'info':    return 30 * 86400;
         case 'checkin': return 3 * 86400;
         default:        return se_journey_intake_ttl_hours() * 3600;

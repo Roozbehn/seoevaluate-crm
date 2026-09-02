@@ -41,14 +41,25 @@ class Se_appointments_model extends App_Model
         return $this->db->get(db_prefix() . 'se_appointments')->result_array();
     }
 
-    public function add($data)
+    /**
+     * @param array $opts 'system' => true when the caller is NOT a staff request
+     *                    (the patient journey booking a slot from a token page,
+     *                    the cron): the brand was resolved by the caller from
+     *                    its own record, and there is no staff session to scope
+     *                    by. Availability, working hours and the slot lock still
+     *                    apply in full.
+     */
+    public function add($data, array $opts = [])
     {
         $data = $this->prepare($data);
 
         // The posted brand_id was previously trusted verbatim, so a crafted POST
         // could create an appointment inside another tenant.
-        if (!se_can_access_brand((int) ($data['brand_id'] ?? 0))) {
+        if (empty($opts['system']) && !se_can_access_brand((int) ($data['brand_id'] ?? 0))) {
             return false;
+        }
+        if (!empty($opts['system']) && (int) ($data['brand_id'] ?? 0) <= 0) {
+            return false;   // a system booking is always for a known brand
         }
 
         if ($this->missing_required($data)) {

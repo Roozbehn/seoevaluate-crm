@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 17);
+define('SE_CORE_SCHEMA_VERSION', 18);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -324,6 +324,10 @@ function se_core_migration_statements()
      * (interactive reply id, reply-button payload, origin) and the journey
      * tables. Health answers and photographs are sealed (libsodium) before
      * they reach these tables; see modules/se_journey/intake.php.
+     * --- v18: the patient's answer to a sent quote (accept / price revision,
+     * three nullable columns on se_journey_quotes) and quick-reply buttons on
+     * a template definition (se_journey_templates.buttons_json). The
+     * statements live with the journey schema and are idempotent.
      */
     if (!function_exists('se_journey_schema_statements') && is_file(__DIR__ . '/../se_journey/helpers.php')) {
         require_once __DIR__ . '/../se_journey/helpers.php';

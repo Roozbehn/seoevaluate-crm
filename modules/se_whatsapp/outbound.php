@@ -283,8 +283,16 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
         $isList   = array_keys($given) === range(0, count($given) - 1);
         $ordered  = [];
         foreach ($expected as $pos => $key) {
-            // Accept values keyed by placeholder ('1', 'name') or as a plain list.
-            $val = isset($given[$key]) ? $given[$key] : ($isList && isset($given[$pos]) ? $given[$pos] : '');
+            // Accept values keyed by placeholder ('1', 'name') or as a plain
+            // list. A plain list is POSITIONAL: with numeric placeholders
+            // ('1','2') PHP turns the key '1' into index 1, so looking the key
+            // up first handed {{1}} the SECOND value (and {{2}} the same one)
+            // for every automated template with two or more variables.
+            if ($isList) {
+                $val = isset($given[$pos]) ? $given[$pos] : '';
+            } else {
+                $val = isset($given[$key]) ? $given[$key] : '';
+            }
             $val = trim((string) $val);
             if ($val === '') {
                 return ['ok' => false, 'id' => 0, 'reason' => 'template_variables', 'missing' => (string) $key];
@@ -298,9 +306,24 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
         }
         $message['variables'] = $ordered;
 
+        // Quick-reply button payloads (template BUTTONS component): what a tap
+        // sends back as button.payload. Optional; without them Meta echoes the
+        // button text. Positional, at most three, short opaque ids.
+        if (!empty($message['quick_replies']) && is_array($message['quick_replies'])) {
+            $qr = [];
+            foreach (array_slice(array_values($message['quick_replies']), 0, 3) as $p) {
+                $p = trim((string) $p);
+                if ($p === '' || mb_strlen($p) > 128) {
+                    return ['ok' => false, 'id' => 0, 'reason' => 'quick_reply_invalid'];
+                }
+                $qr[] = $p;
+            }
+            $payload_json = json_encode(['quick_replies' => $qr]);
+        }
+
         $body      = null;
         $template  = $name;
-        $signature = hash('sha256', $name . '|' . json_encode($ordered));
+        $signature = hash('sha256', $name . '|' . json_encode($ordered) . ($payload_json !== null ? '|' . $payload_json : ''));
     } elseif ($kind === 'media') {
         // An attachment uploaded from the composer: free-form, so it obeys the
         // same 24-hour window as text. The row must be this brand's, stored,
@@ -377,6 +400,39 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
     }
 
     return ['ok' => true, 'id' => $id, 'reason' => ''];
+}
+
+/**
+ * The Cloud API request body for a queued template message: body parameters
+ * in order, then one button component per quick-reply payload (index-bound,
+ * as Meta requires). Pure, so it is testable without the network.
+ */
+function se_wa_template_send_payload(array $m)
+{
+    $components = [];
+    $vars = array_values((array) ($m['variables'] ?? []));
+    if ($vars) {
+        $components[] = ['type' => 'body', 'parameters' => array_map(function ($v) {
+            return ['type' => 'text', 'text' => (string) $v];
+        }, $vars)];
+    }
+    $qr = (array) (($m['payload']['quick_replies'] ?? null) ?: []);
+    foreach (array_values($qr) as $i => $payloadId) {
+        $components[] = ['type' => 'button', 'sub_type' => 'quick_reply', 'index' => (string) $i,
+                         'parameters' => [['type' => 'payload', 'payload' => (string) $payloadId]]];
+    }
+
+    return [
+        'messaging_product' => 'whatsapp',
+        'to'                => (string) $m['to'],
+        'type'              => 'template',
+        'template'          => [
+            'name'     => (string) $m['template'],
+            'language' => ['code' => (string) ($m['template_language'] ?? '') !== ''
+                ? (string) $m['template_language'] : 'tr'],
+            'components' => $components,
+        ],
+    ];
 }
 
 /**

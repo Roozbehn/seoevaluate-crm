@@ -324,8 +324,22 @@ function se_journey_quote_send($quote_id, $staff_id)
         return ['ok' => false, 'reason' => 'token_failed'];
     }
     $link = se_journey_public_url('se_journey/intake/' . $token['token'] . '/quote');
-    $r = se_journey_send_copy($j, 'evaluation_ready', ['link' => $link], ['purpose' => 'evaluation_ready', 'bypass_pause' => true,
-        'template' => 'eyebrow_evaluation_ready_tr', 'template_vars' => [se_journey_template_name($j), $link], 'dedup_salt' => 'q' . (int) $q->id]);
+    $spec = ['purpose' => 'evaluation_ready', 'bypass_pause' => true, 'dedup_salt' => 'q' . (int) $q->id,
+             'template_vars' => [se_journey_template_name($j), $link]];
+    // Inside the window: the message itself carries the three reply buttons
+    // (accept / price revision / human). Outside it: the quick-reply template
+    // when Meta has approved it, else the plain evaluation template (the quote
+    // page then carries the same three actions).
+    $withButtons = se_journey_template_ready((int) $j->brand_id, 'eyebrow_quote_ready_tr');
+    $spec['template'] = $withButtons['ready'] ? 'eyebrow_quote_ready_tr' : 'eyebrow_evaluation_ready_tr';
+    if ($withButtons['ready']) {
+        $spec['template_quick_replies'] = array_column(se_journey_quote_buttons((int) $j->brand_id, (string) $j->language), 'id');
+    }
+    if (se_journey_interactive_enabled((int) $j->brand_id)) {
+        $spec['kind'] = 'interactive';
+        $spec['buttons'] = se_journey_quote_buttons((int) $j->brand_id, (string) $j->language);
+    }
+    $r = se_journey_send_copy($j, 'evaluation_ready', ['link' => $link], $spec);
     if (!$r['ok']) {
         se_journey_revoke_tokens($j, 'quote', 'send_blocked');
 
@@ -338,7 +352,8 @@ function se_journey_quote_send($quote_id, $staff_id)
     ]);
     se_journey_audit((int) $j->brand_id, (int) $j->id, 'quote_send', 'quote', (string) $q->id, 'hash=' . substr(hash('sha256', $json), 0, 16));
     se_journey_event($j, 'quote_sent', 'v' . (int) $q->version . ' (' . $r['mode'] . ')', ['hash' => hash('sha256', $json)], 'staff', $staff_id, 'quote', (string) $q->id);
-    if (in_array((string) $j->state, ['quote_pending_staff_approval', 'consultation_recommended', 'consultation_completed', 'under_review'], true)) {
+    if (in_array((string) $j->state, ['quote_pending_staff_approval', 'consultation_recommended', 'consultation_completed', 'under_review',
+                                       'quote_revision_requested', 'quote_accepted'], true)) {
         if ((string) $j->state !== 'quote_pending_staff_approval') {
             se_journey_transition($j, 'quote_pending_staff_approval', 'quote_prepared', 'staff', $staff_id);
         }
@@ -369,5 +384,125 @@ function se_journey_quote_public($raw_token, $ip = '', $ua = '')
     }
     se_journey_event($v['journey'], 'quote_viewed', 'v' . (int) $q->version, [], 'patient', null, 'quote', (string) $q->id);
 
-    return ['ok' => true, 'reason' => '', 'snapshot' => json_decode((string) $q->snapshot_json, true)];
+    return ['ok' => true, 'reason' => '', 'snapshot' => json_decode((string) $q->snapshot_json, true), 'journey' => $v['journey'],
+            'response' => (string) ($q->patient_response ?? ''), 'quote_id' => (int) $q->id,
+            'booking' => function_exists('se_journey_consultation_upcoming') ? se_journey_consultation_upcoming($v['journey']) : null];
+}
+
+/* ===========================================================================
+ * The patient's answer to the quote
+ * ======================================================================== */
+
+/** Reply buttons offered with a sent quote (≤20 chars each — Meta's cap). */
+function se_journey_quote_buttons($brand_id, $lang = 'tr')
+{
+    return [
+        ['id' => 'jr_quote_accept', 'title' => se_journey_copy($brand_id, 'btn_quote_accept', [], $lang)],
+        ['id' => 'jr_quote_revise', 'title' => se_journey_copy($brand_id, 'btn_quote_revise', [], $lang)],
+        ['id' => 'jr_handoff',      'title' => se_journey_copy($brand_id, 'btn_handoff', [], $lang)],
+    ];
+}
+
+/** The quote the patient is answering: the latest SENT one. */
+function se_journey_quote_sent_row($j)
+{
+    $CI = &get_instance();
+    $CI->db->where('journey_id', (int) $j->id)->where('brand_id', (int) $j->brand_id)->where('status', 'sent')->order_by('id', 'DESC')->limit(1);
+
+    return $CI->db->get(db_prefix() . 'se_journey_quotes')->row();
+}
+
+/**
+ * Repeat the three options once per quote (a typed question after the quote).
+ * In-window only — a closed window means the quote went as a template whose
+ * buttons are still on the patient's screen.
+ */
+function se_journey_send_quote_options($j, $correlation = '')
+{
+    $q = se_journey_quote_sent_row($j);
+    if (!$q || !se_journey_interactive_enabled((int) $j->brand_id)) {
+        return ['ok' => false, 'mode' => 'skipped', 'reason' => $q ? 'interactive_disabled' : 'no_quote', 'outbound_id' => 0];
+    }
+    $conv = se_journey_conversation($j);
+    if ($conv) {
+        $CI = &get_instance();
+        $CI->db->where('conversation_id', (int) $conv->id)->where('origin', 'journey:quote_options')->where('date_created >=', (string) $q->sent_at);
+        if ($CI->db->count_all_results(db_prefix() . 'se_wa_outbound') > 0) {
+            return ['ok' => true, 'mode' => 'skipped', 'reason' => 'already_sent', 'outbound_id' => 0];
+        }
+    }
+    $policy = $conv && function_exists('se_wa_compose_policy') ? se_wa_compose_policy($conv) : ['mode' => 'none'];
+    if (($policy['mode'] ?? '') !== 'freeform') {
+        return ['ok' => false, 'mode' => 'skipped', 'reason' => 'window_closed', 'outbound_id' => 0];
+    }
+
+    return se_journey_send_copy($j, 'quote_options', [], ['purpose' => 'quote_options', 'kind' => 'interactive', 'bypass_pause' => true,
+        'buttons' => se_journey_quote_buttons((int) $j->brand_id, (string) $j->language), 'correlation' => $correlation, 'dedup_salt' => 'q' . (int) $q->id]);
+}
+
+/**
+ * Record the patient's decision on the sent quote and act on it:
+ *   accept → quote_accepted, staff task, booking link (calendar page);
+ *   revise → quote_revision_requested, staff task (new version), acknowledgement.
+ * Idempotent: a repeated accept re-sends the booking link, nothing else.
+ *
+ * @param string $via whatsapp|page|staff
+ * @return array{ok:bool,reason:string,book_link:string}
+ */
+function se_journey_quote_respond($j, $action, $via = 'whatsapp', $correlation = '')
+{
+    $q = se_journey_quote_sent_row($j);
+    if (!$q) {
+        return ['ok' => false, 'reason' => 'no_quote', 'book_link' => ''];
+    }
+    $via = in_array((string) $via, ['whatsapp', 'page', 'staff'], true) ? (string) $via : 'whatsapp';
+    $now = date('Y-m-d H:i:s');
+    $CI  = &get_instance();
+
+    if ($action === 'accept') {
+        $already = (string) ($q->patient_response ?? '') === 'accepted';
+        if (!$already) {
+            // Direct, brand-bound update: the patient (page) and the dispatcher
+            // (WhatsApp tap) have no staff session for a guarded update to scope by.
+            $CI->db->where('id', (int) $q->id)->where('brand_id', (int) $j->brand_id)->update(db_prefix() . 'se_journey_quotes', [
+                'patient_response' => 'accepted', 'patient_response_at' => $now, 'patient_response_via' => $via, 'last_updated' => $now,
+            ]);
+            se_journey_audit((int) $j->brand_id, (int) $j->id, 'quote_accepted', 'quote', (string) $q->id, 'via=' . $via);
+            se_journey_event($j, 'quote_accepted', 'v' . (int) $q->version . ' (' . $via . ')', [], 'patient', null, 'quote', (string) $q->id, $correlation);
+            if (in_array((string) $j->state, ['quote_sent', 'quote_revision_requested'], true)) {
+                se_journey_transition($j, 'quote_accepted', 'patient_accepted_quote', 'patient', null, $correlation);
+            }
+            se_journey_task($j, 'quote_accepted', 'Patient ACCEPTED the quote (v' . (int) $q->version . ') — a consultation slot is being chosen from the calendar', 'normal', null, 'q' . (int) $q->id);
+            if (function_exists('se_outbox_queue') && function_exists('se_outbox_destinations_for_brand') && (int) $j->lead_id > 0) {
+                foreach (se_outbox_destinations_for_brand((int) $j->brand_id) as $dest) {
+                    se_outbox_queue((int) $j->brand_id, (int) $j->lead_id, $dest, 'Quote Accepted');
+                }
+            }
+        }
+        $link = ['ok' => false, 'link' => '', 'reason' => 'booking_unavailable'];
+        if (function_exists('se_journey_send_booking_link')) {
+            $link = se_journey_send_booking_link($j, 0, $correlation, $already ? 'booking_link_repeat' : 'quote_accepted_ack');
+        }
+
+        return ['ok' => true, 'reason' => $already ? 'already_accepted' : '', 'book_link' => (string) $link['link']];
+    }
+
+    if ($action === 'revise') {
+        if ((string) ($q->patient_response ?? '') !== 'revision_requested') {
+            $CI->db->where('id', (int) $q->id)->where('brand_id', (int) $j->brand_id)->update(db_prefix() . 'se_journey_quotes', [
+                'patient_response' => 'revision_requested', 'patient_response_at' => $now, 'patient_response_via' => $via, 'last_updated' => $now,
+            ]);
+            se_journey_audit((int) $j->brand_id, (int) $j->id, 'quote_revision_requested', 'quote', (string) $q->id, 'via=' . $via);
+            se_journey_event($j, 'quote_revision_requested', 'v' . (int) $q->version . ' (' . $via . ')', [], 'patient', null, 'quote', (string) $q->id, $correlation);
+            if (in_array((string) $j->state, ['quote_sent', 'quote_accepted'], true)) {
+                se_journey_transition($j, 'quote_revision_requested', 'patient_requested_revision', 'patient', null, $correlation);
+            }
+        }
+        se_journey_task($j, 'quote_revision', 'Patient asked for a PRICE REVISION of quote v' . (int) $q->version . ' — prepare a new version or reply from the inbox', 'normal', null, 'q' . (int) $q->id);
+        se_journey_send_copy($j, 'quote_revision_ack', [], ['purpose' => 'quote_revision_ack', 'bypass_pause' => true, 'correlation' => $correlation, 'dedup_salt' => 'q' . (int) $q->id]);
+
+        return ['ok' => true, 'reason' => '', 'book_link' => ''];
+    }
+
+    return ['ok' => false, 'reason' => 'bad_action', 'book_link' => ''];
 }

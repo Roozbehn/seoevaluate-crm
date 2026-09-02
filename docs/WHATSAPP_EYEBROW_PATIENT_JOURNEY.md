@@ -135,7 +135,12 @@ stateDiagram-v2
   under_review --> consultation_recommended : decision
   under_review --> quote_pending_staff_approval : decision provisionally_suitable
   under_review --> not_suitable : decision (human)
-  quote_pending_staff_approval --> quote_sent : approved by approve_quote + sent
+  quote_pending_staff_approval --> quote_sent : approved by approve_quote + sent (3 reply buttons)
+  quote_sent --> quote_accepted : patient "Teklifi Kabul Et" (button / typed / quote page)
+  quote_sent --> quote_revision_requested : patient "Fiyat Revizyonu"
+  quote_revision_requested --> quote_pending_staff_approval : staff drafts a new version
+  quote_revision_requested --> quote_accepted : patient accepts after all
+  quote_accepted --> consultation_booked : patient picks a slot on the calendar page
   consultation_recommended --> consultation_booked : Se_appointments_model->add
   quote_sent --> consultation_booked
   consultation_booked --> consultation_completed : appointment held/completed
@@ -320,6 +325,41 @@ Staff takeover: any reply from the WhatsApp composer pauses automation on that t
   `snapshot_hash`, quote token (14 days), message `evaluation_ready`, state `quote_sent`,
   pipeline milestone "Quote Sent" to the conversion outbox (consent-gated there). Editing after
   send creates a new version; the sent one is immutable.
+* **The patient's answer (schema v18).** The quote message carries three reply buttons —
+  `Teklifi Kabul Et` (`jr_quote_accept`), `Fiyat Revizyonu` (`jr_quote_revise`), `Danışmana
+  Bağlan` (`jr_handoff`). In-window they are Cloud API reply buttons on the `evaluation_ready`
+  text itself (one message); outside the window the quick-reply template
+  `eyebrow_quote_ready_tr` goes instead, with the same ids as button payloads (the outbound row
+  stores them in `payload_json.quick_replies`; the transport adds one index-bound `button`
+  component per payload; a tap arrives as `type=button` and is routed like an interactive
+  reply). Until Meta approves that template the plain `eyebrow_evaluation_ready_tr` is used and
+  the secure quote page carries the same three actions (token-authenticated POST, so it works
+  whatever the window state). Typed answers match too (`kabul`, `onaylıyorum`, `fiyat
+  revizyonu`, `indirim`, …); a question after the quote makes a staff task and repeats the
+  buttons **once** per quote.
+  * accept → `se_journey_quotes.patient_response=accepted` (+ `_at`, `_via`
+    whatsapp|page), state `quote_accepted`, staff task `quote_accepted`, pipeline milestone
+    "Quote Accepted", acknowledgement with the **calendar link** (token purpose `book`, 14 days;
+    template fallback `eyebrow_booking_link_tr`). A repeated tap or "randevu / link" re-sends
+    the link and nothing else; the quote page redirects straight to the calendar.
+  * revision → `patient_response=revision_requested`, state `quote_revision_requested`,
+    staff task `quote_revision`, acknowledgement. Staff draft/approve/send a new version
+    (`quote_revision_requested → quote_pending_staff_approval → quote_sent`); each version keeps
+    its own answer. The patient may still accept the current one.
+* **Face-to-face consultation from the calendar** (`/se_journey/intake/<book token>/book`,
+  `modules/se_journey/consultation.php`). The page lists free in-person slots on the
+  consultation calendar: `se_working_hours` rows for the chosen staff member when any exist,
+  otherwise the brand's default hours/days from Journey Settings; minus every non-cancelled
+  appointment on that calendar; slot length, days ahead and minimum notice from the settings.
+  A pick is validated against a **recomputed** list (never trusted from the form) and then
+  booked through `Se_appointments_model->add(..., ['system' => true])` — same lock, overlap and
+  working-hours checks, status history, reminders and Google Calendar sync as a staff booking;
+  the `system` option only replaces the staff-session brand check (there is no session on a
+  token page) and still requires a concrete brand. Result: `consultation_booked` (actor
+  `patient`), confirmation message, staff task `consultation_self_booked`, audit
+  `booking_self_service`. An existing upcoming consultation blocks a second pick; the page then
+  shows the booking. Staff can send the calendar link by hand (journey page → *Send calendar
+  link*, review tab and care tab).
 * Consultation/procedure: booked through `Se_appointments_model->add` (advisory slot lock,
   overlap and working-hours check, status history, reminder queue, calendar sync). Status
   changes (held/completed/cancelled/no_show) made anywhere are reflected on the journey by
@@ -380,6 +420,18 @@ Secrets (file provider `SE_SECRET_DIR=/home/hyundaic/_secrets`, installed with
 `journey_key` (`head -c 32 /dev/urandom | base64`). `.env.example` at the repo root documents the
 placeholders; presence/absence is shown on Integration Credentials, Integration Health and
 Journeys → Settings.
+
+### 8.1 Patient self-booking (Journey Settings → flags section)
+
+| Option | Default | Meaning |
+|---|---|---|
+| `se_journey_booking_staff_<brand>` | 0 = first active staff member of the brand | The calendar patient bookings land on |
+| `se_journey_booking_slot_<brand>` | 30 (15–180) | Slot length, minutes |
+| `se_journey_booking_horizon_<brand>` | 14 (1–60) | Bookable days ahead |
+| `se_journey_booking_notice_<brand>` | 24 (0–168) | Minimum notice, hours |
+| `se_journey_booking_hours_<brand>` | `10:00-18:00` | Default window when the staff member has no `se_working_hours` rows |
+| `se_journey_booking_days_<brand>` | `1,2,3,4,5,6` (Mon–Sat) | Default days, same condition |
+| `se_journey_booking_location_<brand>` | empty | Address shown on the page and stored on the appointment |
 
 ## 9. Staff operating procedure (short)
 
@@ -547,6 +599,23 @@ assumed. Secrets were generated on the host and never displayed.
 | `crm-media` Worker | redeployed from the branch with the `DELETE` route (version `2b583795…`); bindings unchanged (`MEDIA` → `azin-media`, `PREFIX` `crm/`); probes: `DELETE` without bearer → 401, `PATCH` → 405, existing inbox object `HEAD` with the CRM's key → 200 |
 | Options set | `se_journey_public_base_url=https://crm.roozbeh.com.tr`, `se_journey_media_storage=auto`; **`se_journey_enabled_22` left OFF**, sandbox default ON |
 | Live checks | `/se_journey/intake/<bad token>` → 404 "Bağlantı geçersiz" (module routed, Turkish); webhook GET → 403 as before; `/admin` behind Cloudflare's challenge for curl (unchanged); no PHP error log touched; per-minute dispatcher summary now `{"wa_events","wa_queue","ig_events","ig_queue","media","journey_media"}` with `errors: []` |
+
+### 16.1 Addendum — quote answers + calendar booking (schema v18)
+
+* Schema v17 → **v18**: three nullable columns on `se_journey_quotes` (`patient_response`,
+  `patient_response_at`, `patient_response_via`) and `se_journey_templates.buttons_json`. Additive,
+  idempotent (`ADD COLUMN IF NOT EXISTS`), applied with `migrate_cli.php --apply`.
+* Two new logical templates to submit from Journeys → Templates: **`eyebrow_quote_ready_tr`**
+  (the quote with the three quick-reply buttons — preferred over `eyebrow_evaluation_ready_tr`
+  once approved) and **`eyebrow_booking_link_tr`** (the calendar link outside the window).
+* **Fixed on the way:** the outbound queue mapped a plain list of template values by placeholder
+  *key* first; with Meta's numeric placeholders (`1,2`) PHP read `'1'` as index 1, so every
+  automated template with two or more variables was queued as `{{1}} = link, {{2}} = link`
+  (name lost). Values given as a list are now positional; keyed values (`['1' => …]`, the staff
+  composer) unchanged. Regression test in `test_wa_templates.php`.
+* Suite: **3,033 pass, 0 fail** (`test_journey_quote.php` added: buttons, template quick
+  replies + Cloud API payload, accept / revision / page answers, calendar generation, self-booking
+  through the model with no staff session, model guard).
 
 **Not done, by design (owner steps, in order):**
 

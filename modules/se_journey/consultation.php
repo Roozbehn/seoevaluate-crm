@@ -61,6 +61,10 @@ function se_journey_book_appointment($j, array $data, $staff_id, $type = 'consul
     }
     $format = (string) ($data['consultation_format'] ?? 'in_person') === 'online' ? 'online' : 'in_person';
     $title  = $type === 'procedure' ? 'Kaş ekimi işlemi' : ($format === 'online' ? 'Online ön görüşme' : 'Klinikte ön görüşme');
+    // No staff id = the patient booked it (secure booking page) or the system:
+    // no staff session to scope by; the model still checks the calendar.
+    $system = (int) $staff_id <= 0 || !empty($data['system']);
+    $actor  = (int) $staff_id > 0 ? 'staff' : 'patient';
 
     $id = $model->add([
         'brand_id'            => (int) $j->brand_id,
@@ -76,7 +80,7 @@ function se_journey_book_appointment($j, array $data, $staff_id, $type = 'consul
         'location'            => (string) ($data['location'] ?? ''),
         'notes'               => (string) ($data['notes'] ?? ''),
         'staff_timezone'      => (string) ($data['staff_timezone'] ?? ''),
-    ]);
+    ], ['system' => $system]);
     if (!$id) {
         se_journey_audit((int) $j->brand_id, (int) $j->id, 'booking_refused', 'appointment', null, $type . ' slot conflict or invalid');
 
@@ -88,10 +92,10 @@ function se_journey_book_appointment($j, array $data, $staff_id, $type = 'consul
     if ($type === 'consultation') {
         $CI->db->where('id', (int) $j->id)->update(db_prefix() . 'se_journeys', ['consultation_appointment_id' => (int) $id, 'last_updated' => $now]);
         $j->consultation_appointment_id = (int) $id;
-        if (in_array((string) $j->state, ['consultation_recommended', 'quote_sent', 'consultation_booked'], true)) {
-            se_journey_transition($j, 'consultation_booked', 'consultation_booked', 'staff', $staff_id, 'appointment:' . (int) $id);
+        if (in_array((string) $j->state, ['consultation_recommended', 'quote_sent', 'quote_accepted', 'quote_revision_requested', 'consultation_booked'], true)) {
+            se_journey_transition($j, 'consultation_booked', 'consultation_booked', $actor, $staff_id ?: null, 'appointment:' . (int) $id);
         }
-        se_journey_event($j, 'consultation_booked', $format . ' ' . $start, [], 'staff', $staff_id, 'appointment', (string) $id);
+        se_journey_event($j, 'consultation_booked', $format . ' ' . $start . ($actor === 'patient' ? ' (patient self-booked)' : ''), [], $actor, $staff_id ?: null, 'appointment', (string) $id);
         if (function_exists('se_journey_send_copy')) {
             se_journey_send_copy($j, 'consultation_confirmation', ['when' => date('d.m.Y H:i', strtotime($start)), 'format' => $format === 'online' ? 'online' : 'klinikte'],
                 ['purpose' => 'consultation_confirmation', 'bypass_pause' => true, 'template' => 'eyebrow_consultation_confirmation_tr',
@@ -108,7 +112,7 @@ function se_journey_book_appointment($j, array $data, $staff_id, $type = 'consul
         }
         $CI->db->where('id', (int) $j->id)->update(db_prefix() . 'se_journeys', $upd);
         $j->procedure_appointment_id = (int) $id;
-        if (in_array((string) $j->state, ['consultation_completed', 'quote_sent', 'procedure_booked'], true)) {
+        if (in_array((string) $j->state, ['consultation_completed', 'quote_sent', 'quote_accepted', 'procedure_booked'], true)) {
             se_journey_transition($j, 'procedure_booked', 'procedure_booked', 'staff', $staff_id, 'appointment:' . (int) $id);
         }
         se_journey_event($j, 'procedure_booked', $start, [], 'staff', $staff_id, 'appointment', (string) $id);
@@ -194,6 +198,249 @@ function se_journey_sync_appointments($limit = 200)
     }
 
     return $n;
+}
+
+/* ===========================================================================
+ * Patient self-booking: a face-to-face consultation slot picked from the
+ * clinic calendar (token page, no CRM session).
+ *
+ * Availability = the consultation calendar's working hours (se_working_hours
+ * rows for that staff member when defined, else the brand's default hours
+ * and days from Journey Settings) minus existing appointments on the same
+ * calendar. The final write goes through the appointments model, which
+ * re-checks overlap and working hours under the per-calendar lock — the page
+ * list is a convenience, never the authority.
+ * ======================================================================== */
+
+define('SE_JOURNEY_BOOKING_DEFAULT_HOURS', '10:00-18:00');
+define('SE_JOURNEY_BOOKING_DEFAULT_DAYS', '1,2,3,4,5,6');   // Mon–Sat (0 = Sunday)
+
+/** Per-brand booking configuration with safe bounds. */
+function se_journey_booking_settings($brand_id)
+{
+    $b = (int) $brand_id;
+    $int = function ($key, $default, $min, $max) use ($b) {
+        $v = get_option('se_journey_booking_' . $key . '_' . $b);
+        $v = ($v === '' || $v === null) ? $default : (int) $v;
+
+        return max($min, min($max, $v));
+    };
+    $hours = (string) get_option('se_journey_booking_hours_' . $b);
+    if (!preg_match('/^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/', $hours)) {
+        $hours = SE_JOURNEY_BOOKING_DEFAULT_HOURS;
+    }
+    $daysRaw = (string) get_option('se_journey_booking_days_' . $b);
+    $days = [];
+    foreach (preg_split('/[^\d]+/', $daysRaw !== '' ? $daysRaw : SE_JOURNEY_BOOKING_DEFAULT_DAYS) as $d) {
+        if ($d !== '' && (int) $d >= 0 && (int) $d <= 6) { $days[] = (int) $d; }
+    }
+    $days = array_values(array_unique($days));
+    sort($days);
+
+    return [
+        'staff_id'     => $int('staff', 0, 0, PHP_INT_MAX),
+        'slot_minutes' => $int('slot', 30, 15, 180),
+        'days_ahead'   => $int('horizon', 14, 1, 60),
+        'notice_hours' => $int('notice', 24, 0, 168),
+        'hours'        => $hours,
+        'days'         => $days,
+        'location'     => mb_substr(trim((string) get_option('se_journey_booking_location_' . $b)), 0, 191),
+    ];
+}
+
+/** The calendar (staff member) patient bookings land on: the setting, else the brand's first active staff. */
+function se_journey_booking_staff($brand_id, array $cfg = null)
+{
+    $cfg = $cfg ?: se_journey_booking_settings($brand_id);
+    if ((int) $cfg['staff_id'] > 0) {
+        return (int) $cfg['staff_id'];
+    }
+    if (function_exists('se_appt_selectable_staff')) {
+        foreach (se_appt_selectable_staff((int) $brand_id) as $s) {
+            return (int) $s['staffid'];
+        }
+    }
+
+    return 0;
+}
+
+/** Working windows [startClock, endClock] for one weekday (0=Sun..6=Sat). */
+function se_journey_booking_windows($brand_id, $staff_id, $weekday, array $cfg)
+{
+    $CI = &get_instance();
+    $CI->db->where('brand_id', (int) $brand_id)->where('staff_id', (int) $staff_id);
+    $rows = $CI->db->get(db_prefix() . 'se_working_hours')->result_array();
+    if ($rows) {
+        $out = [];
+        foreach ($rows as $r) {
+            if ((int) $r['weekday'] === (int) $weekday) {
+                $out[] = [substr((string) $r['start_time'], 0, 5), substr((string) $r['end_time'], 0, 5)];
+            }
+        }
+
+        return $out;
+    }
+    if (!in_array((int) $weekday, $cfg['days'], true)) {
+        return [];
+    }
+    [$from, $to] = explode('-', $cfg['hours']);
+
+    return [[$from, $to]];
+}
+
+/**
+ * Free in-person slots on the booking calendar from now+notice to the horizon.
+ *
+ * @return array{ok:bool,reason:string,staff_id:int,slot_minutes:int,slots:array,days:array}
+ *         slots: [['start' => 'Y-m-d H:i:s', 'end' => ...], ...]; days: date => [slots]
+ */
+function se_journey_booking_slots($brand_id, $now = null)
+{
+    $cfg   = se_journey_booking_settings($brand_id);
+    $staff = se_journey_booking_staff($brand_id, $cfg);
+    $empty = ['ok' => false, 'reason' => '', 'staff_id' => $staff, 'slot_minutes' => $cfg['slot_minutes'], 'slots' => [], 'days' => [], 'cfg' => $cfg];
+    if ($staff <= 0) {
+        $empty['reason'] = 'no_calendar';
+
+        return $empty;
+    }
+    $now      = $now ? (int) $now : time();
+    $earliest = $now + $cfg['notice_hours'] * 3600;
+    $step     = $cfg['slot_minutes'] * 60;
+    $lastDay  = strtotime('+' . (int) $cfg['days_ahead'] . ' days', strtotime(date('Y-m-d', $now)));
+    $horizon  = $lastDay + 86400;
+
+    // Existing bookings on this calendar in range, once (cancelled/no-show never block).
+    $CI = &get_instance();
+    $CI->db->where('brand_id', (int) $brand_id)->where('staff_id', (int) $staff)
+           ->where('status NOT IN ("cancelled","no_show")')
+           ->where('start_at <', date('Y-m-d H:i:s', $horizon));
+    $busy = [];
+    foreach ($CI->db->get(db_prefix() . 'se_appointments')->result_array() as $a) {
+        $s = strtotime((string) $a['start_at']);
+        $e = !empty($a['end_at']) ? strtotime((string) $a['end_at']) : null;
+        if ($s !== false) { $busy[] = [$s, $e]; }
+    }
+    $isBusy = function ($s, $e) use ($busy) {
+        foreach ($busy as $b) {
+            if ($b[0] < $e && ($b[1] === null || $b[1] === false || $b[1] > $s)) { return true; }
+        }
+
+        return false;
+    };
+
+    $slots = $days = [];
+    for ($d = strtotime(date('Y-m-d', $now)); $d <= $lastDay; $d += 86400) {
+        $date = date('Y-m-d', $d);
+        foreach (se_journey_booking_windows($brand_id, $staff, (int) date('w', $d), $cfg) as $w) {
+            $t   = strtotime($date . ' ' . $w[0] . ':00');
+            $end = strtotime($date . ' ' . $w[1] . ':00');
+            if ($t === false || $end === false) { continue; }
+            for (; $t + $step <= $end; $t += $step) {
+                if ($t < $earliest || $isBusy($t, $t + $step)) { continue; }
+                $slot = ['start' => date('Y-m-d H:i:s', $t), 'end' => date('Y-m-d H:i:s', $t + $step)];
+                $slots[] = $slot;
+                $days[$date][] = $slot;
+            }
+        }
+    }
+
+    return ['ok' => true, 'reason' => $slots ? '' : 'no_slots', 'staff_id' => $staff, 'slot_minutes' => $cfg['slot_minutes'],
+            'slots' => $slots, 'days' => $days, 'cfg' => $cfg];
+}
+
+/** The journey's consultation appointment row (brand-scoped direct read; the model's get() needs a staff session). */
+function se_journey_consultation_appointment($j)
+{
+    if ((int) $j->consultation_appointment_id <= 0) {
+        return null;
+    }
+    $CI = &get_instance();
+    $CI->db->where('id', (int) $j->consultation_appointment_id)->where('brand_id', (int) $j->brand_id);
+
+    return $CI->db->get(db_prefix() . 'se_appointments')->row();
+}
+
+/** A live (not cancelled/no-show/past) consultation booking, if any. */
+function se_journey_consultation_upcoming($j)
+{
+    $a = se_journey_consultation_appointment($j);
+    if (!$a || in_array((string) $a->status, ['cancelled', 'no_show', 'completed', 'held'], true)) {
+        return null;
+    }
+    if (strtotime((string) $a->start_at) < time() - 3600) {
+        return null;
+    }
+
+    return $a;
+}
+
+/**
+ * The patient picked a slot on the booking page. The slot must be one the
+ * page could have offered right now (recomputed, never trusted from the
+ * form), then the appointment is created through the model.
+ *
+ * @return array{ok:bool,reason:string,appointment_id:int}
+ */
+function se_journey_booking_pick($j, $slot_start, $via = 'page')
+{
+    if (se_journey_consultation_upcoming($j)) {
+        return ['ok' => false, 'reason' => 'already_booked', 'appointment_id' => (int) $j->consultation_appointment_id];
+    }
+    if (!in_array((string) $j->state, ['quote_accepted', 'quote_sent', 'consultation_recommended', 'quote_revision_requested'], true)) {
+        return ['ok' => false, 'reason' => 'state', 'appointment_id' => 0];
+    }
+    $want = strtotime(trim((string) $slot_start));
+    if ($want === false) {
+        return ['ok' => false, 'reason' => 'bad_slot', 'appointment_id' => 0];
+    }
+    $want = date('Y-m-d H:i:s', $want);
+    $avail = se_journey_booking_slots((int) $j->brand_id);
+    if (!$avail['ok']) {
+        return ['ok' => false, 'reason' => $avail['reason'], 'appointment_id' => 0];
+    }
+    $chosen = null;
+    foreach ($avail['slots'] as $s) {
+        if ($s['start'] === $want) { $chosen = $s; break; }
+    }
+    if (!$chosen) {
+        se_journey_audit((int) $j->brand_id, (int) $j->id, 'booking_slot_rejected', 'appointment', null, 'not offered: ' . $want);
+
+        return ['ok' => false, 'reason' => 'slot_unavailable', 'appointment_id' => 0];
+    }
+    $r = se_journey_book_appointment($j, [
+        'start_at' => $chosen['start'], 'end_at' => $chosen['end'], 'staff_id' => (int) $avail['staff_id'],
+        'consultation_format' => 'in_person', 'location' => (string) $avail['cfg']['location'],
+        'notes' => 'Hasta güvenli bağlantıdan seçti (' . $via . ')', 'system' => true,
+    ], 0, 'consultation');
+    if ($r['ok']) {
+        se_journey_audit((int) $j->brand_id, (int) $j->id, 'booking_self_service', 'appointment', (string) $r['appointment_id'], $chosen['start'] . ' via ' . $via);
+        se_journey_task($j, 'consultation_self_booked', 'Patient booked a face-to-face consultation from the calendar — confirm the slot', 'normal', null, (string) $r['appointment_id']);
+    }
+
+    return $r;
+}
+
+/**
+ * Send (or re-send) the secure booking link. Called after the patient accepts
+ * the quote, by staff from the journey page, and on a "randevu/link" reply.
+ *
+ * @return array{ok:bool,reason:string,link:string,mode:string}
+ */
+function se_journey_send_booking_link($j, $issued_by = 0, $correlation = '', $copy_key = 'quote_accepted_ack')
+{
+    $tok = se_journey_issue_token($j, 'book', (int) $issued_by);
+    if (!$tok['ok']) {
+        return ['ok' => false, 'reason' => 'token_failed', 'link' => '', 'mode' => ''];
+    }
+    $link = se_journey_public_url('se_journey/intake/' . $tok['token'] . '/book');
+    $r = se_journey_send_copy($j, $copy_key, ['link' => $link], [
+        'purpose' => $copy_key, 'bypass_pause' => true, 'correlation' => $correlation,
+        'template' => 'eyebrow_booking_link_tr', 'template_vars' => [se_journey_template_name($j), $link],
+        'dedup_salt' => 't' . (int) $tok['id'],
+    ]);
+
+    return ['ok' => (bool) $r['ok'], 'reason' => (string) $r['reason'], 'link' => $link, 'mode' => (string) $r['mode']];
 }
 
 /* ===========================================================================

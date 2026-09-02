@@ -270,6 +270,15 @@ $phase = se_journey_ui_phase($j->state);
       <?php } ?>
       <?php if ($quote->status === 'sent') { ?>
         <small class="text-muted"><?php echo html_escape(_l('se_journey_sent_at')); ?> <?php echo html_escape($quote->sent_at); ?> · <?php echo html_escape(_l('se_journey_snapshot_hash')); ?> <code><?php echo html_escape(substr((string) $quote->snapshot_hash, 0, 16)); ?></code></small>
+        <div class="mtop10">
+          <?php $resp = (string) ($quote->patient_response ?? ''); ?>
+          <strong><?php echo html_escape(_l('se_journey_patient_response')); ?>:</strong>
+          <?php if ($resp === 'accepted') { echo se_ui_badge('ok', _l('se_journey_response_accepted')); } elseif ($resp === 'revision_requested') { echo se_ui_badge('warning', _l('se_journey_response_revision')); } else { echo se_ui_badge('pending', _l('se_journey_response_none')); } ?>
+          <?php if ($resp !== '') { ?><small class="text-muted"><?php echo html_escape((string) $quote->patient_response_at . ' · ' . (string) $quote->patient_response_via); ?></small><?php } ?>
+          <?php if ($can['manage_consultation'] && in_array($j->state, ['quote_sent', 'quote_accepted', 'quote_revision_requested', 'consultation_recommended'], true)) { ?>
+            <?php echo form_open($act('book_link'), ['style' => 'display:inline-block;margin-left:8px']); ?><input type="hidden" name="tab" value="review" /><button class="btn btn-default btn-xs" type="submit" title="<?php echo html_escape(_l('se_journey_book_link_hint')); ?>"><i class="fa fa-calendar"></i> <?php echo html_escape(_l('se_journey_send_book_link')); ?></button><?php echo form_close(); ?>
+          <?php } ?>
+        </div>
         <details class="mtop10"><summary><?php echo html_escape(_l('se_journey_snapshot')); ?></summary><pre style="white-space:pre-wrap;font-size:11px"><?php echo html_escape(json_encode(json_decode((string) $quote->snapshot_json, true), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre></details>
       <?php } ?>
     </div>
@@ -296,6 +305,9 @@ $phase = se_journey_ui_phase($j->state);
             </td></tr>
       <?php } ?>
       </tbody></table></div>
+    <?php } ?>
+    <?php if ($can['manage_consultation'] && in_array($j->state, ['quote_sent', 'quote_accepted', 'quote_revision_requested', 'consultation_recommended'], true)) { ?>
+      <?php echo form_open($act('book_link'), ['style' => 'display:inline-block']); ?><input type="hidden" name="tab" value="care" /><button class="btn btn-default btn-sm" type="submit" title="<?php echo html_escape(_l('se_journey_book_link_hint')); ?>"><i class="fa fa-calendar"></i> <?php echo html_escape(_l('se_journey_send_book_link')); ?></button><?php echo form_close(); ?>
     <?php } ?>
     <?php if ($can['manage_consultation']) { ?>
     <h5 class="mtop15"><?php echo html_escape(_l('se_journey_book')); ?></h5>
