@@ -33,6 +33,8 @@ $contact_label = se_ig_redacted_contact($c->igsid); ?>
             'window_label' => _l('se_ig_window_open'),
             'window_text'  => _l('se_ig_window_until') . ' ' . (string) $policy['expires_at'],
             'maxlength'    => 1000,
+            'accept'       => 'image/*,audio/*,video/*',
+            'max_upload_mb' => 8,
             'placeholder'  => _l('se_chat_placeholder'),
             'label_send'   => _l('se_chat_send'),
         ]);

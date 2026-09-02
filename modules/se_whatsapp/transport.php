@@ -43,6 +43,28 @@ function se_wa_live_transport(array $m)
                 'components' => $components,
             ],
         ];
+    } elseif ($m['kind'] === 'media' && !empty($m['media'])) {
+        // Two steps: upload the bytes (multipart) to get a media id, then send
+        // a message referencing it. The upload is repeated on every attempt —
+        // Meta's ids are short-lived and a retry must not depend on one.
+        $up = se_wa_upload_media((string) $m['phone_number_id'], $m['media'], $token);
+        if (empty($up['ok'])) {
+            return ['ok' => false, 'wamid' => '', 'code' => (int) $up['code'], 'error' => 'media upload: ' . $up['error']];
+        }
+        $kind = (string) $m['media']['kind'];
+        $obj  = ['id' => (string) $up['id']];
+        if ($kind !== 'audio' && (string) ($m['body'] ?? '') !== '') {
+            $obj['caption'] = (string) $m['body'];
+        }
+        if ($kind === 'document' && !empty($m['media']['filename'])) {
+            $obj['filename'] = (string) $m['media']['filename'];
+        }
+        $payload = [
+            'messaging_product' => 'whatsapp',
+            'to'                => (string) $m['to'],
+            'type'              => $kind,
+            $kind               => $obj,
+        ];
     } else {
         $payload = [
             'messaging_product' => 'whatsapp',
@@ -92,6 +114,45 @@ function se_wa_live_transport(array $m)
 
     return ['ok' => false, 'wamid' => '', 'code' => $code,
             'error' => mb_substr($msg, 0, 180) . $sub];
+}
+
+/**
+ * Upload a stored file to the Cloud API media endpoint. Returns
+ * {ok, id, code, error}. The token goes in the header; the file is streamed
+ * from its private path and never copied into the docroot.
+ */
+function se_wa_upload_media($phone_number_id, array $media, $token)
+{
+    $version = get_option('se_meta_graph_version') ?: 'v23.0';
+    $url = 'https://graph.facebook.com/' . $version . '/' . rawurlencode((string) $phone_number_id) . '/media';
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 120,
+        CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $token],
+        CURLOPT_POSTFIELDS     => [
+            'messaging_product' => 'whatsapp',
+            'type'              => (string) $media['mime'],
+            'file'              => new CURLFile((string) $media['abs_path'], (string) $media['mime'],
+                                       (string) ($media['filename'] ?: basename((string) $media['abs_path']))),
+        ],
+    ]);
+    $raw  = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+
+    if ($raw === false) {
+        return ['ok' => false, 'id' => '', 'code' => 0, 'error' => 'network error: ' . mb_substr((string) $err, 0, 80)];
+    }
+    $body = json_decode((string) $raw, true) ?: [];
+    if ($code >= 200 && $code < 300 && !empty($body['id'])) {
+        return ['ok' => true, 'id' => (string) $body['id'], 'code' => $code, 'error' => ''];
+    }
+    return ['ok' => false, 'id' => '', 'code' => $code,
+            'error' => mb_substr((string) ($body['error']['message'] ?? ('HTTP ' . $code)), 0, 160)];
 }
 
 /**

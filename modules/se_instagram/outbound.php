@@ -106,12 +106,27 @@ function se_ig_queue_message($conversation_id, array $message, $staff_id = 0)
         return ['ok' => false, 'id' => 0, 'reason' => $policy['reason']];
     }
 
-    $body = trim((string) ($message['body'] ?? ''));
-    if ($body === '') {
-        return ['ok' => false, 'id' => 0, 'reason' => 'empty_body'];
+    $kind     = ($message['kind'] ?? 'text') === 'media' ? 'media' : 'text';
+    $media_id = null;
+    $body     = trim((string) ($message['body'] ?? ''));
+
+    if ($kind === 'media') {
+        // Instagram attachments carry no caption; the composer queues any text
+        // as a separate message. Image / audio / video only, ≤ 8 MB (Meta).
+        $media_id = (int) ($message['media_id'] ?? 0);
+        $media = function_exists('se_media_sendable') ? se_media_sendable($media_id, 'ig', (int) $conv->brand_id) : null;
+        if ($media === null) {
+            return ['ok' => false, 'id' => 0, 'reason' => 'media_invalid'];
+        }
+        $body = null;
+        $key  = se_ig_idempotency_key($conversation_id, 'media', hash('sha256', 'media|' . $media_id));
+    } else {
+        if ($body === '') {
+            return ['ok' => false, 'id' => 0, 'reason' => 'empty_body'];
+        }
+        $body = mb_substr($body, 0, SE_IG_OUT_MAX_TEXT);
+        $key  = se_ig_idempotency_key($conversation_id, 'text', hash('sha256', $body));
     }
-    $body = mb_substr($body, 0, SE_IG_OUT_MAX_TEXT);
-    $key  = se_ig_idempotency_key($conversation_id, 'text', hash('sha256', $body));
 
     $CI->db->where('idempotency_key', $key);
     if ($CI->db->count_all_results(db_prefix() . 'se_ig_outbound') > 0) {
@@ -122,8 +137,9 @@ function se_ig_queue_message($conversation_id, array $message, $staff_id = 0)
         $CI->db->insert(db_prefix() . 'se_ig_outbound', [
             'conversation_id' => (int) $conv->id,
             'brand_id'        => (int) $conv->brand_id,
-            'kind'            => 'text',
+            'kind'            => $kind,
             'body'            => $body,
+            'media_id'        => $media_id,
             'idempotency_key' => $key,
             'status'          => 'pending',
             'attempts'        => 0,
@@ -224,12 +240,26 @@ function se_ig_out_process($row)
                 'failure_class' => 'permanent', 'last_error' => 'service window closed before send'];
     }
 
+    // Attachment: the Send API fetches by URL, so mint a signed, short-lived
+    // public URL for the stored file (outbound rows only; see se_media_pub).
+    $media = null;
+    if (($row['kind'] ?? 'text') === 'media') {
+        $media = function_exists('se_media_sendable') ? se_media_sendable((int) ($row['media_id'] ?? 0), 'ig', (int) $conv->brand_id) : null;
+        if ($media === null || se_media_abs_path($media) === '') {
+            return ['status' => 'failed', 'attempts' => (int) $row['attempts'] + 1,
+                    'failure_class' => 'permanent', 'last_error' => 'attachment missing'];
+        }
+        $media['url'] = se_media_pub_url($media);
+    }
+
     try {
         $result = call_user_func($GLOBALS['SE_IG_TRANSPORT'], [
             'ig_account_id'   => $conv->ig_account_id,
             'brand_id'        => (int) $conv->brand_id,
             'to'              => $conv->igsid,
+            'kind'            => $row['kind'] ?? 'text',
             'body'            => $row['body'],
+            'media'           => $media,   // kind, mime, url — or null
             'idempotency_key' => $row['idempotency_key'],
         ]);
     } catch (Exception $e) {
@@ -278,18 +308,25 @@ function se_ig_record_outbound($row, $conv, $mid)
         return;
     }
 
+    $media = ($row['kind'] ?? 'text') === 'media' && function_exists('se_media_get') ? se_media_get((int) ($row['media_id'] ?? 0)) : null;
+
     $CI->db->insert(db_prefix() . 'se_ig_messages', [
         'conversation_id' => (int) $conv->id,
         'brand_id'        => (int) $conv->brand_id,
         'mid'             => $mid,
         'direction'       => 'out',
         'source'          => 'crm_api',
-        'type'            => 'text',
+        'type'            => $media ? $media['kind'] : 'text',
         'body'            => $row['body'],
+        'media_ref'       => $media ? 'out:' . (int) $media['id'] : null,
         'delivery_state'  => 'sent',
         'sent_at'         => date('Y-m-d H:i:s'),
         'date_created'    => date('Y-m-d H:i:s'),
     ]);
+
+    if ($media && function_exists('se_media_attach_message')) {
+        se_media_attach_message((int) $media['id'], (int) $CI->db->insert_id(), (int) ($row['id'] ?? 0));
+    }
 }
 
 function se_ig_out_health($brand_id = 0)

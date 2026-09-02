@@ -43,6 +43,17 @@ function se_ui_chat_styles()
 .se-composer .se-tpl pre{white-space:pre-wrap;font-size:12px;margin:8px 0}
 .se-composer .se-tpl .form-group{margin-bottom:8px}
 .se-composer .btn-send{min-width:96px}
+.se-composer .se-tools{display:flex;gap:4px}
+.se-composer .se-tools .btn{padding:6px 9px;font-size:15px;line-height:1.4}
+.se-composer .se-attach{font-size:12px;margin-bottom:6px;padding:6px 10px;border:1px dashed rgba(128,128,128,.4);border-radius:6px}
+.se-composer .se-attach a{margin-left:6px;font-weight:700;text-decoration:none}
+.se-emoji{margin-top:8px;border:1px solid rgba(128,128,128,.3);border-radius:8px;padding:8px;background:rgba(128,128,128,.06)}
+.se-emoji .se-emoji-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.se-emoji .se-emoji-tabs button{border:0;background:transparent;font-size:16px;padding:2px 6px;border-radius:4px;cursor:pointer;opacity:.6}
+.se-emoji .se-emoji-tabs button.on{opacity:1;background:rgba(59,130,246,.2)}
+.se-emoji .se-emoji-grid{display:flex;flex-wrap:wrap;gap:2px;max-height:160px;overflow-y:auto}
+.se-emoji .se-emoji-grid button{border:0;background:transparent;font-size:20px;line-height:1;padding:4px;border-radius:4px;cursor:pointer}
+.se-emoji .se-emoji-grid button:hover{background:rgba(59,130,246,.2)}
 </style>';
 }
 
@@ -142,18 +153,31 @@ function se_ui_chat_composer(array $cfg)
     }
 
     if ($mode === 'freeform') {
-        echo form_open($cfg['action'], ['id' => 'se-compose', 'autocomplete' => 'off']);
+        $accept = $cfg['accept'] ?? 'image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt';
+        $maxMb  = (int) ($cfg['max_upload_mb'] ?? 25);
+        echo form_open_multipart($cfg['action'], ['id' => 'se-compose', 'autocomplete' => 'off']);
         echo '<input type="hidden" name="kind" value="text" />';
         echo '<div class="se-policy">' . se_ui_badge('open', $cfg['window_label'] ?? _l('se_wa_window_open'))
            . '<span class="text-muted">' . html_escape($cfg['window_text'] ?? '') . '</span></div>';
-        echo '<div class="se-row"><textarea class="form-control" id="se-body" name="body" rows="1" required maxlength="'
+        echo '<div class="se-attach" id="se-attach" hidden><i class="fa fa-paperclip"></i> <span id="se-attach-name"></span>'
+           . ' <a href="#" id="se-attach-clear" title="' . html_escape(_l('se_chat_remove_attachment')) . '">&times;</a>'
+           . ' <small class="text-muted" id="se-attach-note">' . html_escape($cfg['attach_note'] ?? '') . '</small></div>';
+        echo '<div class="se-row">'
+           . '<div class="se-tools">'
+           . '<button type="button" class="btn btn-default" id="se-emoji-btn" title="' . html_escape(_l('se_chat_emoji')) . '">&#128578;</button>'
+           . '<label class="btn btn-default" for="se-file" title="' . html_escape(_l('se_chat_attach')) . '"><i class="fa fa-paperclip"></i></label>'
+           . '<input type="file" id="se-file" name="attachment" accept="' . html_escape($accept) . '" hidden />'
+           . '</div>'
+           . '<textarea class="form-control" id="se-body" name="body" rows="1" required maxlength="'
            . (int) ($cfg['maxlength'] ?? 4096) . '" placeholder="' . html_escape($cfg['placeholder'] ?? _l('se_chat_placeholder')) . '"></textarea>'
            . '<button type="submit" class="btn btn-primary btn-send" id="se-send"><i class="fa fa-paper-plane"></i> '
            . html_escape($cfg['label_send'] ?? _l('se_chat_send')) . '</button></div>';
-        echo '<div class="se-hint"><span>' . html_escape(_l('se_chat_enter_hint')) . '</span><span id="se-count">0 / '
+        echo '<div class="se-emoji" id="se-emoji" hidden></div>';
+        echo '<div class="se-hint"><span>' . html_escape(_l('se_chat_enter_hint')) . ' · '
+           . html_escape(sprintf(_l('se_chat_attach_hint'), $maxMb)) . '</span><span id="se-count">0 / '
            . (int) ($cfg['maxlength'] ?? 4096) . '</span></div>';
         echo form_close();
-        se_ui_chat_scripts();
+        se_ui_chat_scripts($maxMb);
         echo '</div>';
         return;
     }
@@ -214,18 +238,58 @@ function se_ui_chat_composer(array $cfg)
     echo '</div>';
 }
 
-/** Composer behaviour: auto-grow, Enter to send, counter, double-submit guard. */
-function se_ui_chat_scripts()
+/** Composer behaviour: auto-grow, Enter to send, counter, attachment chip, emoji picker, double-submit guard. */
+function se_ui_chat_scripts($max_upload_mb = 25)
 {
     static $done = false;
     if ($done) { return; }
     $done = true;
+
+    // Categories are plain arrays of characters: no library, no CDN, no
+    // network. Insertion goes through the textarea's selection so an emoji
+    // lands where the caret is, and the last 24 used are remembered locally.
+    $sets = [
+        ['😀', 'Smileys', '😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😗 😚 😙 🥲 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🤧 🥵 🥶 🥴 😵 🤯 🤠 🥳 🥸 😎 🤓 🧐 😕 😟 🙁 ☹️ 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 💩 🤡 👻 👽 🤖 😺 😸 😹 😻 😼 😽 🙀 😿 😾'],
+        ['👋', 'People', '👋 🤚 🖐️ ✋ 🖖 👌 🤌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 🖕 👇 ☝️ 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 👐 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 🦵 🦶 👂 🦻 👃 🧠 🫀 🫁 🦷 🦴 👀 👁️ 👅 👄 💋 👶 🧒 👦 👧 🧑 👱 👨 🧔 👩 🧓 👴 👵 🙍 🙎 🙅 🙆 💁 🙋 🧏 🙇 🤦 🤷 👮 🕵️ 💂 👷 🤴 👸 👳 👲 🧕 🤵 👰 🤰 🤱 👼 🎅 🤶 🦸 🦹 🧙 🧚 🧛 🧜 🧝 🧞 🧟 💆 💇 🚶 🧍 🧎 🏃 💃 🕺 👯 🧖 🧗 🏇 ⛷️ 🏂 🏌️ 🏄 🚣 🏊 ⛹️ 🏋️ 🚴 🚵 🤸 🤼 🤽 🤾 🤹 🧘 🛀 🛌 👭 👫 👬 💏 💑 👪'],
+        ['❤️', 'Hearts', '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ☮️ ✝️ ☪️ 🕉️ ☸️ ✡️ 🔯 🕎 ☯️ ☦️ 🛐 ⛎ ♈ ♉ ♊ ♋ ♌ ♍ ♎ ♏ ♐ ♑ ♒ ♓ 🆔 ⚛️ 🉑 ☢️ ☣️ 📴 📳 🈶 🈚 🈸 🈺 🈷️ ✴️ 🆚 💮 🉐 ㊙️ ㊗️ 🈴 🈵 🈹 🈲 🅰️ 🅱️ 🆎 🆑 🅾️ 🆘 ❌ ⭕ 🛑 ⛔ 📛 🚫 💯 💢 ♨️ 🚷 🚯 🚳 🚱 🔞 📵 🚭 ❗ ❕ ❓ ❔ ‼️ ⁉️ 🔅 🔆 〽️ ⚠️ 🚸 🔱 ⚜️ 🔰 ♻️ ✅ 🈯 💹 ❇️ ✳️ ❎ 🌐 💠 Ⓜ️ 🌀 💤 🏧 🚾 ♿ 🅿️ 🈳 🈂️ 🛂 🛃 🛄 🛅 🚹 🚺 🚼 🚻 🚮 🎦 📶 🈁 🔣 ℹ️ 🔤 🔡 🔠 🆖 🆗 🆙 🆒 🆕 🆓 0️⃣ 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ 🔟'],
+        ['🌿', 'Nature', '🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐔 🐧 🐦 🐤 🦆 🦅 🦉 🦇 🐺 🐗 🐴 🦄 🐝 🐛 🦋 🐌 🐞 🐜 🦟 🦗 🕷️ 🦂 🐢 🐍 🦎 🦖 🦕 🐙 🦑 🦐 🦞 🦀 🐡 🐠 🐟 🐬 🐳 🐋 🦈 🐊 🐅 🐆 🦓 🦍 🐘 🦛 🦏 🐪 🐫 🦒 🦘 🐃 🐂 🐄 🐎 🐖 🐏 🐑 🦙 🐐 🦌 🐕 🐩 🦮 🐈 🐓 🦃 🦚 🦜 🦢 🦩 🕊️ 🐇 🦝 🦨 🦡 🦦 🦥 🐁 🐀 🐿️ 🦔 🐾 🐉 🌵 🎄 🌲 🌳 🌴 🌱 🌿 ☘️ 🍀 🎍 🎋 🍃 🍂 🍁 🍄 🐚 🌾 💐 🌷 🌹 🥀 🌺 🌸 🌼 🌻 🌞 🌝 🌛 🌜 🌚 🌕 🌖 🌗 🌘 🌑 🌒 🌓 🌔 🌙 🌎 🌍 🌏 🪐 💫 ⭐ 🌟 ✨ ⚡ ☄️ 💥 🔥 🌪️ 🌈 ☀️ 🌤️ ⛅ 🌥️ ☁️ 🌦️ 🌧️ ⛈️ 🌩️ 🌨️ ❄️ ☃️ ⛄ 🌬️ 💨 💧 💦 ☔ ☂️ 🌊 🌫️'],
+        ['🍕', 'Food', '🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍈 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🍆 🥑 🥦 🥬 🥒 🌶️ 🫑 🌽 🥕 🫒 🧄 🧅 🥔 🍠 🥐 🥯 🍞 🥖 🥨 🧀 🥚 🍳 🧈 🥞 🧇 🥓 🥩 🍗 🍖 🦴 🌭 🍔 🍟 🍕 🫓 🥪 🥙 🧆 🌮 🌯 🫔 🥗 🥘 🫕 🥫 🍝 🍜 🍲 🍛 🍣 🍱 🥟 🦪 🍤 🍙 🍚 🍘 🍥 🥠 🥮 🍢 🍡 🍧 🍨 🍦 🥧 🧁 🍰 🎂 🍮 🍭 🍬 🍫 🍿 🍩 🍪 🌰 🥜 🍯 🥛 🍼 🫖 ☕ 🍵 🧃 🥤 🧋 🍶 🍺 🍻 🥂 🍷 🥃 🍸 🍹 🧉 🍾 🧊 🥄 🍴 🍽️ 🥣 🥡 🥢 🧂'],
+        ['⚽', 'Activity', '⚽ 🏀 🏈 ⚾ 🥎 🎾 🏐 🏉 🥏 🎱 🪀 🏓 🏸 🏒 🏑 🥍 🏏 🪃 🥅 ⛳ 🪁 🏹 🎣 🤿 🥊 🥋 🎽 🛹 🛼 🛷 ⛸️ 🥌 🎿 ⛷️ 🏂 🪂 🏋️ 🤼 🤸 ⛹️ 🤺 🤾 🏌️ 🏇 🧘 🏄 🏊 🤽 🚣 🧗 🚵 🚴 🏆 🥇 🥈 🥉 🏅 🎖️ 🏵️ 🎗️ 🎫 🎟️ 🎪 🤹 🎭 🩰 🎨 🎬 🎤 🎧 🎼 🎹 🥁 🪘 🎷 🎺 🪗 🎸 🪕 🎻 🎲 ♟️ 🎯 🎳 🎮 🎰 🧩'],
+        ['🚗', 'Travel', '🚗 🚕 🚙 🚌 🚎 🏎️ 🚓 🚑 🚒 🚐 🛻 🚚 🚛 🚜 🦯 🦽 🦼 🛴 🚲 🛵 🏍️ 🛺 🚨 🚔 🚍 🚘 🚖 🚡 🚠 🚟 🚃 🚋 🚞 🚝 🚄 🚅 🚈 🚂 🚆 🚇 🚊 🚉 ✈️ 🛫 🛬 🛩️ 💺 🛰️ 🚀 🛸 🚁 🛶 ⛵ 🚤 🛥️ 🛳️ ⛴️ 🚢 ⚓ 🪝 ⛽ 🚧 🚦 🚥 🚏 🗺️ 🗿 🗽 🗼 🏰 🏯 🏟️ 🎡 🎢 🎠 ⛲ ⛱️ 🏖️ 🏝️ 🏜️ 🌋 ⛰️ 🏔️ 🗻 🏕️ ⛺ 🛖 🏠 🏡 🏘️ 🏚️ 🏗️ 🏭 🏢 🏬 🏣 🏤 🏥 🏦 🏨 🏪 🏫 🏩 💒 🏛️ ⛪ 🕌 🕍 🛕 🕋 ⛩️ 🛤️ 🛣️ 🗾 🎑 🏞️ 🌅 🌄 🌠 🎇 🎆 🌇 🌆 🏙️ 🌃 🌌 🌉 🌁'],
+        ['💡', 'Objects', '⌚ 📱 📲 💻 ⌨️ 🖥️ 🖨️ 🖱️ 🖲️ 🕹️ 🗜️ 💽 💾 💿 📀 📼 📷 📸 📹 🎥 📽️ 🎞️ 📞 ☎️ 📟 📠 📺 📻 🎙️ 🎚️ 🎛️ 🧭 ⏱️ ⏲️ ⏰ 🕰️ ⌛ ⏳ 📡 🔋 🔌 💡 🔦 🕯️ 🪔 🧯 🛢️ 💸 💵 💴 💶 💷 🪙 💰 💳 💎 ⚖️ 🪜 🧰 🪛 🔧 🔨 ⚒️ 🛠️ ⛏️ 🪚 🔩 ⚙️ 🪤 🧱 ⛓️ 🧲 🔫 💣 🧨 🪓 🔪 🗡️ ⚔️ 🛡️ 🚬 ⚰️ 🪦 ⚱️ 🏺 🔮 📿 🧿 💈 ⚗️ 🔭 🔬 🕳️ 🩹 🩺 💊 💉 🩸 🧬 🦠 🧫 🧪 🌡️ 🧹 🪠 🧺 🧻 🚽 🚰 🚿 🛁 🛀 🧼 🪥 🪒 🧽 🪣 🧴 🛎️ 🔑 🗝️ 🚪 🪑 🛋️ 🛏️ 🛌 🧸 🪆 🖼️ 🪞 🪟 🛍️ 🛒 🎁 🎈 🎏 🎀 🪄 🪅 🎊 🎉 🎎 🏮 🎐 🧧 ✉️ 📩 📨 📧 💌 📥 📤 📦 🏷️ 🪧 📪 📫 📬 📭 📮 📯 📜 📃 📄 📑 🧾 📊 📈 📉 🗒️ 🗓️ 📆 📅 🗑️ 📇 🗃️ 🗳️ 🗄️ 📋 📁 📂 🗂️ 🗞️ 📰 📓 📔 📒 📕 📗 📘 📙 📚 📖 🔖 🧷 🔗 📎 🖇️ 📐 📏 🧮 📌 📍 ✂️ 🖊️ 🖋️ ✒️ 🖌️ 🖍️ 📝 ✏️ 🔍 🔎 🔏 🔐 🔒 🔓'],
+    ];
+    $json = json_encode(array_map(function ($s) { return [$s[0], $s[1], preg_split('/\s+/u', trim($s[2]))]; }, $sets), JSON_UNESCAPED_UNICODE);
+
     echo '<script>(function(){
 var f=document.getElementById("se-compose"),b=document.getElementById("se-body"),c=document.getElementById("se-count"),s=document.getElementById("se-send");
 if(!f)return;
+var file=document.getElementById("se-file"),chip=document.getElementById("se-attach"),chipName=document.getElementById("se-attach-name"),chipClear=document.getElementById("se-attach-clear");
+var MAX=' . (int) $max_upload_mb . '*1024*1024;
 function grow(){if(!b)return;b.style.height="auto";b.style.height=Math.min(b.scrollHeight,220)+"px";if(c){c.textContent=b.value.length+" / "+b.getAttribute("maxlength");}}
+function hasFile(){return file&&file.files&&file.files.length>0;}
+function syncRequired(){if(b){b.required=!hasFile();}}
 if(b){b.addEventListener("input",grow);grow();b.focus();
-b.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();if(b.value.trim()!==""){f.requestSubmit?f.requestSubmit():f.submit();}}});}
+b.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();if(b.value.trim()!==""||hasFile()){f.requestSubmit?f.requestSubmit():f.submit();}}});}
+if(file){file.addEventListener("change",function(){if(hasFile()){var x=file.files[0];if(x.size>MAX){alert("' . html_escape(_l('se_chat_attach_too_large')) . ' ("+' . (int) $max_upload_mb . '+" MB)");file.value="";chip.hidden=true;syncRequired();return;}chipName.textContent=x.name+" ("+Math.max(1,Math.round(x.size/1024))+" KB)";chip.hidden=false;}else{chip.hidden=true;}syncRequired();});
+if(chipClear){chipClear.addEventListener("click",function(e){e.preventDefault();file.value="";chip.hidden=true;syncRequired();b&&b.focus();});}}
 f.addEventListener("submit",function(){if(s){s.disabled=true;s.innerHTML="<i class=\"fa fa-spinner fa-spin\"></i> …";}});
+
+/* emoji picker */
+var eb=document.getElementById("se-emoji-btn"),ep=document.getElementById("se-emoji");
+if(eb&&ep&&b){
+var SETS=' . $json . ',RK="se_emoji_recent",recent=[];
+try{recent=JSON.parse(localStorage.getItem(RK)||"[]");if(!Array.isArray(recent))recent=[];}catch(e){recent=[];}
+function insert(ch){var st=b.selectionStart||0,en=b.selectionEnd||0;b.value=b.value.slice(0,st)+ch+b.value.slice(en);b.selectionStart=b.selectionEnd=st+ch.length;b.focus();grow();
+recent=[ch].concat(recent.filter(function(x){return x!==ch;})).slice(0,24);try{localStorage.setItem(RK,JSON.stringify(recent));}catch(e){}}
+function render(i){ep.innerHTML="";var tabs=document.createElement("div");tabs.className="se-emoji-tabs";
+var all=[["🕘","Recent",recent]].concat(SETS);
+all.forEach(function(set,j){var t=document.createElement("button");t.type="button";t.textContent=set[0];t.title=set[1];if(j===i)t.className="on";t.addEventListener("click",function(){render(j);});tabs.appendChild(t);});
+ep.appendChild(tabs);var g=document.createElement("div");g.className="se-emoji-grid";
+var list=all[i][2];if(!list.length){g.innerHTML="<small class=\"text-muted\">' . html_escape(_l('se_chat_emoji_recent_empty')) . '</small>";}
+list.forEach(function(ch){var x=document.createElement("button");x.type="button";x.textContent=ch;x.addEventListener("click",function(){insert(ch);});g.appendChild(x);});
+ep.appendChild(g);}
+eb.addEventListener("click",function(){ep.hidden=!ep.hidden;if(!ep.hidden)render(recent.length?0:1);});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!ep.hidden){ep.hidden=true;}});
+}
 })();</script>';
 }

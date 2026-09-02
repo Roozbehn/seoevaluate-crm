@@ -78,7 +78,29 @@ class Se_instagram extends AdminController
             access_denied('se_instagram');
         }
 
-        $result = se_ig_queue_message((int) $id, ['body' => (string) $this->input->post('body')], (int) get_staff_user_id());
+        $conversation = $this->se_instagram_model->get_conversation($id);
+        $staff = (int) get_staff_user_id();
+        $body  = trim((string) $this->input->post('body'));
+
+        // Instagram attachments carry no caption: the file goes as its own
+        // message and any text follows as a second one. File first, so a
+        // rejected upload queues nothing.
+        $result = null;
+        if (!empty($_FILES['attachment']) && (int) $_FILES['attachment']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $up = se_media_store_upload('ig', (int) $conversation->brand_id, $_FILES['attachment'], $staff);
+            if (!$up['ok']) {
+                set_alert('warning', _l('se_media_upload_' . $up['error']) ?: _l('se_media_upload_failed'));
+                redirect(admin_url('se_instagram/se_instagram/conversation/' . (int) $id));
+                return;
+            }
+            $result = se_ig_queue_message((int) $id, ['kind' => 'media', 'media_id' => (int) $up['id']], $staff);
+        }
+        if ($body !== '' && ($result === null || $result['ok'])) {
+            $result = se_ig_queue_message((int) $id, ['body' => $body], $staff);
+        }
+        if ($result === null) {
+            $result = ['ok' => false, 'reason' => 'empty_body'];
+        }
 
         if ($result['ok']) {
             set_alert('success', _l('se_ig_reply_queued'));

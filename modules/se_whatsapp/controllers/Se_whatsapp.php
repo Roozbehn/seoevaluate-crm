@@ -128,11 +128,26 @@ class Se_whatsapp extends AdminController
             }
         }
 
+        // An attachment turns a text reply into a media reply (text = caption).
+        // The file is validated + stored BEFORE anything is queued; a rejected
+        // file queues nothing and says why.
+        if ($kind === 'text' && !empty($_FILES['attachment']) && (int) $_FILES['attachment']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $up = se_media_store_upload('wa', (int) $conversation->brand_id, $_FILES['attachment'], (int) get_staff_user_id());
+            if (!$up['ok']) {
+                set_alert('warning', _l('se_media_upload_' . $up['error']) ?: _l('se_media_upload_failed'));
+                redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $id));
+                return;
+            }
+            $kind = 'media';
+            $media_id = (int) $up['id'];
+        }
+
         $result = se_wa_queue_message((int) $id, [
             'kind'      => $kind,
             'body'      => (string) $this->input->post('body'),
             'template'  => $template,
             'variables' => $variables,
+            'media_id'  => $media_id ?? 0,
         ], (int) get_staff_user_id());
 
         if ($result['ok']) {

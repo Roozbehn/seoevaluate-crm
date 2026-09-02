@@ -8,7 +8,7 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 se_group('Schema version and statement shape');
 
-se_eq(14, SE_CORE_SCHEMA_VERSION, 'se_core schema version is 14');
+se_eq(15, SE_CORE_SCHEMA_VERSION, 'se_core schema version is 15');
 
 $stmts = se_core_migration_statements();
 se_ok(count($stmts) > 40, 'the statement list is populated (' . count($stmts) . ' statements)');
@@ -24,7 +24,10 @@ foreach ($stmts as $i => $sql) {
     // Every statement must be guarded so re-running is a no-op.
     $guarded = stripos($sql, 'IF NOT EXISTS') !== false
         || stripos($sql, 'INSERT IGNORE') !== false
-        || stripos($sql, 'WHERE NOT EXISTS') !== false;
+        || stripos($sql, 'WHERE NOT EXISTS') !== false
+        // Relaxing a unique index to a plain one (v15) is the one permitted
+        // DROP: an INDEX, never data, and guarded so a re-run is a no-op.
+        || preg_match('/DROP INDEX IF EXISTS/i', $sql) === 1;
     se_ok($guarded, "statement {$n} is guarded for idempotency");
 }
 

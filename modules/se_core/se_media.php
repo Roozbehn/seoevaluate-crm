@@ -54,6 +54,9 @@ function se_media_schema_statements($p)
         `channel` varchar(8) NOT NULL,
         `message_id` bigint(20) NOT NULL,
         `brand_id` int(11) NOT NULL DEFAULT 0,
+        `direction` varchar(4) NOT NULL DEFAULT 'in',
+        `outbound_id` bigint(20) DEFAULT NULL,
+        `created_by` int(11) NOT NULL DEFAULT 0,
         `kind` varchar(24) NOT NULL DEFAULT 'file',
         `provider_ref` text DEFAULT NULL,
         `caption` text DEFAULT NULL,
@@ -69,7 +72,7 @@ function se_media_schema_statements($p)
         `fetched_at` datetime DEFAULT NULL,
         `date_created` datetime NOT NULL,
         PRIMARY KEY (`id`),
-        UNIQUE KEY `channel_message` (`channel`,`message_id`),
+        KEY `channel_message` (`channel`,`message_id`),
         KEY `brand_id` (`brand_id`),
         KEY `claim` (`state`,`next_attempt_at`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"];
@@ -472,4 +475,202 @@ function se_ui_media(array $media = null, $redacted = false)
             return '<span class="label label-info"><i class="fa fa-refresh"></i> '
                  . html_escape(_l('se_media_fetching')) . ' (' . html_escape($media['kind']) . ')</span>' . $cap;
     }
+}
+
+/* ===========================================================================
+ * OUTBOUND attachments — files a staff member sends from the composer.
+ *
+ * The file is validated and stored at upload time (same allow-list, sniff and
+ * cap as inbound; Instagram additionally caps at 8 MB per Meta), with
+ * direction='out' and message_id=0 until the send succeeds, when the thread
+ * row is created and linked. WhatsApp uploads the bytes to the Cloud API
+ * (/{phone_number_id}/media) at send time; Instagram's Send API only accepts
+ * a URL, so a short-lived, HMAC-signed public URL is minted for the file.
+ * ======================================================================== */
+
+define('SE_MEDIA_IG_MAX_BYTES', 8 * 1024 * 1024);
+define('SE_MEDIA_PUB_TTL', 3600);
+
+/** Schema additions for outbound (schema v15; idempotent). */
+function se_media_schema_statements_v15($p)
+{
+    return [
+        "ALTER TABLE `{$p}se_media` ADD COLUMN IF NOT EXISTS `direction` varchar(4) NOT NULL DEFAULT 'in'",
+        "ALTER TABLE `{$p}se_media` ADD COLUMN IF NOT EXISTS `outbound_id` bigint(20) DEFAULT NULL",
+        "ALTER TABLE `{$p}se_media` ADD COLUMN IF NOT EXISTS `created_by` int(11) NOT NULL DEFAULT 0",
+        // Outbound rows share message_id=0 until sent, so the pair can no longer be unique.
+        "ALTER TABLE `{$p}se_media` DROP INDEX IF EXISTS `channel_message`",
+        "ALTER TABLE `{$p}se_media` ADD INDEX IF NOT EXISTS `channel_message` (`channel`,`message_id`)",
+        "ALTER TABLE `{$p}se_wa_outbound` ADD COLUMN IF NOT EXISTS `media_id` bigint(20) DEFAULT NULL",
+        "ALTER TABLE `{$p}se_ig_outbound` ADD COLUMN IF NOT EXISTS `media_id` bigint(20) DEFAULT NULL",
+    ];
+}
+
+/** What a channel may send: kind => true. */
+function se_media_sendable_kinds($channel)
+{
+    return $channel === 'ig'
+        ? ['image' => true, 'audio' => true, 'video' => true]
+        : ['image' => true, 'audio' => true, 'video' => true, 'document' => true];
+}
+
+/**
+ * Validate + store one uploaded file (a $_FILES entry) for sending.
+ *
+ * @return array{ok:bool,id:int,error:string,kind:string}
+ */
+function se_media_store_upload($channel, $brand_id, array $file, $staff_id = 0)
+{
+    $err = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($err === UPLOAD_ERR_NO_FILE) {
+        return ['ok' => false, 'id' => 0, 'error' => 'no_file', 'kind' => ''];
+    }
+    if ($err !== UPLOAD_ERR_OK) {
+        return ['ok' => false, 'id' => 0, 'error' => 'upload_error_' . $err, 'kind' => ''];
+    }
+    $tmp = (string) ($file['tmp_name'] ?? '');
+    if ($tmp === '' || !is_file($tmp)) {
+        return ['ok' => false, 'id' => 0, 'error' => 'upload_missing', 'kind' => ''];
+    }
+
+    $size = (int) filesize($tmp);
+    $cap  = $channel === 'ig' ? SE_MEDIA_IG_MAX_BYTES : SE_MEDIA_MAX_BYTES;
+    if ($size <= 0) {
+        return ['ok' => false, 'id' => 0, 'error' => 'empty_file', 'kind' => ''];
+    }
+    if ($size > $cap) {
+        return ['ok' => false, 'id' => 0, 'error' => 'too_large', 'kind' => ''];
+    }
+
+    // The declared type is a hint; the bytes decide.
+    $mime = '';
+    if (function_exists('finfo_open')) {
+        $fi = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = (string) finfo_file($fi, $tmp);
+        finfo_close($fi);
+    }
+    // Candidates in order of trust: what libmagic sees, then what the browser
+    // declared (libmagic is unsure about some short/odd-but-valid files). A
+    // candidate counts only if it is allow-listed AND the leading bytes agree.
+    $allowed = se_media_allowed();
+    $head    = (string) file_get_contents($tmp, false, null, 0, 16);
+    $alias   = ['audio/x-m4a' => 'audio/mp4', 'audio/m4a' => 'audio/mp4', 'video/x-m4v' => 'video/mp4',
+                'image/jpg' => 'image/jpeg', 'audio/x-wav' => 'audio/wav', 'audio/vnd.wave' => 'audio/wav'];
+    $picked  = '';
+    $sawMismatch = false;
+    foreach ([$mime, (string) ($file['type'] ?? '')] as $cand) {
+        $cand = se_media_normalize_mime($cand);
+        $cand = $alias[$cand] ?? $cand;
+        if ($cand === '' || !isset($allowed[$cand])) { continue; }
+        if (!se_media_sniff_ok($cand, $head)) { $sawMismatch = true; continue; }
+        $picked = $cand;
+        break;
+    }
+    if ($picked === '') {
+        return ['ok' => false, 'id' => 0, 'error' => $sawMismatch ? 'content_mismatch' : 'unsupported_type', 'kind' => ''];
+    }
+    $mime = $picked;
+    [$kind, $ext] = $allowed[$mime];
+    if (!isset(se_media_sendable_kinds($channel)[$kind])) {
+        return ['ok' => false, 'id' => 0, 'error' => 'unsupported_for_channel', 'kind' => $kind];
+    }
+
+    $CI = &get_instance();
+    $table = db_prefix() . 'se_media';
+    $CI->db->insert($table, [
+        'channel'      => $channel,
+        'message_id'   => 0,
+        'brand_id'     => (int) $brand_id,
+        'direction'    => 'out',
+        'kind'         => $kind,
+        'provider_ref' => null,
+        'filename'     => mb_substr(basename((string) ($file['name'] ?? '')), 0, 191) ?: null,
+        'mime'         => $mime,
+        'bytes'        => $size,
+        'state'        => 'pending',
+        'attempts'     => 0,
+        'created_by'   => (int) $staff_id,
+        'next_attempt_at' => se_db_now(),
+        'date_created' => se_db_now(),
+    ]);
+    $id = (int) $CI->db->insert_id();
+
+    $sub = $channel . '/' . (int) $brand_id;
+    if (($e = se_media_ensure_dir($sub)) !== '') {
+        $CI->db->where('id', $id)->update($table, ['state' => 'failed', 'last_error' => $e]);
+        return ['ok' => false, 'id' => 0, 'error' => 'store_failed', 'kind' => $kind];
+    }
+    $rel  = $sub . '/' . $id . '.' . $ext;
+    $dest = se_media_dir() . '/' . $rel;
+    $moved = is_uploaded_file($tmp) ? @move_uploaded_file($tmp, $dest) : @rename($tmp, $dest);
+    if (!$moved) {
+        $CI->db->where('id', $id)->update($table, ['state' => 'failed', 'last_error' => 'write failed']);
+        return ['ok' => false, 'id' => 0, 'error' => 'store_failed', 'kind' => $kind];
+    }
+    @chmod($dest, 0600);
+
+    $CI->db->where('id', $id)->update($table, [
+        'state' => 'stored', 'path' => $rel, 'sha256' => hash_file('sha256', $dest), 'fetched_at' => se_db_now(),
+    ]);
+
+    return ['ok' => true, 'id' => $id, 'error' => '', 'kind' => $kind];
+}
+
+/** A stored OUTBOUND media row this brand may send, or null. */
+function se_media_sendable($media_id, $channel, $brand_id)
+{
+    $row = se_media_get((int) $media_id);
+    if (!$row || $row['channel'] !== $channel || (int) $row['brand_id'] !== (int) $brand_id
+        || ($row['direction'] ?? 'in') !== 'out' || $row['state'] !== 'stored'
+        || !isset(se_media_sendable_kinds($channel)[$row['kind']])) {
+        return null;
+    }
+    return $row;
+}
+
+/** Link a media row to the thread message created after a successful send. */
+function se_media_attach_message($media_id, $message_id, $outbound_id = null)
+{
+    $CI = &get_instance();
+    $upd = ['message_id' => (int) $message_id];
+    if ($outbound_id !== null) { $upd['outbound_id'] = (int) $outbound_id; }
+    $CI->db->where('id', (int) $media_id)->update(db_prefix() . 'se_media', $upd);
+}
+
+/* ---- Signed public URL (Instagram Send API fetches attachments by URL) --- */
+
+function se_media_pub_key()
+{
+    $k = (string) get_option('se_media_pub_key');
+    if ($k === '') {
+        $k = bin2hex(random_bytes(32));
+        update_option('se_media_pub_key', $k);
+    }
+    return $k;
+}
+
+function se_media_pub_sig($id, $exp)
+{
+    return substr(hash_hmac('sha256', (int) $id . '|' . (int) $exp, se_media_pub_key()), 0, 40);
+}
+
+/** Time-limited public URL for one stored row. */
+function se_media_pub_url(array $row, $ttl = SE_MEDIA_PUB_TTL, $now = null)
+{
+    $exp = ($now ?? time()) + (int) $ttl;
+    return site_url('se_core/se_media_pub/index/' . (int) $row['id'] . '/' . $exp . '/' . se_media_pub_sig($row['id'], $exp));
+}
+
+/** Verify a public URL's id/exp/sig. Returns the row or null. */
+function se_media_pub_verify($id, $exp, $sig, $now = null)
+{
+    $now = $now ?? time();
+    if ((int) $exp < $now || !preg_match('/^[a-f0-9]{40}$/', (string) $sig)) {
+        return null;
+    }
+    if (!hash_equals(se_media_pub_sig($id, $exp), (string) $sig)) {
+        return null;
+    }
+    $row = se_media_get((int) $id);
+    return $row && $row['state'] === 'stored' && ($row['direction'] ?? 'in') === 'out' ? $row : null;
 }

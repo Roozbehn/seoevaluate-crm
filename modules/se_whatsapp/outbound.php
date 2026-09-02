@@ -275,6 +275,22 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
         $body      = null;
         $template  = $name;
         $signature = hash('sha256', $name . '|' . json_encode($ordered));
+    } elseif ($kind === 'media') {
+        // An attachment uploaded from the composer: free-form, so it obeys the
+        // same 24-hour window as text. The row must be this brand's, stored,
+        // and of a kind WhatsApp accepts.
+        if ($policy['mode'] !== 'freeform') {
+            return ['ok' => false, 'id' => 0, 'reason' => 'window_closed'];
+        }
+        $media_id = (int) ($message['media_id'] ?? 0);
+        $media = function_exists('se_media_sendable') ? se_media_sendable($media_id, 'wa', (int) $conv->brand_id) : null;
+        if ($media === null) {
+            return ['ok' => false, 'id' => 0, 'reason' => 'media_invalid'];
+        }
+        $body      = trim((string) ($message['body'] ?? ''));
+        $body      = $body !== '' ? mb_substr($body, 0, 1024) : null;   // caption cap (Meta: 1024)
+        $template  = null;
+        $signature = hash('sha256', 'media|' . $media_id . '|' . (string) $body);
     } else {
         return ['ok' => false, 'id' => 0, 'reason' => 'unsupported_kind'];
     }
@@ -296,6 +312,7 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
             'body'            => $body,
             'template_name'   => $template,
             'variables_json'  => $kind === 'template' ? json_encode(array_values((array) $message['variables'])) : null,
+            'media_id'        => $kind === 'media' ? (int) $message['media_id'] : null,
             'idempotency_key' => $key,
             'status'          => 'pending',
             'attempts'        => 0,
@@ -429,9 +446,22 @@ function se_wa_out_process($row)
 
     /* Re-check the WINDOW at send time: it may have closed while queued, and
      * free-form text outside it is silently dropped by Meta. */
-    if ($row['kind'] === 'text' && !se_wa_window_open($conv)) {
+    if (($row['kind'] === 'text' || $row['kind'] === 'media') && !se_wa_window_open($conv)) {
         return ['status' => 'skipped', 'attempts' => (int) $row['attempts'],
                 'failure_class' => 'permanent', 'last_error' => 'service window closed before send'];
+    }
+
+    // Attachment: hand the transport the stored file (it uploads to the Cloud
+    // API at send time — Meta media ids are single-use-ish and short-lived).
+    $media = null;
+    if ($row['kind'] === 'media') {
+        $media = function_exists('se_media_sendable') ? se_media_sendable((int) ($row['media_id'] ?? 0), 'wa', (int) $conv->brand_id) : null;
+        $abs   = $media ? se_media_abs_path($media) : '';
+        if ($media === null || $abs === '') {
+            return ['status' => 'failed', 'attempts' => (int) $row['attempts'] + 1,
+                    'failure_class' => 'permanent', 'last_error' => 'attachment missing'];
+        }
+        $media['abs_path'] = $abs;
     }
 
     // The template's language comes from the mirror row, never assumed: Meta
@@ -452,6 +482,7 @@ function se_wa_out_process($row)
             'template'        => $row['template_name'],
             'template_language' => $template_language,
             'variables'       => json_decode((string) $row['variables_json'], true) ?: [],
+            'media'           => $media,   // kind, mime, filename, abs_path — or null
             'idempotency_key' => $row['idempotency_key'],
         ]);
     } catch (Exception $e) {
@@ -508,14 +539,17 @@ function se_wa_record_outbound($row, $conv, $wamid)
         return;   // already mirrored
     }
 
+    $media = $row['kind'] === 'media' && function_exists('se_media_get') ? se_media_get((int) ($row['media_id'] ?? 0)) : null;
+
     $CI->db->insert(db_prefix() . 'se_wa_messages', [
         'conversation_id' => (int) $conv->id,
         'brand_id'        => (int) $conv->brand_id,
         'wamid'           => $wamid,
         'direction'       => 'out',
         'source'          => 'cloud_api',
-        'type'            => $row['kind'] === 'template' ? 'template' : 'text',
+        'type'            => $row['kind'] === 'template' ? 'template' : ($media ? $media['kind'] : 'text'),
         'body'            => $row['body'],
+        'media_ref'       => $media ? 'out:' . (int) $media['id'] : null,
         'template_name'   => $row['template_name'],
         'delivery_state'  => 'sent',
         // DISPLAY timestamps use the PHP application clock (business timezone,
@@ -527,6 +561,10 @@ function se_wa_record_outbound($row, $conv, $wamid)
         'sent_at'         => date('Y-m-d H:i:s'),
         'date_created'    => date('Y-m-d H:i:s'),
     ]);
+
+    if ($media && function_exists('se_media_attach_message')) {
+        se_media_attach_message((int) $media['id'], (int) $CI->db->insert_id(), (int) ($row['id'] ?? 0));
+    }
 }
 
 /* ---------------------------------------------------------------------------

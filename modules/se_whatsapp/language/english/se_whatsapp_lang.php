@@ -104,3 +104,4 @@ $lang['se_wa_step_review']         = 'Production messaging live-tested';
 $lang['se_wa_step_review_hint']    = 'Proven by a processed live webhook and at least one sent queue row for the business-owned WABA.';
 $lang['se_wa_step_transport']      = 'Send transport enabled';
 $lang['se_wa_step_transport_hint'] = 'Registered only when the Cloud API credential and live transport are available.';
+$lang['se_wa_reply_blocked_media_invalid'] = 'That attachment is not available to send (missing, not stored, or not a type WhatsApp accepts).';

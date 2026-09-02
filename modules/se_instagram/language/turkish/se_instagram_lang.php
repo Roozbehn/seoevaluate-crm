@@ -40,3 +40,4 @@ $lang['se_ig_blocked_window_closed'] = '24 saatlik yanıt penceresinin dışınd
 $lang['se_ig_blocked_empty_body']  = 'Mesaj metni boş.';
 $lang['se_ig_blocked_duplicate']   = 'Aynı yanıt zaten kuyrukta.';
 $lang['se_ig_blocked_not_found']   = 'Görüşme bulunamadı.';
+$lang['se_ig_blocked_media_invalid'] = 'Bu ek gönderilemiyor (eksik, kaydedilmemiş veya görsel/ses/video değil).';

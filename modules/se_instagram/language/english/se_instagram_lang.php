@@ -40,3 +40,4 @@ $lang['se_ig_blocked_window_closed'] = 'Outside the 24-hour reply window — Ins
 $lang['se_ig_blocked_empty_body']  = 'Message body is empty.';
 $lang['se_ig_blocked_duplicate']   = 'That exact reply is already queued.';
 $lang['se_ig_blocked_not_found']   = 'Conversation not found.';
+$lang['se_ig_blocked_media_invalid'] = 'That attachment is not available to send (missing, not stored, or not image/audio/video).';

@@ -44,10 +44,20 @@ function se_ig_live_transport(array $m)
         return ['ok' => false, 'mid' => '', 'code' => 0, 'error' => 'no page token'];
     }
 
-    $payload = [
-        'recipient' => ['id' => (string) $m['to']],
-        'message'   => ['text' => (string) $m['body']],
-    ];
+    if (($m['kind'] ?? 'text') === 'media' && !empty($m['media'])) {
+        $payload = [
+            'recipient' => ['id' => (string) $m['to']],
+            'message'   => ['attachment' => [
+                'type'    => (string) $m['media']['kind'],          // image | audio | video
+                'payload' => ['url' => (string) $m['media']['url'], 'is_reusable' => false],
+            ]],
+        ];
+    } else {
+        $payload = [
+            'recipient' => ['id' => (string) $m['to']],
+            'message'   => ['text' => (string) $m['body']],
+        ];
+    }
 
     $version = get_option('se_meta_graph_version') ?: 'v23.0';
     $ch = curl_init('https://graph.facebook.com/' . $version . '/' . rawurlencode($pageId) . '/messages');
