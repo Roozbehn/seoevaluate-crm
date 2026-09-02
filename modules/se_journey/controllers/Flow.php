@@ -33,14 +33,14 @@ class Flow extends App_Controller
         }
         $declared = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
         if ($declared > self::MAX_BODY) {
-            set_status_header(413);
+            set_status_header(413, 'Payload Too Large');
             echo 'too large';
 
             return;
         }
         $raw = (string) file_get_contents('php://input', false, null, 0, self::MAX_BODY + 1);
         if (strlen($raw) > self::MAX_BODY) {
-            set_status_header(413);
+            set_status_header(413, 'Payload Too Large');
             echo 'too large';
 
             return;
@@ -49,7 +49,7 @@ class Flow extends App_Controller
         $sig = (string) ($_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? '');
         if (!se_journey_flow_signature_ok($raw, $sig, $secret)) {
             se_journey_audit(0, 0, 'flow_bad_signature', 'flow', null, $secret === '' ? 'no app secret' : 'mismatch');
-            set_status_header(432);
+            set_status_header(432, 'Signature Mismatch');   // CI needs a text for a non-standard code
             echo 'bad signature';
 
             return;
@@ -58,7 +58,7 @@ class Flow extends App_Controller
         $dec = is_array($body) ? se_journey_flow_decrypt($body, se_journey_flow_private_key()) : ['ok' => false, 'reason' => 'json'];
         if (!$dec['ok']) {
             se_journey_audit(0, 0, 'flow_undecryptable', 'flow', null, (string) $dec['reason']);
-            set_status_header(421);
+            set_status_header(421, 'Misdirected Request');
             echo 'cannot decrypt';
 
             return;
@@ -71,7 +71,7 @@ class Flow extends App_Controller
         }
         $out = se_journey_flow_encrypt($response, $dec['aes_key'], $dec['iv']);
         if ($out === '') {
-            set_status_header(500);
+            set_status_header(500, 'Internal Server Error');
             echo 'encrypt failed';
 
             return;
