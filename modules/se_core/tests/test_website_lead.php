@@ -45,6 +45,14 @@ $valid = [
 $r = se_website_lead_validate($valid);
 se_eq(true, $r['ok'], 'a complete allowlisted payload is accepted');
 se_eq('TR', $r['data']['country'], 'country is normalized');
+$named = $valid; $named['country'] = 'Türkiye';
+$rn = se_website_lead_validate($named);
+se_eq(true, $rn['ok'], "a country NAME (older form version, re-sent on a repeat submission) no longer refuses the enquiry");
+se_eq('TR', $rn['data']['country'], 'a known name maps to its code');
+$odd = $valid; $odd['country'] = 'Atlantis';
+$ro = se_website_lead_validate($odd);
+se_eq(true, $ro['ok'], 'an unknown country value is dropped, never fatal (the field is optional and not stored)');
+se_eq('', $ro['data']['country'], 'dropped');
 se_eq('tr', $r['data']['preferred_language'], 'language is normalized');
 se_eq(true, $r['data']['contact_consent'], 'contact permission remains explicit');
 
