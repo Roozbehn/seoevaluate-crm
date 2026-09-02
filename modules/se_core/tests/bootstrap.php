@@ -351,6 +351,7 @@ require_once $SE_MODULES . '/se_instagram/outbound.php';
 require_once $SE_MODULES . '/se_core/se_integration_ui.php';
 require_once $SE_MODULES . '/se_core/se_reporting.php';
 require_once $SE_MODULES . '/se_core/se_outbound_tracker.php';
+require_once $SE_MODULES . '/se_core/se_dispatch.php';
 require_once $SE_MODULES . '/se_core/helpers/se_ui_helper.php';
 require_once $SE_MODULES . '/se_core/se_clinic.php';
 require_once $SE_MODULES . '/se_core/se_navigation.php';

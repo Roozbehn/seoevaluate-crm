@@ -55,10 +55,20 @@ function se_outbound_dispatch_eta($now = null)
     $now      = $now ?? time();
     $interval = defined('SE_CRON_EXPECTED_INTERVAL_SECONDS') ? SE_CRON_EXPECTED_INTERVAL_SECONDS : 900;
     $last     = (int) get_option('last_cron_run');
+    $source   = 'cron';
+
+    // The dedicated per-minute dispatcher (se_core/dispatch) takes precedence
+    // while it is alive; if it stops, the ETA falls back to the 15-minute cron
+    // rather than promising a minute that will not come.
+    if (function_exists('se_dispatch_active') && se_dispatch_active($now)) {
+        $interval = SE_DISPATCH_INTERVAL_SECONDS;
+        $last     = (int) get_option('se_dispatch_last_run');
+        $source   = 'dispatcher';
+    }
 
     if ($last <= 0) {
         return ['last_run_at' => null, 'next_run_at' => null, 'seconds' => null,
-                'interval' => $interval, 'overdue' => false];
+                'interval' => $interval, 'overdue' => false, 'source' => $source];
     }
 
     $next = $last + $interval;
@@ -68,7 +78,15 @@ function se_outbound_dispatch_eta($now = null)
     $seconds = max(0, $next - $now);
 
     return ['last_run_at' => date('Y-m-d H:i:s', $last), 'next_run_at' => date('Y-m-d H:i:s', $next),
-            'seconds' => $seconds, 'interval' => $interval, 'overdue' => $overdue];
+            'seconds' => $seconds, 'interval' => $interval, 'overdue' => $overdue, 'source' => $source];
+}
+
+/** "every minute" / "every 15 minutes" for an ETA's interval. */
+function se_outbound_cadence_text(array $eta)
+{
+    $s = (int) ($eta['interval'] ?? 900);
+    if ($s < 120) { return 'every minute'; }
+    return 'every ' . (int) round($s / 60) . ' minutes';
 }
 
 /**
@@ -151,7 +169,11 @@ function se_outbound_explain(array $row, array $eta, $now = null)
     }
     if ($eta['overdue']) {
         return ['state' => 'warning', 'text' => 'Queued — dispatcher run overdue (last run ' . $eta['last_run_at']
-            . '; expected every ' . (int) ($eta['interval'] / 60) . ' min). Check System / Cron on Integration Health'];
+            . '; expected ' . se_outbound_cadence_text($eta) . '). Check System / Cron on Integration Health'];
+    }
+
+    if ($eta['interval'] < 120) {
+        return ['state' => 'pending', 'text' => 'Queued — goes out within the next minute (dispatcher runs every minute)'];
     }
 
     return ['state' => 'pending', 'text' => 'Queued — goes out on the next dispatcher run at '
@@ -164,10 +186,9 @@ function se_ui_outbound_tracker(array $rows, array $eta, $now = null)
     $now = $now ?? time();
 
     echo '<p class="text-muted" style="font-size:12px">'
-       . 'Replies are queued here and sent by the dispatcher, which runs every '
-       . (int) ($eta['interval'] / 60) . ' minutes'
+       . 'Replies are queued here and sent by the dispatcher, which runs ' . html_escape(se_outbound_cadence_text($eta))
        . ($eta['next_run_at'] !== null && !$eta['overdue']
-            ? ' — next run ' . html_escape(substr($eta['next_run_at'], 11, 5))
+            ? ' — next run ' . html_escape(substr($eta['next_run_at'], 11, ($eta['interval'] < 120 ? 8 : 5)))
             : '')
        . '. Delivery receipts update the thread on the run after that.</p>';
 

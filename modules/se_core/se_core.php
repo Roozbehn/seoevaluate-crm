@@ -243,7 +243,7 @@ function se_core_deny()
  */
 foreach (['se_asset_registry.php', 'se_outbox_snapshot.php', 'se_outbox.php', 'se_capi.php', 'se_google_dm.php',
           'se_meta_leadgen.php', 'se_webhook_state.php', 'se_reporting.php', 'se_google_auth.php',
-          'se_outbox_ui.php', 'se_integration_ui.php', 'se_outbound_tracker.php'] as $__se_b2) {
+          'se_outbox_ui.php', 'se_integration_ui.php', 'se_outbound_tracker.php', 'se_dispatch.php'] as $__se_b2) {
     $__se_b2_path = __DIR__ . '/' . $__se_b2;
     if (is_file($__se_b2_path)) {
         require_once $__se_b2_path;
