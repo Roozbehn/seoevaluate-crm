@@ -22,6 +22,8 @@
 .se-blocker .why{color:#fde68a;font-weight:600}
 .se-blocker .meta{color:#cbd5e1;font-size:12px;margin-top:3px}
 .se-blocker a{color:#93c5fd}
+.se-note{border-left-color:#10b981;background:rgba(16,185,129,.08)}
+.se-note .why{color:#a7f3d0}
 .se-checked{color:#94a3b8;font-size:12px;margin-top:6px}
 </style>
 <div id="wrapper"><div class="content"><div class="row"><div class="col-md-12">
@@ -183,6 +185,18 @@
        });
      } else { h+='<p class="text-success">No blockers — all configured integrations are ready.</p>'; }
      h+='</div>';
+
+     // Optional follow-ups on integrations that already work — never blockers.
+     if((d.notes||[]).length){
+       h+='<div class="se-blockers se-notes"><h5>Notes (optional)</h5>';
+       d.notes.forEach(function(x){
+         h+='<div class="se-blocker se-note"><div class="why">'+esc(x.reason)+'</div>'
+           +'<div class="meta">'+esc(x.impact)+'</div>'
+           +'<div class="meta">Optional: '+esc(x.action)+(x.link?(' — <a href="'+esc(x.link)+'">Open</a>'):'')+'</div>'
+           +'<div class="meta">Checked: '+ts(x.checked_at)+'</div></div>';
+       });
+       h+='</div>';
+     }
      h+='<div class="se-checked">Snapshot taken: '+ts(d.checked_at)+'</div>';
 
      el.innerHTML=h;

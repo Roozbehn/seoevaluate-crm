@@ -267,7 +267,12 @@ function se_meta_ui_status($brand_id = 0)
         // Reconciliation is implemented: it re-fetches recent leads per mapped
         // form and upserts them idempotently; live fetching is gated on a token.
         'reconcile_implemented' => true,
-        'reconcile_gated'    => !$tokenConfigured || (int) get_option('se_meta_leadgen_review_gated') === 1,
+        // Standard access on business-owned assets is operational (verified by
+        // a live fetch): only a missing token, or a review gate WITHOUT that
+        // evidence, gates reconciliation.
+        'reconcile_gated'    => !$tokenConfigured
+            || ((int) get_option('se_meta_leadgen_review_gated') === 1
+                && get_option('se_meta_leadgen_access_level') !== 'standard_operational'),
         // Honest, blocker-naming status line (never a bare green "Yes").
         'reconcile_status_text' => se_meta_reconcile_status_text(
             $tokenConfigured, $activeForms > 0,

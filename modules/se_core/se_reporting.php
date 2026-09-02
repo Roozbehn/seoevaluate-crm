@@ -351,6 +351,14 @@ function se_integration_health($brand_id)
         $blockers[] = ['key' => $key, 'reason' => $reason, 'impact' => $impact,
                        'action' => $action, 'link' => $link, 'checked_at' => $now];
     };
+    // Notes are OPTIONAL follow-ups on integrations that already work. They
+    // are never blockers: a blocker means something is not operational, and
+    // listing a working integration there contradicts the recorded evidence.
+    $notes = [];
+    $note = function ($key, $reason, $impact, $action, $link) use (&$notes, $now) {
+        $notes[] = ['key' => $key, 'reason' => $reason, 'impact' => $impact,
+                    'action' => $action, 'link' => $link, 'checked_at' => $now];
+    };
 
     // Every blocker names the ONE credential the system knows is missing —
     // never "and/or". The exact strings below are contractual and asserted in
@@ -397,13 +405,14 @@ function se_integration_health($brand_id)
              'Submit the app for App Review for ' . $item . ' (and pages_manage_ads for form management)',
              se_health_link('se_core/se_meta'));
     } elseif (($meta['leadgen_access_level'] ?? '') === 'standard_operational' && !empty($meta['leadgen_review_gated'])) {
-        // Informational: the integration is OPERATIONAL at standard access
-        // (business-owned assets, verified by a live fetch); advanced access
-        // only widens future scope.
-        $blk('meta_leadgen_advanced_access',
-             'Meta Lead Ads operational at standard access; advanced access (App Review) pending',
-             'Business-owned/test assets work now (verified by a live fetch). Advanced access may be required for assets beyond this business',
-             'Optional: submit App Review for leads_retrieval and pages_manage_ads to lift the standard-access scope limit',
+        // Informational, NOT a blocker: the integration is OPERATIONAL at
+        // standard access (business-owned assets, verified by a live fetch).
+        // Standard access is sufficient for the brand's own Page and forms;
+        // advanced access only widens scope to assets outside this business.
+        $note('meta_leadgen_advanced_access',
+             'Meta Lead Ads operational at standard access (business-owned assets)',
+             'Nothing is blocked: the brand\'s own Page, forms and lead retrieval work (verified by a live fetch). Advanced access would only be needed for assets outside this business',
+             'Optional: submit App Review for leads_retrieval and pages_manage_ads if leads from another business\'s Page must ever be retrieved',
              se_health_link('se_core/se_meta'));
     }
     if (empty($meta['active_form_count'])) {
@@ -491,5 +500,6 @@ function se_integration_health($brand_id)
         'cron_fail_seconds' => SE_CRON_FAIL_SECONDS,
         'data_freshness'  => $freshness,
         'blockers'        => $blockers,
+        'notes'           => $notes,
     ];
 }
