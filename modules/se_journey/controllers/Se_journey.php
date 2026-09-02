@@ -98,7 +98,9 @@ class Se_journey extends AdminController
             access_denied('se_journey');
         }
         $r = se_journey_start_from_conversation($conv, (int) get_staff_user_id());
-        if ($r['ok']) {
+        if ($r['ok'] && $r['mode'] === 'sandbox') {
+            set_alert('warning', _l('se_journey_sandbox_not_sent'));
+        } elseif ($r['ok']) {
             set_alert('success', _l('se_journey_welcome_queued') . ($r['mode'] === 'template' ? ' (' . _l('se_journey_via_template') . ')' : ''));
         } elseif ($r['reason'] === 'already_started' && $r['journey']) {
             set_alert('warning', _l('se_journey_already_started') . ': ' . _l('se_journey_state_' . $r['journey']->state));
@@ -127,7 +129,8 @@ class Se_journey extends AdminController
                 $this->need('edit_review');
                 if ((string) $j->state === 'new_whatsapp_enquiry') {
                     $r = se_journey_send_welcome($j, 'staff:' . $staff);
-                    $msg = $r['ok'] ? ['success', _l('se_journey_welcome_queued')] : ['warning', _l('se_journey_blocked') . ': ' . $r['reason']];
+                    $msg = !$r['ok'] ? ['warning', _l('se_journey_blocked') . ': ' . $r['reason']]
+                         : ($r['mode'] === 'sandbox' ? ['warning', _l('se_journey_sandbox_not_sent')] : ['success', _l('se_journey_welcome_queued')]);
                 }
                 break;
             case 'resend_link':

@@ -344,4 +344,5 @@ $lang['se_journey_start_evaluation'] = 'Start evaluation';
 $lang['se_journey_open'] = 'Open journey';
 $lang['se_journey_via_template'] = 'sent as the start template — the window was closed';
 $lang['se_journey_already_started'] = 'A journey already exists for this contact';
+$lang['se_journey_sandbox_not_sent'] = 'Sandbox is ON and this contact is not in the test recipients — the journey advanced but nothing was sent (Journeys → Settings).';
 $lang['se_journeys'] = 'Patient journeys';
