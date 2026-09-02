@@ -698,15 +698,24 @@ assumed. Secrets were generated on the host and never displayed.
 * Lead sync (§6.1) and the calendar file (§6.2) shipped; no schema change. Templates to submit:
   `eyebrow_consultation_calendar_tr`. Suite: **3,123 pass, 0 fail**.
 
-### 16.3 Addendum — WhatsApp Flows shipped (2026-09-03), owner steps to switch them on
+### 16.3 Addendum — WhatsApp Flows LIVE (2026-09-03 02:45–02:52 +03, driven through the owner's Chrome)
 
 Code + endpoint deployed; `flow_key` generated on the host (RSA-2048, 0600, never displayed);
-`se_journey_flow_app_id` = the CRM integration app. Suite **3,497 pass, 0 fail**. Then, in
-Journeys → WhatsApp Flows: (1) *Register public key with Meta* → *Check at Meta* shows VALID;
-(2) intake: *Create at Meta + upload JSON* → fix any validation error Meta reports → *Publish*;
-(3) the same for the calendar; (4) Journeys → Templates: submit `eyebrow_intake_flow_tr` and
-`eyebrow_booking_flow_tr` (their FLOW buttons bind to the created flow ids); (5) tick *Use
-WhatsApp Flows* and save. From then on the journey sends the flows; the links remain the fallback.
+`se_journey_flow_app_id` = the CRM integration app; live encrypted `ping` self-test → 200
+`{"status":"active"}`, tampered signature → 432. Then, in Journeys → WhatsApp Flows: (1) public key
+registered — Meta: **VALID, matches**; (2) intake flow created at Meta as `eyebrow_intake_tr`
+(**863647023379460**): the first upload came back with `PATTERN_MISMATCH` (screen ids may contain
+letters and underscores only — `HEALTH_1/2` → `HEALTH_A/B`, `409d569`), the re-upload was clean,
+**PUBLISHED**; (3) calendar flow `eyebrow_booking_tr` (**28015986638101700**) clean on the first
+upload, **PUBLISHED**; (4) templates `eyebrow_intake_flow_tr` / `eyebrow_booking_flow_tr`
+submitted — the first attempt was refused (`2388203` "Navigate screen field should be null when
+flow_action is data_exchange", fixed `b7c9eea`), both now **pending** at Meta (`1362571199278702`,
+`1655695072782990`); `eyebrow_consultation_calendar_tr` already **APPROVED**; (5) *Use WhatsApp
+Flows* ON — both cards read "In use". WhatsApp Manager → Flows lists both as Published (Sep 3,
+2026) and previews the screens. Suite **3,505 pass, 0 fail**. From now on: a new journey's
+"Değerlendirme Başlat" opens the form inside WhatsApp; an accepted quote opens the calendar inside
+WhatsApp; outside the 24 h window the flow-button templates go once Meta approves them, and the
+links remain the fallback for anything not ready.
 
 **Not done, by design (owner steps, in order):**
 

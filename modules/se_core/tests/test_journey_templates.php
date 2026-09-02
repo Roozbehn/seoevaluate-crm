@@ -101,6 +101,9 @@ se_eq('UTILITY', $captured['category'], 'category');
 se_eq('BODY', $captured['components'][0]['type'], 'one BODY component');
 se_eq([['Ayşe']], $captured['components'][0]['example']['body_text'], 'example values = samples');
 se_eq(1, count($captured['components']), 'no BUTTONS component when the definition has none');
+$r2 = se_journey_submit_template(1, 'eyebrow_photos_retake_tr', 10);   // refused a moment ago, accepted now
+foreach ($db->rows('tblse_journey_templates') as $row) { if ($row['logical_name'] === 'eyebrow_photos_retake_tr') { $retake = $row; } }
+se_eq([true, 'pending', null], [$r2['ok'], $retake['approval_status'], $retake['rejection_reason']], 'a successful re-submission clears the old refusal text');
 
 // A definition with quick replies submits a BUTTONS component (text only — payloads are a send-time concern).
 $r = se_journey_submit_template(1, 'eyebrow_quote_ready_tr', 10);

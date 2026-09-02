@@ -973,6 +973,7 @@ function se_journey_submit_template($brand_id, $logical, $staff_id = 0)
         'meta_template_id' => mb_substr((string) ($r['id'] ?? ''), 0, 64),
         'category_meta'    => isset($r['category']) ? mb_substr((string) $r['category'], 0, 24) : null,
         'approval_status'  => $status === 'approved' ? 'approved' : ($status ?: 'pending'),
+        'rejection_reason' => null,   // an earlier refusal no longer applies once Meta accepted the submission
         'submitted_at'     => $now, 'last_sync_at' => $now, 'last_updated' => $now,
     ]);
     se_journey_audit($brand_id, 0, 'template_submitted', 'template', (string) $logical, 'status=' . $status);
