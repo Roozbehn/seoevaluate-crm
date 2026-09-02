@@ -76,3 +76,26 @@ menu-visibility and AJAX-authorization checks while logged in as a one-brand and
 unmapped staff account. Route- and model-level authorization is already proven by
 the HTTP and real-MariaDB tiers; this pass proves it **through the rendered UI as a
 restricted human user**, which cannot be self-verified without creating accounts.
+
+## Patient journey (`se_journey`) — added 2026-09-02
+
+Feature `se_journey`, default deny; admins pass. Brand scoping applies to every read.
+
+| Capability | Clinic Owner | Sales | Admin | Gate in code |
+|---|---|---|---|---|
+| `view` (header, timeline, tasks; masked identity) | ✓ | ✓ | ✓ | `Se_journey::__construct`, list/lead tab |
+| `view_health` (intake answers, check-in replies) | ✓ | – | ✓ | `view` tab=intake (audited `view_intake`) |
+| `view_photos` (sealed photos via signed 10-min URL) | ✓ | – | ✓ | `media()` + `se_journey_media_signature_valid` (audited `view_photo`) |
+| `edit_review` (decisions, quote drafts, automation pause/resume, close) | ✓ | – | ✓ | `action()` |
+| `approve_quote` | ✓ | – | ✓ | `se_journey_quote_approve()` re-checks the capability |
+| `manage_consultation` (book, status, pre-op, procedure) | ✓ | ✓ | ✓ | `action()` |
+| `manage_aftercare` (protocol start, complete) | ✓ | – | ✓ | `action()` |
+| `export_health` (JSON export, audited `export_intake`) | ✓ | – | ✓ | `export()` |
+| `manage_templates` (Meta submission, sync, test send to allow-list) | – | – | ✓ (or brand-config staff) | `templates()` |
+| `manage_consent` (clinical gates, protocols, copy) | ✓ | – | ✓ | `settings()` sections clinical/copy |
+| consent-text emergency bypass | – | – | ✓ (reason required, audited) | `se_journey_set_consent_bypass()` |
+
+Internal notes and margins never enter any patient payload (`se_journey_quote_snapshot` builds
+from an explicit allow-list). Dashboards show counts only; no health flag or thumbnail leaves
+the journey view. The role grant is applied once by `se_journey_grant_clinic_roles()` (option
+`se_journey_roles_version`), additively, to the seeded roles only.

@@ -23,8 +23,8 @@ $GLOBALS['se_test']['options'] = [];
 $GLOBALS['SE_MEDIA_FETCHER'] = null;
 
 // Private store for the run.
-$dir = sys_get_temp_dir() . '/se_media_test_' . getmypid();
-define('SE_MEDIA_DIR', $dir);
+$dir = defined('SE_MEDIA_DIR') ? SE_MEDIA_DIR : sys_get_temp_dir() . '/se_media_test_' . getmypid();
+if (!defined('SE_MEDIA_DIR')) { define('SE_MEDIA_DIR', $dir); }
 se_eq($dir, se_media_dir(), 'the store path is the configured private directory');
 
 /* --- WhatsApp ingest registers the attachment ---------------------------- */

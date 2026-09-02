@@ -328,6 +328,7 @@ require_once $SE_MODULES . '/se_core/se_authz.php';
 require_once $SE_MODULES . '/se_core/migrations.php';
 require_once $SE_MODULES . '/se_core/pipeline.php';
 require_once $SE_MODULES . '/se_core/se_consent.php';
+require_once $SE_MODULES . '/se_core/se_consent_settings.php';
 require_once $SE_MODULES . '/se_core/se_patients.php';
 require_once $SE_MODULES . '/se_core/libraries/Se_hash.php';
 require_once $SE_MODULES . '/se_core/se_outbox_snapshot.php';
@@ -346,6 +347,28 @@ require_once $SE_MODULES . '/se_core/se_website_lead.php';
 require_once $SE_MODULES . '/se_whatsapp/helpers.php';
 require_once $SE_MODULES . '/se_whatsapp/outbound.php';
 require_once $SE_MODULES . '/se_whatsapp/templates.php';
+/* Patient journey (se_journey). Its sealed media store AND the inbox media
+ * store it reads from are throw-away temp directories for the run, like the
+ * secret store below (the media suites define SE_MEDIA_DIR only when unset). */
+if (!defined('SE_MEDIA_DIR')) {
+    $seMediaDir = sys_get_temp_dir() . '/se_test_media_' . getmypid();
+    @mkdir($seMediaDir, 0700, true);
+    define('SE_MEDIA_DIR', $seMediaDir);
+}
+if (!defined('SE_JOURNEY_MEDIA_DIR')) {
+    $seJourneyMediaDir = sys_get_temp_dir() . '/se_test_journey_media_' . getmypid();
+    @mkdir($seJourneyMediaDir, 0700, true);
+    define('SE_JOURNEY_MEDIA_DIR', $seJourneyMediaDir);
+}
+require_once $SE_MODULES . '/se_journey/helpers.php';
+require_once $SE_MODULES . '/se_journey/messaging.php';
+require_once $SE_MODULES . '/se_journey/intake.php';
+require_once $SE_MODULES . '/se_journey/media.php';
+require_once $SE_MODULES . '/se_journey/review.php';
+require_once $SE_MODULES . '/se_journey/consultation.php';
+require_once $SE_MODULES . '/se_journey/aftercare.php';
+require_once $SE_MODULES . '/se_journey/health.php';
+require_once $SE_MODULES . '/se_journey/ui.php';
 require_once $SE_MODULES . '/se_instagram/helpers.php';
 require_once $SE_MODULES . '/se_instagram/outbound.php';
 require_once $SE_MODULES . '/se_core/se_integration_ui.php';

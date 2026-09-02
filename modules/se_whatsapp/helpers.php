@@ -194,6 +194,7 @@ function se_wa_store_event($raw_body, $signature_valid)
             'payload'         => $raw_body,
             'signature_valid' => $signature_valid ? 1 : 0,
             'state'           => 'pending',
+            'attempts'        => 0,
             'next_attempt_at' => se_db_now(),
             'received_at'     => se_db_now(),
         ]);
@@ -486,6 +487,21 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
         }
     }
 
+    // Interactive replies (reply buttons / list rows) and template quick-reply
+    // buttons carry their choice in a typed sub-object, not in text.body. The
+    // visible title becomes the body so the thread reads naturally; the
+    // machine id is kept separately so automation matches on the id, never on
+    // a translated label.
+    $interactive_id = null;
+    if ($type === 'interactive') {
+        $reply = $msg['interactive']['button_reply'] ?? ($msg['interactive']['list_reply'] ?? []);
+        $interactive_id = isset($reply['id']) ? mb_substr((string) $reply['id'], 0, SE_WA_MAX_ID_LEN) : null;
+        $body = mb_substr((string) ($reply['title'] ?? ''), 0, SE_WA_MAX_TEXT_LEN);
+    } elseif ($type === 'button') {
+        $interactive_id = isset($msg['button']['payload']) ? mb_substr((string) $msg['button']['payload'], 0, SE_WA_MAX_ID_LEN) : null;
+        $body = mb_substr((string) ($msg['button']['text'] ?? ''), 0, SE_WA_MAX_TEXT_LEN);
+    }
+
     $CI->db->insert($msgTable, [
         'conversation_id' => $conv_id,
         'brand_id'        => (int) $brand_id,
@@ -495,9 +511,11 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
         'type'            => $type,
         'body'            => $body,
         'media_ref'       => $media_ref,
+        'interactive_id'  => $interactive_id,
         'received_at'     => $ts,
         'date_created'    => date('Y-m-d H:i:s'),
     ]);
+    $message_id = (int) $CI->db->insert_id();
 
     // Register the attachment for the async fetch (dispatcher / cron). The
     // media id is all Meta gives us here; the bytes are pulled with the Cloud
@@ -510,6 +528,74 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
 
     // Meter the inbound (service category) once per wamid.
     se_wa_meter((int) $brand_id, 'service', false, 'in:' . $wamid);
+
+    // Downstream automation (se_journey) reacts to NEW inbound messages only —
+    // a redelivered wamid returned above and never reaches a listener, which
+    // is what makes every listener idempotent for free.
+    se_wa_notify_inbound_listeners([
+        'brand_id'        => (int) $brand_id,
+        'phone_number_id' => (string) $phone_number_id,
+        'conversation_id' => $conv_id,
+        'conversation'    => $conv ?: null,
+        'is_new_conversation' => !$conv,
+        'message_id'      => $message_id,
+        'wamid'           => $wamid,
+        'from'            => $from,
+        'type'            => $type,
+        'body'            => (string) $body,
+        'interactive_id'  => $interactive_id,
+        'media_ref'       => $media_ref,
+        'media_mime'      => isset($msg[$type]['mime_type']) ? mb_substr((string) $msg[$type]['mime_type'], 0, 64) : null,
+        'media_sha256'    => isset($msg[$type]['sha256']) ? mb_substr((string) $msg[$type]['sha256'], 0, 128) : null,
+        'referral'        => isset($msg['referral']) && is_array($msg['referral']) ? $msg['referral'] : null,
+        'profile_name'    => isset($contact['profile']['name']) ? mb_substr((string) $contact['profile']['name'], 0, 191) : '',
+        'received_at'     => $ts,
+    ]);
+}
+
+/* --------------------------- inbound listener seam ----------------------- */
+
+/*
+ * Listeners are held in a plain global rather than behind Perfex hooks so that
+ * (a) a module loaded BEFORE this file (directory order is not guaranteed) can
+ * still register by appending to the global, and (b) the test harness, whose
+ * hooks() stub never dispatches, exercises the real dispatch path.
+ */
+if (!isset($GLOBALS['SE_WA_INBOUND_LISTENERS']) || !is_array($GLOBALS['SE_WA_INBOUND_LISTENERS'])) {
+    $GLOBALS['SE_WA_INBOUND_LISTENERS'] = [];
+}
+
+/** Register callable(array $ctx): void — called once per NEW inbound message. */
+function se_wa_register_inbound_listener(callable $listener, $key = null)
+{
+    if ($key === null) {
+        $GLOBALS['SE_WA_INBOUND_LISTENERS'][] = $listener;
+    } else {
+        $GLOBALS['SE_WA_INBOUND_LISTENERS'][(string) $key] = $listener;
+    }
+}
+
+/**
+ * Dispatch to every listener. A listener failure is CONTAINED: the message is
+ * already stored, so the webhook event must still be marked processed rather
+ * than retried (a retry would not re-run the listener anyway — the wamid is a
+ * duplicate by then). Only the exception class is recorded, never a payload.
+ */
+function se_wa_notify_inbound_listeners(array $ctx)
+{
+    foreach ((array) ($GLOBALS['SE_WA_INBOUND_LISTENERS'] ?? []) as $key => $listener) {
+        if (!is_callable($listener)) {
+            continue;
+        }
+        try {
+            call_user_func($listener, $ctx);
+        } catch (Throwable $e) {
+            if (function_exists('update_option')) {
+                update_option('se_wa_listener_last_error', (is_string($key) ? $key : 'listener')
+                    . ': ' . get_class($e) . ' @ ' . date('Y-m-d H:i:s'));
+            }
+        }
+    }
 }
 
 /**
@@ -630,8 +716,28 @@ function se_wa_handle_status($brand_id, $status)
     }
 
     if ($state === 'failed') {
+        // Meta explains the drop in statuses[].errors[] (e.g. 131047 outside the
+        // 24h window, 131049 marketing pacing, 131026 undeliverable). Keep the
+        // code + title — never message content — on the message AND flip the
+        // originating queue row, so the outbound tracker stops saying "sent"
+        // for a message the recipient never got.
+        $err = isset($status['errors'][0]) && is_array($status['errors'][0]) ? $status['errors'][0] : [];
+        $errText = trim(((int) ($err['code'] ?? 0) > 0 ? (int) $err['code'] . ' ' : '') . (string) ($err['title'] ?? ($err['message'] ?? '')));
+        $errText = mb_substr(preg_replace('/[A-Za-z0-9_\-]{24,}/', '[redacted]', $errText), 0, 191);
+
         $CI->db->where('id', $msg->id)->where('brand_id', (int) $brand_id)
-               ->update($msgTable, ['delivery_state' => 'failed']);
+               ->update($msgTable, ['delivery_state' => 'failed', 'status_error' => $errText !== '' ? $errText : 'provider reported failed']);
+
+        $CI->db->where('wamid', $wamid)->where('brand_id', (int) $brand_id)
+               ->update(db_prefix() . 'se_wa_outbound', [
+                   'status'        => 'failed',
+                   'failure_class' => 'provider',
+                   'last_error'    => mb_substr('delivery failed after send: ' . ($errText !== '' ? $errText : 'no error detail'), 0, 255),
+               ]);
+
+        if (function_exists('se_journey_on_delivery_failed')) {
+            se_journey_on_delivery_failed((int) $brand_id, $wamid, $errText);
+        }
         return;
     }
 

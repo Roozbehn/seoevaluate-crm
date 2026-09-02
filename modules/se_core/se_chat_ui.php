@@ -123,6 +123,11 @@ function se_ui_chat_thread(array $messages, array $media, array $opts)
         echo '<span>' . html_escape(substr($ts, 11, 5) ?: $ts) . '</span>';
         if ($out && !empty($m['delivery_state'])) {
             echo se_ui_badge($m['delivery_state']);
+            // Meta's reason for a drop (e.g. "131047 Re-engagement message"):
+            // an error code + title from the status webhook, never content.
+            if ($m['delivery_state'] === 'failed' && !empty($m['status_error'])) {
+                echo '<span class="text-danger">' . html_escape($m['status_error']) . '</span>';
+            }
         }
         echo '</div></div></div>';
     }

@@ -47,6 +47,9 @@ function se_secret_providers()
         'landing_token' => ['label' => 'Landing-token HMAC secret', 'per_brand' => false],
         'website_lead'  => ['label' => 'Website lead-ingest token', 'per_brand' => true],
         'r2_media_key'  => ['label' => 'R2 media gateway key (Cloudflare Worker crm-media)', 'per_brand' => false],
+        // Patient-journey data key: seals health answers, check-in replies and
+        // photographs at rest (libsodium secretbox). 32 random bytes, base64.
+        'journey_key'   => ['label' => 'Patient-journey encryption key (32 bytes, base64)', 'per_brand' => false],
     ];
 }
 

@@ -22,10 +22,18 @@ function se_consent_config_key($brand_id = 0)
     return 'se_consent_config_' . (int) $brand_id;
 }
 
-/** Purposes that can be configured independently. */
+/**
+ * Purposes that can be configured independently.
+ *
+ * `health_data` and `photo_publication` carry the counsel-approved KVKK wording
+ * the WhatsApp intake journey shows before collecting anything sensitive. With
+ * no approved text for `health_data` the intake form refuses to open its
+ * health sections (se_journey_health_collection_allowed()) — the same
+ * fail-closed rule the web-to-lead form already applies to `ads`.
+ */
 function se_consent_configurable_purposes()
 {
-    return ['ads', 'marketing'];
+    return ['ads', 'marketing', 'health_data', 'photo_publication'];
 }
 
 /** Languages the consent text is maintained in. */

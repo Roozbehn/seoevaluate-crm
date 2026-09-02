@@ -67,6 +67,9 @@ function se_authz_record_types()
         'appointment'     => [$p . 'se_appointments', 'id', 'brand_id'],
         'wa_conversation' => [$p . 'se_wa_conversations', 'id', 'brand_id'],
         'wa_message'      => [$p . 'se_wa_messages', 'id', 'brand_id'],
+        'journey'         => [$p . 'se_journeys', 'id', 'brand_id'],
+        'journey_media'   => [$p . 'se_journey_media', 'id', 'brand_id'],
+        'journey_quote'   => [$p . 'se_journey_quotes', 'id', 'brand_id'],
         'outbox'          => [$p . 'se_conversion_outbox', 'id', 'brand_id'],
         'brand'           => [$p . 'se_brands', 'id', 'id'],
     ];

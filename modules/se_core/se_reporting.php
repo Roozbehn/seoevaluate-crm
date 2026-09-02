@@ -473,6 +473,63 @@ function se_integration_health($brand_id)
              se_health_link('se_core/se_google'));
     }
 
+    // Patient journey (se_journey): exact per-gate items, reported ONLY while
+    // the journey is enabled for the brand — a switched-off feature has no
+    // operational follow-ups (its readiness lives on the Journey settings
+    // screen). Missing prerequisites are blockers; sandbox and template
+    // approval progress are notes.
+    $journey = function_exists('se_journey_health') ? se_journey_health($brand_id) : null;
+    if ($journey !== null && !empty($journey['enabled'])) {
+        $emit = $blk;
+        if (empty($journey['encryption'])) {
+            $emit('journey_key', 'Patient-journey encryption key missing',
+                 'The intake form refuses health answers and photographs (fails closed) — the WhatsApp journey stops at the welcome step',
+                 'Install the journey_key credential (32 random bytes, base64) with se-secret-install.sh; sodium must be loaded',
+                 se_health_link('se_core/se_credentials'));
+        }
+        if (empty($journey['health_consent_text'])) {
+            $emit('journey_health_consent', 'Health-data (KVKK special category) consent text not configured',
+                 'Health questions and photographs cannot be collected — patients are told the form is being prepared',
+                 'Enter the counsel-approved health_data text (TR + EN) and version under Consent Settings',
+                 se_health_link('se_core/se_consent'));
+        }
+        if (!empty($journey['media_storage']) && (empty($journey['media_storage']['exists']) || empty($journey['media_storage']['writable']))) {
+            $emit('journey_media_dir', 'Private media directory missing or not writable',
+                 'Photographs cannot be stored; WhatsApp photos are parked and retried',
+                 'Create the directory outside the docroot (default: sibling of the inbox media store, _se_journey_media, mode 0700) or set option se_journey_media_dir',
+                 se_health_link('se_journey/se_journey/settings'));
+        }
+        if (!empty($journey['enabled']) && !empty($journey['sandbox'])) {
+            $note('journey_sandbox', 'Patient journey is in SANDBOX',
+                 'Only allow-listed test recipients receive automated messages; every other send is recorded, not sent',
+                 'Turn sandbox off in Journey settings once the go-live checklist is complete',
+                 se_health_link('se_journey/se_journey/settings'));
+        }
+        if ((int) ($journey['templates']['approved'] ?? 0) < (int) ($journey['templates']['total'] ?? 0)) {
+            $note('journey_templates', 'Not every journey template is APPROVED by Meta ('
+                 . (int) ($journey['templates']['approved'] ?? 0) . '/' . (int) ($journey['templates']['total'] ?? 0) . ')',
+                 'Out-of-window messages for the unapproved purposes are blocked visibly (task + error state) instead of sent',
+                 'Submit the templates to Meta and sync their status',
+                 se_health_link('se_journey/se_journey/templates'));
+        }
+        if ((int) ($journey['automation_errors'] ?? 0) > 0 || (int) ($journey['template_blocked_tasks'] ?? 0) > 0) {
+            $emit('journey_blocked_sends', (int) ($journey['automation_errors'] ?? 0) . ' journey(s) in error, '
+                 . (int) ($journey['template_blocked_tasks'] ?? 0) . ' blocked template send(s)',
+                 'Automated messages for those patients are on hold', 'Open the journey list and resolve each item',
+                 se_health_link('se_journey/se_journey/index'));
+        }
+        if ((int) ($journey['media_parked'] ?? 0) > 0 || (int) ($journey['media_fetch_failed'] ?? 0) > 0) {
+            $emit('journey_media_fetch', (int) ($journey['media_parked'] ?? 0) . ' photo(s) parked, ' . (int) ($journey['media_fetch_failed'] ?? 0) . ' fetch failure(s)',
+                 'Patient photographs sent on WhatsApp are not yet stored', 'Install wa_token (parked photos are retried by cron) / ask the patient to use the secure upload link',
+                 se_health_link('se_journey/se_journey/index'));
+        }
+        if ((int) ($journey['urgent_open'] ?? 0) > 0) {
+            $emit('journey_urgent', (int) $journey['urgent_open'] . ' URGENT patient report(s) open',
+                 'A patient reported a possibly serious symptom', 'Contact the patient now (Journeys → Urgent)',
+                 se_health_link('se_journey/se_journey/index?urgent=1'));
+        }
+    }
+
     $cronAge = se_report_cron_age();
     $cronState = $cronAge === null ? 'unknown'
         : ($cronAge < SE_CRON_WARN_SECONDS ? 'healthy'
@@ -491,6 +548,7 @@ function se_integration_health($brand_id)
             'dead'    => (int) ($outbox['dead'] ?? 0),
         ],
         'instagram'       => $ig,
+        'journey'         => $journey,
         'whatsapp_numbers' => $quality,   // back-compat
         'cron_age_seconds' => $cronAge,
         'cron_state'      => $cronState,

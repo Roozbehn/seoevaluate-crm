@@ -62,6 +62,8 @@ class SeFakeDb
     private $orderBy = null;
     private $limitN = null;
     private $groupBy = null;
+    /** Open group_start() frames: each is a list of [cond, isOr]. */
+    private $groups = [];
 
     public function seed($table, array $rows)
     {
@@ -96,11 +98,36 @@ class SeFakeDb
     public function where($k, $v = null, $escape = true)
     {
         if (is_array($k)) {
-            foreach ($k as $kk => $vv) { $this->wheres[] = [$kk, $vv]; }
+            foreach ($k as $kk => $vv) { $this->addWhere([$kk, $vv], false); }
         } else {
-            $this->wheres[] = [$k, $v];
+            $this->addWhere([$k, $v], false);
         }
         return $this;
+    }
+
+    /** or_where() is only meaningful inside a group_start()/group_end() frame. */
+    public function or_where($k, $v = null, $escape = true)
+    {
+        $this->addWhere([$k, $v], true);
+        return $this;
+    }
+
+    /** Parenthesised predicate group: (a AND b OR c). Evaluated left to right. */
+    public function group_start()  { $this->groups[] = []; return $this; }
+    public function group_end()
+    {
+        $frame = array_pop($this->groups);
+        $this->addWhere(['__group__', $frame ?? []], false);
+        return $this;
+    }
+
+    private function addWhere(array $cond, $isOr)
+    {
+        if ($this->groups) {
+            $this->groups[count($this->groups) - 1][] = [$cond, $isOr];
+        } else {
+            $this->wheres[] = $cond;
+        }
     }
 
     public function where_in($k, array $vals)
@@ -118,9 +145,12 @@ class SeFakeDb
 
     private function reset()
     {
-        $this->sel = null; $this->wheres = []; $this->whereIn = [];
+        $this->sel = null; $this->wheres = []; $this->whereIn = []; $this->groups = [];
         $this->orderBy = null; $this->limitN = null; $this->groupBy = null;
     }
+
+    /** CI_DB_query_builder::reset_query() — drops the in-flight builder state. */
+    public function reset_query() { $this->reset(); return $this; }
 
     /**
      * Evaluate the accumulated predicates against one row.
@@ -129,7 +159,50 @@ class SeFakeDb
      */
     private function matches(array $row)
     {
-        foreach ($this->wheres as [$k, $v]) {
+        foreach ($this->wheres as $w) {
+            if (!$this->condMatches($row, $w)) { return false; }
+        }
+
+        foreach ($this->whereIn as [$k, $vals]) {
+            $col = trim($k, '` ');
+            if (!in_array((string) ($row[$col] ?? ''), $vals, true)) { return false; }
+        }
+
+        return true;
+    }
+
+    /** One where() condition (or a whole group) against a row. */
+    private function condMatches(array $row, array $w)
+    {
+        [$k, $v] = $w;
+        if ($k === '__group__') {
+            $result = null;
+            foreach ((array) $v as [$cond, $isOr]) {
+                $c = $this->condMatches($row, $cond);
+                if ($result === null) { $result = $c; }
+                elseif ($isOr) { $result = $result || $c; }
+                else { $result = $result && $c; }
+            }
+            return $result === null ? true : $result;
+        }
+        // Raw NULL tests and NOT IN, as emitted by the appointment/journey helpers.
+        if ($v === null && is_string($k) && preg_match('/^\s*`?([A-Za-z0-9_.]+)`?\s+IS\s+(NOT\s+)?NULL\s*$/i', $k, $m)) {
+            $col = strpos($m[1], '.') !== false ? substr($m[1], strrpos($m[1], '.') + 1) : $m[1];
+            $isNull = !isset($row[$col]) || $row[$col] === null || $row[$col] === '';
+            return empty($m[2]) ? $isNull : !$isNull;
+        }
+        if ($v === null && is_string($k) && preg_match('/^\s*`?([A-Za-z0-9_.]+)`?\s+NOT\s+IN\s*\(([^)]*)\)\s*$/i', $k, $m)) {
+            $col = strpos($m[1], '.') !== false ? substr($m[1], strrpos($m[1], '.') + 1) : $m[1];
+            $list = array_map(function ($x) { return trim(trim($x), "'\""); }, explode(',', $m[2]));
+            return !in_array((string) ($row[$col] ?? ''), $list, true);
+        }
+        return $this->simpleMatches($row, $k, $v);
+    }
+
+    /** The original single-condition matcher. */
+    private function simpleMatches(array $row, $k, $v)
+    {
+        foreach ([[$k, $v]] as [$k, $v]) {
             if ($v === null && is_string($k) && preg_match('/^\s*`?([A-Za-z0-9_]+)`?\s+IN\s*\(([^)]*)\)\s*$/i', $k, $m)) {
                 $col  = $m[1];
                 $list = array_map('trim', explode(',', $m[2]));
@@ -165,11 +238,6 @@ class SeFakeDb
                 case '>=': if (!($actual >= $v)) { return false; } break;
                 case '<=': if (!($actual <= $v)) { return false; } break;
             }
-        }
-
-        foreach ($this->whereIn as [$k, $vals]) {
-            $col = trim($k, '` ');
-            if (!in_array((string) ($row[$col] ?? ''), $vals, true)) { return false; }
         }
 
         return true;
@@ -245,10 +313,10 @@ class SeFakeDb
         return new SeFakeResult($rows);
     }
 
-    public function count_all_results($table)
+    public function count_all_results($table, $reset = true)
     {
         $n = count($this->select_rows($table));
-        $this->reset();
+        if ($reset) { $this->reset(); }
 
         return $n;
     }

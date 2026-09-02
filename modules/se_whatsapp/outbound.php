@@ -219,6 +219,7 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
     }
 
     $kind = $message['kind'] ?? 'text';
+    $payload_json = null;
 
     if ($kind === 'text') {
         if ($policy['mode'] !== 'freeform') {
@@ -234,6 +235,24 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
         $body      = mb_substr($body, 0, SE_WA_OUT_MAX_TEXT);
         $signature = hash('sha256', $body);
         $template  = null;
+    } elseif ($kind === 'interactive') {
+        /* Reply-button message. Same window rule as free-form text: it is a
+         * session message, not a template. Limits are Meta's published ones
+         * (body 1024, footer 60, 1–3 buttons, title 20, id 256) and are
+         * enforced here so a bad definition fails at queue time, visibly. */
+        if ($policy['mode'] !== 'freeform') {
+            return ['ok' => false, 'id' => 0, 'reason' => 'window_closed'];
+        }
+
+        $shaped = se_wa_shape_interactive($message);
+        if (!$shaped['ok']) {
+            return ['ok' => false, 'id' => 0, 'reason' => $shaped['reason']];
+        }
+
+        $body         = $shaped['body'];
+        $payload_json = json_encode($shaped['payload']);
+        $signature    = hash('sha256', $body . '|' . $payload_json);
+        $template     = null;
     } elseif ($kind === 'template') {
         $name = (string) ($message['template'] ?? '');
 
@@ -295,6 +314,12 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
         return ['ok' => false, 'id' => 0, 'reason' => 'unsupported_kind'];
     }
 
+    // Callers that need a distinct row for the same content (a second reminder
+    // with identical wording) pass a discriminator; it becomes part of the key.
+    if (isset($message['dedup_salt']) && (string) $message['dedup_salt'] !== '') {
+        $signature .= '|' . (string) $message['dedup_salt'];
+    }
+
     $key = se_wa_idempotency_key($conversation_id, $kind, $signature);
 
     // Idempotent: the same intent queued twice is one row.
@@ -302,6 +327,13 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
 
     if ($CI->db->count_all_results(db_prefix() . 'se_wa_outbound') > 0) {
         return ['ok' => false, 'id' => 0, 'reason' => 'duplicate'];
+    }
+
+    // A deferred send (quiet hours) is expressed as a future next_attempt_at;
+    // the claim query already honours it. Never earlier than now.
+    $sendAt = se_db_now();
+    if (isset($message['send_after']) && (int) $message['send_after'] > 0) {
+        $sendAt = se_db_now(max(0, (int) $message['send_after'] - time()));
     }
 
     try {
@@ -313,20 +345,71 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
             'template_name'   => $template,
             'variables_json'  => $kind === 'template' ? json_encode(array_values((array) $message['variables'])) : null,
             'media_id'        => $kind === 'media' ? (int) $message['media_id'] : null,
+            'payload_json'    => $payload_json,
+            'origin'          => isset($message['origin']) ? mb_substr((string) $message['origin'], 0, 48) : ($staff_id > 0 ? 'staff' : 'system'),
             'idempotency_key' => $key,
             'status'          => 'pending',
             'attempts'        => 0,
             'fence'           => 0,
             'created_by'      => (int) $staff_id,
             'date_created'    => se_db_now(),
-            'next_attempt_at' => se_db_now(),
+            'next_attempt_at' => $sendAt,
         ]);
     } catch (Exception $e) {
         // The unique index is the real guard; the pre-check only narrows it.
         return ['ok' => false, 'id' => 0, 'reason' => 'duplicate'];
     }
 
-    return ['ok' => true, 'id' => (int) $CI->db->insert_id(), 'reason' => ''];
+    $id = (int) $CI->db->insert_id();
+
+    // A human replying from the composer is a TAKEOVER: automation on that
+    // thread must pause until a staff member deliberately resumes it. The
+    // journey module owns that rule; this is only the notification.
+    if ((int) $staff_id > 0 && empty($message['origin']) && function_exists('se_journey_on_staff_send')) {
+        se_journey_on_staff_send($conv, (int) $staff_id, $id);
+    }
+
+    return ['ok' => true, 'id' => $id, 'reason' => ''];
+}
+
+/**
+ * Validate and normalise a reply-button message definition.
+ *
+ * @return array{ok:bool,reason:string,body:string,payload:array}
+ */
+function se_wa_shape_interactive(array $message)
+{
+    $body = trim((string) ($message['body'] ?? ''));
+    if ($body === '') {
+        return ['ok' => false, 'reason' => 'empty_body', 'body' => '', 'payload' => []];
+    }
+    if (mb_strlen($body) > 1024) {
+        return ['ok' => false, 'reason' => 'interactive_body_too_long', 'body' => '', 'payload' => []];
+    }
+
+    $buttons = [];
+    foreach ((array) ($message['buttons'] ?? []) as $b) {
+        $id    = trim((string) ($b['id'] ?? ''));
+        $title = trim((string) ($b['title'] ?? ''));
+        if ($id === '' || $title === '' || mb_strlen($id) > 256 || mb_strlen($title) > 20) {
+            return ['ok' => false, 'reason' => 'interactive_button_invalid', 'body' => '', 'payload' => []];
+        }
+        $buttons[] = ['id' => $id, 'title' => $title];
+    }
+    if (count($buttons) < 1 || count($buttons) > 3) {
+        return ['ok' => false, 'reason' => 'interactive_button_count', 'body' => '', 'payload' => []];
+    }
+
+    $payload = ['buttons' => $buttons];
+    $footer  = trim((string) ($message['footer'] ?? ''));
+    if ($footer !== '') {
+        if (mb_strlen($footer) > 60) {
+            return ['ok' => false, 'reason' => 'interactive_footer_too_long', 'body' => '', 'payload' => []];
+        }
+        $payload['footer'] = $footer;
+    }
+
+    return ['ok' => true, 'reason' => '', 'body' => $body, 'payload' => $payload];
 }
 
 /* ---------------------------------------------------------------------------
@@ -446,9 +529,14 @@ function se_wa_out_process($row)
 
     /* Re-check the WINDOW at send time: it may have closed while queued, and
      * free-form text outside it is silently dropped by Meta. */
-    if (($row['kind'] === 'text' || $row['kind'] === 'media') && !se_wa_window_open($conv)) {
-        return ['status' => 'skipped', 'attempts' => (int) $row['attempts'],
-                'failure_class' => 'permanent', 'last_error' => 'service window closed before send'];
+    if (in_array($row['kind'], ['text', 'interactive', 'media'], true) && !se_wa_window_open($conv)) {
+        $skipped = ['status' => 'skipped', 'attempts' => (int) $row['attempts'],
+                    'failure_class' => 'permanent', 'last_error' => 'service window closed before send'];
+        // Let the journey layer fall back to an approved template / staff task.
+        if (function_exists('se_journey_on_outbound_skipped')) {
+            se_journey_on_outbound_skipped($row, $conv, 'window_closed');
+        }
+        return $skipped;
     }
 
     // Attachment: hand the transport the stored file (it uploads to the Cloud
@@ -486,6 +574,7 @@ function se_wa_out_process($row)
             'template_language' => $template_language,
             'variables'       => json_decode((string) $row['variables_json'], true) ?: [],
             'media'           => $media,   // kind, mime, filename, abs_path — or null
+            'payload'         => json_decode((string) ($row['payload_json'] ?? ''), true) ?: [],
             'idempotency_key' => $row['idempotency_key'],
         ]);
     } catch (Exception $e) {
@@ -553,7 +642,7 @@ function se_wa_record_outbound($row, $conv, $wamid)
         'wamid'           => $wamid,
         'direction'       => 'out',
         'source'          => 'cloud_api',
-        'type'            => $row['kind'] === 'template' ? 'template' : ($media ? $media['kind'] : 'text'),
+        'type'            => $row['kind'] === 'template' ? 'template' : ($media ? $media['kind'] : ($row['kind'] === 'interactive' ? 'interactive' : 'text')),
         'body'            => $row['body'],
         'media_ref'       => $media ? 'out:' . (int) $media['id'] : null,
         'template_name'   => $row['template_name'],

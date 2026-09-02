@@ -35,15 +35,26 @@ function se_nav_items()
             'label'    => 'se_patients',
             'href'     => 'se_core/se_patients',
             'icon'     => 'fa fa-user-md',
-            'position' => 3,
+            'position' => 4,
             'can'      => function () { return staff_can('view', 'se_patients'); },
+        ],
+        [
+            // Patient journeys (WhatsApp intake → review → consultation →
+            // procedure → aftercare). Basic view only; health answers and
+            // photos are gated per tab by their own capabilities.
+            'slug'     => 'se-journeys',
+            'label'    => 'se_journeys',
+            'href'     => 'se_journey/se_journey/index',
+            'icon'     => 'fa fa-route',
+            'position' => 3,
+            'can'      => function () { return staff_can('view', 'se_journey'); },
         ],
         [
             'slug'     => 'se-appointments',
             'label'    => 'se_appointments',
             'href'     => 'se_appointments/se_appointments/manage',
             'icon'     => 'fa fa-calendar-check',
-            'position' => 4,
+            'position' => 5,
             'can'      => function () { return staff_can('view', 'se_appointments'); },
         ],
         [
@@ -51,7 +62,7 @@ function se_nav_items()
             'label'    => 'se_whatsapp',
             'href'     => 'se_whatsapp/se_whatsapp/inbox',
             'icon'     => 'fab fa-whatsapp',
-            'position' => 5,
+            'position' => 6,
             'can'      => function () { return staff_can('view', 'se_whatsapp'); },
         ],
         [
@@ -59,7 +70,7 @@ function se_nav_items()
             'label'    => 'se_instagram',
             'href'     => 'se_instagram/se_instagram/inbox',
             'icon'     => 'fab fa-instagram',
-            'position' => 6,
+            'position' => 7,
             'can'      => function () { return staff_can('view', 'se_instagram'); },
         ],
         [
@@ -67,7 +78,7 @@ function se_nav_items()
             'label'    => 'se_reports',
             'href'     => 'se_core/se_reports/index',
             'icon'     => 'fa fa-bar-chart',
-            'position' => 8,
+            'position' => 9,
             'can'      => function () { return se_staff_can_report(); },
         ],
     ];
@@ -194,7 +205,7 @@ function se_nav_register()
             'name'     => _l($integrations[0]['label']),
             'href'     => admin_url($integrations[0]['href']),
             'icon'     => $integrations[0]['icon'],
-            'position' => 9,
+            'position' => 11,
             'badge'    => [],
         ]);
 
@@ -205,7 +216,7 @@ function se_nav_register()
         'collapse' => true,
         'name'     => _l('se_integrations'),
         'icon'     => 'fa fa-plug',
-        'position' => 8,
+        'position' => 10,
     ]);
 
     $position = 1;

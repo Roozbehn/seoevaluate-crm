@@ -22,6 +22,7 @@ function se_dispatch_steps()
         'ig_events' => 'se_ig_process_pending',
         'ig_queue'  => 'se_ig_out_drain',
         'media'     => 'se_media_fetch_pending',   // attachments referenced by the events above
+        'journey_media' => 'se_journey_retry_parked_media',   // seal fetched patient photos (se_journey)
     ];
 }
 

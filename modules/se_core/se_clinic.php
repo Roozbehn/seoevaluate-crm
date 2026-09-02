@@ -181,14 +181,15 @@ function se_clinic_sidebar_positions()
     return [
         'dashboard'       => 1,
         'leads'           => 2,
-        'se-patients'     => 3,
-        'se-appointments' => 4,
-        'se-whatsapp'     => 5,
-        'se-instagram'    => 6,
-        'customers'       => 7,
-        'se-reports'      => 8,
-        'se-integrations' => 9,
-        'se-consent'      => 10, // only when it stands alone (owner)
+        'se-journeys'     => 3,
+        'se-patients'     => 4,
+        'se-appointments' => 5,
+        'se-whatsapp'     => 6,
+        'se-instagram'    => 7,
+        'customers'       => 8,
+        'se-reports'      => 9,
+        'se-integrations' => 10,
+        'se-consent'      => 11, // only when it stands alone (owner)
     ];
 }
 
@@ -453,6 +454,11 @@ function se_clinic_role_definitions()
                 'se_instagram'    => ['view', 'create', 'edit', 'delete'],
                 'se_reports'      => ['view'],
                 SE_FEATURE_CONSENT => [SE_CAP_CONSENT_MANAGE],
+                // Clinic owner = clinical reviewer: full journey, health data,
+                // photos, quote approval, aftercare. Not templates/integration.
+                'se_journey'      => ['view', 'view_health', 'view_photos', 'edit_review',
+                                      'approve_quote', 'manage_consultation', 'manage_aftercare',
+                                      'export_health', 'manage_consent'],
             ],
         ],
         [
@@ -464,6 +470,9 @@ function se_clinic_role_definitions()
                 'se_appointments' => ['view', 'create', 'edit'],
                 'se_whatsapp'     => ['view', 'create', 'edit'],
                 'se_instagram'    => ['view', 'create', 'edit'],
+                // Sales sees the journey header/timeline and books
+                // consultations; health answers and photos stay hidden.
+                'se_journey'      => ['view', 'manage_consultation'],
             ],
         ],
     ];

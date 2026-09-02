@@ -193,10 +193,23 @@ function se_consent_text_version($brand_id = 0)
  * Ledger — append-only, authoritative.
  * ------------------------------------------------------------------------- */
 
-/** Allowed consent purposes; anything else is rejected at the boundary. */
+/**
+ * Allowed consent purposes; anything else is rejected at the boundary.
+ *
+ *   ads               Meta/Google measurement of the lead's own conversion events.
+ *   marketing         Promotional messages (optional, never required for care).
+ *   whatsapp          Service messaging on WhatsApp (opt-out via İPTAL/DUR/STOP).
+ *   health_data       KVKK special-category processing: health answers and
+ *                     identifiable eyebrow/face photographs, for the
+ *                     preliminary evaluation ONLY. Required before any health
+ *                     question or photo is collected; separate from everything
+ *                     else by design.
+ *   photo_publication Use of photographs beyond evaluation (before/after,
+ *                     social media). Optional, separate, never implied.
+ */
 function se_consent_purposes()
 {
-    return ['ads', 'marketing', 'whatsapp'];
+    return ['ads', 'marketing', 'whatsapp', 'health_data', 'photo_publication'];
 }
 
 /**

@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 16);
+define('SE_CORE_SCHEMA_VERSION', 17);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -316,6 +316,21 @@ function se_core_migration_statements()
     if (function_exists('se_media_schema_statements_v15')) {
         foreach (se_media_schema_statements_v15($p) as $mSql) {
             $stmts[] = $mSql;
+        }
+    }
+
+    /* --- v17: patient journey (se_journey) --------------------------------- *
+     * Additive only: two nullable columns on se_wa_messages/se_wa_outbound
+     * (interactive reply id, reply-button payload, origin) and the journey
+     * tables. Health answers and photographs are sealed (libsodium) before
+     * they reach these tables; see modules/se_journey/intake.php.
+     */
+    if (!function_exists('se_journey_schema_statements') && is_file(__DIR__ . '/../se_journey/helpers.php')) {
+        require_once __DIR__ . '/../se_journey/helpers.php';
+    }
+    if (function_exists('se_journey_schema_statements')) {
+        foreach (se_journey_schema_statements($p) as $jSql) {
+            $stmts[] = $jSql;
         }
     }
 
