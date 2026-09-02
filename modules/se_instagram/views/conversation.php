@@ -35,6 +35,7 @@ $contact_label = se_ig_redacted_contact($c->igsid); ?>
             'maxlength'    => 1000,
             'accept'       => 'image/*,audio/*,video/*',
             'max_upload_mb' => 8,
+            'attach_hint_key' => 'se_chat_attach_hint_ig',
             'placeholder'  => _l('se_chat_placeholder'),
             'label_send'   => _l('se_chat_send'),
         ]);

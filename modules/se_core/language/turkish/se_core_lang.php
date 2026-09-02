@@ -363,3 +363,4 @@ $lang['se_chat_record_ready']      = 'Sesli mesaj hazır — Gönder’e basın'
 $lang['se_chat_record_cancel']     = 'Vazgeç';
 $lang['se_chat_record_unsupported'] = 'Bu tarayıcı kanalın kabul ettiği bir formatta ses kaydedemiyor. Chrome, Edge veya Safari kullanın.';
 $lang['se_chat_record_denied']     = 'Mikrofon izni verilmedi.';
+$lang['se_chat_attach_hint_ig']    = 'en fazla %d MB görsel / ses / video ekleyin (Instagram belge kabul etmez; metin ayrı mesaj olarak gider)';

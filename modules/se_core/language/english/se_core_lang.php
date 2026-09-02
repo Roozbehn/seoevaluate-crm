@@ -368,3 +368,4 @@ $lang['se_chat_record_ready']      = 'Voice message ready — press Send';
 $lang['se_chat_record_cancel']     = 'Discard';
 $lang['se_chat_record_unsupported'] = 'This browser cannot record audio in a format the channel accepts. Use Chrome, Edge or Safari.';
 $lang['se_chat_record_denied']     = 'Microphone access was not granted.';
+$lang['se_chat_attach_hint_ig']    = 'attach image / voice / video up to %d MB (Instagram does not accept documents; text is sent as a separate message)';

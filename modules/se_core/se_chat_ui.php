@@ -185,7 +185,7 @@ function se_ui_chat_composer(array $cfg)
            . '<button type="button" class="btn btn-default btn-xs" id="se-rec-cancel">' . html_escape(_l('se_chat_record_cancel')) . '</button>'
            . '<audio id="se-rec-preview" controls style="display:none;vertical-align:middle;margin-left:8px;max-width:260px"></audio></div>';
         echo '<div class="se-hint"><span>' . html_escape(_l('se_chat_enter_hint')) . ' · '
-           . html_escape(_l('se_chat_attach_hint', $maxMb)) . '</span><span id="se-count">0 / '
+           . html_escape(_l($cfg['attach_hint_key'] ?? 'se_chat_attach_hint', $maxMb)) . '</span><span id="se-count">0 / '
            . (int) ($cfg['maxlength'] ?? 4096) . '</span></div>';
         echo form_close();
         se_ui_chat_scripts($maxMb, !empty($cfg['voice_ogg_ok']));
