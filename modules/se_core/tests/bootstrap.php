@@ -345,6 +345,7 @@ require_once $SE_MODULES . '/se_core/se_secret_provider.php';
 require_once $SE_MODULES . '/se_core/se_website_lead.php';
 require_once $SE_MODULES . '/se_whatsapp/helpers.php';
 require_once $SE_MODULES . '/se_whatsapp/outbound.php';
+require_once $SE_MODULES . '/se_whatsapp/templates.php';
 require_once $SE_MODULES . '/se_instagram/helpers.php';
 require_once $SE_MODULES . '/se_instagram/outbound.php';
 require_once $SE_MODULES . '/se_core/se_integration_ui.php';

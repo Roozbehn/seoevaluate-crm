@@ -38,7 +38,8 @@ function se_wa_live_transport(array $m)
             'type'              => 'template',
             'template'          => [
                 'name'     => (string) $m['template'],
-                'language' => ['code' => 'tr'],
+                'language' => ['code' => (string) ($m['template_language'] ?? '') !== ''
+                    ? (string) $m['template_language'] : 'tr'],
                 'components' => $components,
             ],
         ];

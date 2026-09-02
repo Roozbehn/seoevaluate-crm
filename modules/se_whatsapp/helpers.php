@@ -365,6 +365,20 @@ function se_wa_process_event($ev)
 {
     $payload = json_decode($ev['payload'], true) ?: [];
     $routing = se_wa_extract_routing($payload);
+    $change  = $payload['entry'][0]['changes'][0] ?? [];
+
+    // Template lifecycle notifications carry the WABA id, not a phone number:
+    // routing them by phone_number_id parked every one as a routing failure.
+    if (($change['field'] ?? '') === 'message_template_status_update') {
+        $brand_id = function_exists('se_wa_route_waba_to_brand')
+            ? se_wa_route_waba_to_brand($routing['waba_id']) : null;
+        if ($brand_id === null) {
+            throw new SeWaPermanentError('unknown waba_id');
+        }
+        se_wa_handle_template_status($brand_id, (array) ($change['value'] ?? []));
+        return;
+    }
+
     $brand_id = se_wa_route_to_brand($routing['phone_number_id']);
     if ($brand_id === null) {
         // No mapping will appear by waiting; park it for an operator.

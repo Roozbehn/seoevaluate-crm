@@ -87,6 +87,16 @@ $contact_label = $evidence_redacted ? se_wa_redacted_contact($c->wa_user_id) : $
       </div>
       <?php if (empty($templates)) { ?>
         <?php se_ui_empty(_l('se_wa_no_templates')); ?>
+        <?php if (function_exists('se_staff_can_configure_brands') && se_staff_can_configure_brands()
+                  && function_exists('se_wa_waba_for_brand') && se_wa_waba_for_brand((int) $c->brand_id) !== '') { ?>
+          <?php echo form_open(admin_url('se_whatsapp/se_whatsapp/sync_templates'), ['class' => 'mtop10']); ?>
+            <input type="hidden" name="brand" value="<?php echo (int) $c->brand_id; ?>" />
+            <input type="hidden" name="back" value="<?php echo html_escape(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $c->id)); ?>" />
+            <button type="submit" class="btn btn-default btn-sm">
+              <i class="fa fa-refresh"></i> <?php echo html_escape(_l('se_wa_sync_templates')); ?></button>
+            <small class="text-muted mleft10"><?php echo html_escape(_l('se_wa_sync_templates_hint')); ?></small>
+          <?php echo form_close(); ?>
+        <?php } ?>
       <?php } else { ?>
         <?php echo form_open(admin_url('se_whatsapp/se_whatsapp/reply/' . (int) $c->id)); ?>
           <input type="hidden" name="kind" value="template" />

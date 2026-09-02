@@ -410,6 +410,15 @@ function se_wa_out_process($row)
                 'failure_class' => 'permanent', 'last_error' => 'service window closed before send'];
     }
 
+    // The template's language comes from the mirror row, never assumed: Meta
+    // rejects a send whose language code differs from the approved template.
+    $template_language = '';
+    if ($row['kind'] === 'template') {
+        foreach (se_wa_approved_templates((int) $conv->brand_id) as $t) {
+            if ($t['name'] === $row['template_name']) { $template_language = (string) $t['language']; break; }
+        }
+    }
+
     try {
         $result = call_user_func($GLOBALS['SE_WA_TRANSPORT'], [
             'phone_number_id' => $conv->phone_number_id,
@@ -417,6 +426,7 @@ function se_wa_out_process($row)
             'kind'            => $row['kind'],
             'body'            => $row['body'],
             'template'        => $row['template_name'],
+            'template_language' => $template_language,
             'variables'       => json_decode((string) $row['variables_json'], true) ?: [],
             'idempotency_key' => $row['idempotency_key'],
         ]);

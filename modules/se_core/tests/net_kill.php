@@ -36,6 +36,13 @@ function se_net_install_fixtures()
             return null;
         });
     }
+
+    if (function_exists('se_wa_register_template_fetcher')) {
+        se_wa_register_template_fetcher(function ($waba_id) {
+            $GLOBALS['se_net_attempts'][] = 'wa_templates:' . $waba_id;   // counted => test fails
+            return ['ok' => false, 'templates' => [], 'error' => 'network disabled in tests'];
+        });
+    }
 }
 
 /**

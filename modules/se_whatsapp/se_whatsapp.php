@@ -20,6 +20,7 @@ register_language_files(SE_WHATSAPP_MODULE_NAME, [SE_WHATSAPP_MODULE_NAME]);
 
 require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/outbound.php';
+require_once __DIR__ . '/templates.php';   // WABA template mirror (sync + status webhooks)
 require_once __DIR__ . '/transport.php';   // registers the live Cloud API sender when wa_token exists
 
 register_activation_hook(SE_WHATSAPP_MODULE_NAME, 'se_whatsapp_activation');
@@ -31,6 +32,7 @@ hooks()->add_action('admin_init', 'se_whatsapp_permissions');
 hooks()->add_action('after_cron_run', 'se_wa_process_pending');
 hooks()->add_action('after_cron_run', 'se_wa_consume_due_reminders');
 hooks()->add_action('after_cron_run', 'se_wa_out_drain');
+hooks()->add_action('after_cron_run', 'se_wa_sync_templates_cron');   // throttled WABA template re-pull
 
 // Conversation tab on the lead profile.
 hooks()->add_action('after_lead_tabs_content', 'se_whatsapp_lead_tab');

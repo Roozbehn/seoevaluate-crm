@@ -127,6 +127,42 @@ class Se_whatsapp extends AdminController
         redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $id));
     }
 
+    /**
+     * Pull the WABA template library into the mirror. POST-only + CSRF +
+     * configuration capability + brand guarded. Reads Meta; writes only the
+     * templates table. Never sends a message.
+     */
+    public function sync_templates()
+    {
+        if ($this->input->method() !== 'post') {
+            access_denied('se_whatsapp');
+        }
+
+        if (!se_staff_can_configure_brands()) {
+            access_denied('se_whatsapp');
+        }
+
+        $brand = (int) $this->input->post('brand');
+
+        if ($brand <= 0 || !se_can_access_brand($brand)) {
+            access_denied('se_whatsapp');
+        }
+
+        $r = se_wa_sync_templates($brand);
+
+        if ($r['ok']) {
+            set_alert('success', sprintf(_l('se_wa_templates_synced'),
+                (int) $r['approved'], (int) $r['inserted'], (int) $r['updated'], (int) $r['removed']));
+        } else {
+            set_alert('warning', _l('se_wa_templates_sync_failed') . ': ' . $r['reason']);
+        }
+
+        $back = (string) $this->input->post('back');
+        redirect($back !== '' && strpos($back, admin_url()) === 0
+            ? $back
+            : admin_url('se_whatsapp/se_whatsapp/readiness?brand=' . $brand));
+    }
+
     /** Per-brand readiness: numbers, templates, webhook and queue health. */
     public function readiness()
     {
@@ -145,6 +181,9 @@ class Se_whatsapp extends AdminController
         $data['brands']    = se_all_brands(false, true);
         $data['numbers']   = se_wa_numbers_for($brand);
         $data['templates'] = $brand > 0 ? se_wa_approved_templates($brand) : [];
+        $data['templates_synced_at'] = $brand > 0 ? (string) get_option('se_wa_templates_synced_at_' . $brand) : '';
+        $data['templates_last_error'] = $brand > 0 ? (string) get_option('se_wa_templates_last_error_' . $brand) : '';
+        $data['can_sync_templates'] = $brand > 0 && se_wa_waba_for_brand($brand) !== '';
         $data['blocked']   = se_wa_send_blocked_reason($brand);
         $data['out_health'] = se_wa_out_health($brand);
         $data['webhook_state'] = function_exists('se_webhook_state')

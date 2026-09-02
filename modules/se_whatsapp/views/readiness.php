@@ -95,6 +95,20 @@
 <?php if ($brand > 0) { ?>
 <div class="row"><div class="col-md-12"><div class="panel_s"><div class="panel-body">
   <h5><?php echo html_escape(_l('se_wa_templates')); ?></h5>
+  <?php if (!empty($can_sync_templates)) { ?>
+    <?php echo form_open(admin_url('se_whatsapp/se_whatsapp/sync_templates'), ['class' => 'form-inline mbot15']); ?>
+      <input type="hidden" name="brand" value="<?php echo (int) $brand; ?>" />
+      <button type="submit" class="btn btn-default btn-sm">
+        <i class="fa fa-refresh"></i> <?php echo html_escape(_l('se_wa_sync_templates')); ?></button>
+      <small class="text-muted mleft10">
+        <?php echo html_escape(_l('se_wa_templates_synced_at')); ?>:
+        <?php echo $templates_synced_at !== '' ? html_escape($templates_synced_at) : html_escape(_l('se_wa_templates_never_synced')); ?>
+        <?php if (!empty($templates_last_error)) { ?>
+          &mdash; <span class="text-danger"><?php echo html_escape($templates_last_error); ?></span>
+        <?php } ?>
+      </small>
+    <?php echo form_close(); ?>
+  <?php } ?>
   <?php if (empty($templates)) { se_ui_empty(_l('se_wa_no_templates')); } else { ?>
   <div class="table-responsive"><table class="table table-striped">
     <thead><tr>
