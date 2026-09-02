@@ -23,7 +23,15 @@ function se_journey_readiness($brand_id)
         : 'Sandbox off: real patients receive automated messages.', false);
     $add('encryption_key', se_journey_crypto_available(), 'Install the 32-byte key as secret provider `journey_key` (base64) with se-secret-install.sh; sodium extension must be loaded.');
     $storage = se_journey_media_storage_status();
-    $add('media_dir', $storage['exists'] && $storage['writable'], 'Create the private journey media directory outside the docroot (default: a sibling of the inbox media store named _se_journey_media, mode 0700, owner = PHP user) or set option se_journey_media_dir.');
+    $add('media_storage_r2', $storage['driver'] === 'r2', $storage['driver'] === 'r2'
+        ? 'Sealed photos go to Cloudflare R2 (bucket azin-media, crm/journey/…) through the crm-media gateway.'
+        : ($storage['r2_requested']
+            ? 'R2 gateway not ready — set option se_media_r2_url (crm-media Worker URL) and install secret r2_media_key; until then sealed photos stay in the local directory and migrate automatically once the gateway is up.'
+            : 'Storage forced to local by option se_journey_media_storage=local.'), false);
+    $add('media_dir', $storage['exists'] && $storage['writable'],
+        ($storage['driver'] === 'r2' ? 'Fallback only (used when the gateway is unreachable): ' : '')
+        . 'create the private journey media directory outside the docroot (default: a sibling of the inbox media store named _se_journey_media, mode 0700, owner = PHP user) or set option se_journey_media_dir.',
+        $storage['driver'] !== 'r2');
     $add('media_outside_docroot', $storage['outside_docroot'], 'Move the media directory outside the document root.');
     $add('health_consent_text', function_exists('se_consent_text_configured') && se_consent_text_configured($brand_id, 'health_data'),
         'Counsel-approved KVKK health-data (special category) consent text: Consent Settings → health_data (TR + EN, enabled, version).');

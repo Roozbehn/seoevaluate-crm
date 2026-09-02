@@ -55,6 +55,12 @@
         </div>
         <div class="form-group"><label><?php echo html_escape(_l('se_journey_public_base_url')); ?></label><input class="form-control" name="public_base_url" value="<?php echo html_escape($v['public_base_url']); ?>" placeholder="https://crm.roozbeh.com.tr" /></div>
         <div class="checkbox"><label><input type="checkbox" name="technical_fields" value="1" <?php echo $v['technical_fields'] ? 'checked' : ''; ?> /> <?php echo html_escape(_l('se_journey_flag_technical')); ?></label></div>
+        <div class="row">
+          <div class="col-sm-6"><div class="form-group"><label><?php echo html_escape(_l('se_journey_media_storage')); ?></label>
+            <select name="media_storage" class="form-control"><?php foreach (['auto', 'r2', 'local'] as $p) { ?><option value="<?php echo $p; ?>"<?php echo $v['media_storage'] === $p ? ' selected' : ''; ?>><?php echo html_escape(_l('se_journey_media_storage_' . $p)); ?></option><?php } ?></select>
+            <small class="text-muted"><?php echo html_escape(_l('se_journey_media_storage_now')); ?>: <strong><?php echo html_escape($v['media_storage_status']['driver']); ?></strong><?php if (!$v['media_storage_status']['r2_ready']) { echo ' · ' . html_escape(_l('se_journey_media_r2_not_ready')); } ?></small></div></div>
+          <div class="col-sm-6"><div class="checkbox" style="margin-top:28px"><label><input type="checkbox" name="purge_inbox_copy" value="1" <?php echo $v['purge_inbox_copy'] ? 'checked' : ''; ?> /> <?php echo html_escape(_l('se_journey_flag_purge_inbox')); ?></label></div></div>
+        </div>
         <button class="btn btn-primary" type="submit"><?php echo html_escape(_l('submit')); ?></button>
       <?php echo form_close(); ?>
     </div></div>

@@ -5,8 +5,11 @@
  *   HEAD /o/<key>              Authorization: Bearer <MEDIA_KEY>
  *   GET  /o/<key>              Authorization: Bearer <MEDIA_KEY>          (server-to-server)
  *   GET  /o/<key>?exp=&sig=    no auth: sig = hex(HMAC-SHA256(MEDIA_KEY, key + "|" + exp)), exp = unix seconds
+ *   DELETE /o/<key>            Authorization: Bearer <MEDIA_KEY>   (erasure; idempotent, 204)
  *
- * Keys are confined to PREFIX ("crm/"). Nothing lists, nothing deletes.
+ * Keys are confined to PREFIX ("crm/"). Nothing lists. Deletes need the bearer key.
+ * The patient-journey module stores SEALED (libsodium) photos under crm/journey/…;
+ * a signed GET of those returns ciphertext only.
  * Signed GETs are how staff browsers (via the CRM's authed redirect) and
  * Meta's Instagram fetcher receive files; the TTL is chosen by the CRM.
  */
@@ -25,6 +28,12 @@ export default {
       const type = req.headers.get('Content-Type') || 'application/octet-stream';
       const obj = await env.MEDIA.put(key, req.body, { httpMetadata: { contentType: type } });
       return json(200, { ok: true, key, size: obj.size, etag: obj.etag });
+    }
+
+    if (req.method === 'DELETE') {
+      if (!authed) return json(401, { ok: false, reason: 'unauthorized' });
+      await env.MEDIA.delete(key);
+      return new Response(null, { status: 204 });
     }
 
     if (req.method === 'HEAD' || req.method === 'GET') {

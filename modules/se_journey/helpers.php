@@ -213,6 +213,7 @@ function se_journey_schema_statements($p)
         `bytes` int(11) NOT NULL DEFAULT 0,
         `sha256` varchar(64) DEFAULT NULL,
         `storage_ref` varchar(191) DEFAULT NULL,
+        `storage` varchar(8) NOT NULL DEFAULT 'local',
         `key_version` varchar(16) DEFAULT NULL,
         `metadata_stripped` tinyint(1) NOT NULL DEFAULT 0,
         `state` varchar(24) NOT NULL DEFAULT 'received',

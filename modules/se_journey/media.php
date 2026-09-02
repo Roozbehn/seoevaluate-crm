@@ -12,10 +12,13 @@ defined('BASEPATH') or exit('No direct script access allowed');
  *   - the bytes are validated by content (magic bytes + image decode +
  *     dimension bounds), not by the name the sender chose, and are
  *     re-encoded to drop EXIF/metadata and neutralise appended payloads;
- *   - files live OUTSIDE the document root, sealed with the journey key,
- *     under unguessable names — there is no URL to a photo, only a
- *     staff-only, capability-gated, signed, expiring view route that logs
- *     every view;
+ *   - files are sealed with the journey key BEFORE they leave PHP and live
+ *     under unguessable names in Cloudflare R2 (bucket azin-media, key
+ *     crm/journey/…, through the crm-media gateway — the CRM host holds no
+ *     R2 credential) or, while the gateway is not configured, in a private
+ *     directory OUTSIDE the document root; there is no URL to a photo, only
+ *     a staff-only, capability-gated, signed, expiring view route that logs
+ *     every view and streams the decrypted bytes;
  *   - evaluation use and publication use are separate permissions on every
  *     row, never inferred from each other.
  */
@@ -71,6 +74,30 @@ function se_journey_media_dir()
     return SE_JOURNEY_MEDIA_FALLBACK_DIR;
 }
 
+/**
+ * Where NEW sealed objects go. Option se_journey_media_storage:
+ *   auto  (default) — R2 whenever the inbox store's gateway is ready, else local
+ *   r2              — R2, but never silently: falls back to local when the gateway is not ready
+ *   local           — the private directory only
+ * Every row records its own `storage`, so both can coexist while files migrate.
+ */
+function se_journey_media_storage_driver()
+{
+    $opt = (string) get_option('se_journey_media_storage');
+    $ready = function_exists('se_media_r2_ready') && se_media_r2_ready();
+    if ($opt === 'local') {
+        return 'local';
+    }
+
+    return $ready ? 'r2' : 'local';
+}
+
+/** R2 object path (relative to the gateway prefix) for a journey storage_ref. */
+function se_journey_media_object_rel($storage_ref)
+{
+    return 'journey/' . ltrim((string) $storage_ref, '/');
+}
+
 /** Presence/writability report — never a path secret, safe for the readiness screen. */
 function se_journey_media_storage_status()
 {
@@ -78,8 +105,11 @@ function se_journey_media_storage_status()
     $exists = is_dir($dir);
     $writable = $exists && is_writable($dir);
     $inDocroot = defined('FCPATH') && FCPATH !== '' && strpos(realpath($dir) ?: $dir, rtrim(realpath(FCPATH) ?: FCPATH, '/')) === 0;
+    $driver = se_journey_media_storage_driver();
 
-    return ['exists' => $exists, 'writable' => $writable, 'outside_docroot' => !$inDocroot, 'encrypted' => se_journey_crypto_available()];
+    return ['exists' => $exists, 'writable' => $writable, 'outside_docroot' => !$inDocroot, 'encrypted' => se_journey_crypto_available(),
+            'driver' => $driver, 'r2_ready' => function_exists('se_media_r2_ready') && se_media_r2_ready(),
+            'r2_requested' => (string) get_option('se_journey_media_storage') !== 'local'];
 }
 
 /**
@@ -173,40 +203,121 @@ function se_journey_media_validate($bytes, $claimed_name = '')
 function se_journey_media_store_bytes($brand_id, $journey_id, $bytes)
 {
     if (!se_journey_crypto_available()) {
-        return '';
+        return ['ok' => false, 'ref' => '', 'storage' => '', 'fallback' => false, 'error' => 'crypto_unavailable'];
     }
-    $base = se_journey_media_dir();
     $rel  = (int) $brand_id . '/' . (int) $journey_id;
-    $dir  = $base . '/' . $rel;
-    if (!is_dir($dir) && !@mkdir($dir, 0700, true)) {
-        return '';
-    }
-    @chmod($base, 0700);
     $name = bin2hex(random_bytes(16)) . '.enc';
+    $ref  = $rel . '/' . $name;
     $sealed = se_journey_encrypt($bytes);
     if ($sealed === '') {
-        return '';
+        return ['ok' => false, 'ref' => '', 'storage' => '', 'fallback' => false, 'error' => 'seal_failed'];
     }
+
+    $fallback = false;
+    if (se_journey_media_storage_driver() === 'r2') {
+        // Ciphertext only ever reaches the gateway; the content type is opaque on purpose.
+        $err = se_media_r2_put(se_journey_media_object_rel($ref), $sealed, 'application/octet-stream');
+        if ($err === '') {
+            return ['ok' => true, 'ref' => $ref, 'storage' => 'r2', 'fallback' => false, 'error' => ''];
+        }
+        $fallback = true;   // the gateway is down: keep the photo locally, migrate later
+    }
+
+    $base = se_journey_media_dir();
+    $dir  = $base . '/' . $rel;
+    if (!is_dir($dir) && !@mkdir($dir, 0700, true)) {
+        return ['ok' => false, 'ref' => '', 'storage' => '', 'fallback' => $fallback, 'error' => 'local_dir_unavailable'];
+    }
+    @chmod($base, 0700);
     if (@file_put_contents($dir . '/' . $name, $sealed, LOCK_EX) === false) {
-        return '';
+        return ['ok' => false, 'ref' => '', 'storage' => '', 'fallback' => $fallback, 'error' => 'local_write_failed'];
     }
     @chmod($dir . '/' . $name, 0600);
 
-    return $rel . '/' . $name;
+    return ['ok' => true, 'ref' => $ref, 'storage' => 'local', 'fallback' => $fallback, 'error' => ''];
 }
 
-/** Open a stored object. Null on failure. */
+/** Sealed bytes of a row from wherever it lives ('' when missing). */
+function se_journey_media_sealed_bytes($storage, $storage_ref)
+{
+    if ($storage === 'r2') {
+        return function_exists('se_media_r2_get') ? (string) se_media_r2_get(se_journey_media_object_rel($storage_ref)) : '';
+    }
+    $path = se_journey_media_dir() . '/' . $storage_ref;
+
+    return is_file($path) ? (string) file_get_contents($path) : '';
+}
+
+/** Open a stored object (decrypted). Null on failure. */
 function se_journey_media_read($media)
 {
     if (!$media || empty($media->storage_ref) || !empty($media->deleted_at)) {
         return null;
     }
-    $path = se_journey_media_dir() . '/' . $media->storage_ref;
-    if (!is_file($path)) {
+    $sealed = se_journey_media_sealed_bytes((string) ($media->storage ?? 'local'), (string) $media->storage_ref);
+    if ($sealed === '') {
         return null;
     }
 
-    return se_journey_decrypt((string) file_get_contents($path));
+    return se_journey_decrypt($sealed);
+}
+
+/**
+ * Remove the stored object. '' on success, 'unsupported' when the deployed
+ * gateway has no DELETE route yet (the row keeps its object), else an error.
+ */
+function se_journey_media_delete_object($storage, $storage_ref)
+{
+    if ($storage_ref === '') {
+        return '';
+    }
+    if ($storage === 'r2') {
+        return function_exists('se_media_r2_delete') ? (string) se_media_r2_delete(se_journey_media_object_rel($storage_ref)) : 'unsupported';
+    }
+    $path = se_journey_media_dir() . '/' . $storage_ref;
+    if (is_file($path) && !@unlink($path)) {
+        return 'unlink failed';
+    }
+
+    return '';
+}
+
+/**
+ * Cron: move sealed objects written locally (gateway down, or before R2 was
+ * configured) up to R2 — upload, read back, compare, then unlink. Runs only
+ * while the driver is r2. Returns ['moved','failed'].
+ */
+function se_journey_media_migrate_to_r2($limit = 10)
+{
+    $out = ['moved' => 0, 'failed' => 0];
+    if (se_journey_media_storage_driver() !== 'r2') {
+        return $out;
+    }
+    $CI = &get_instance();
+    $table = db_prefix() . 'se_journey_media';
+    $CI->db->where('storage', 'local')->where('deleted_at IS NULL')->where('storage_ref !=', '')->order_by('id', 'ASC')->limit(max(1, (int) $limit));
+    foreach ($CI->db->get($table)->result_array() as $m) {
+        $sealed = se_journey_media_sealed_bytes('local', (string) $m['storage_ref']);
+        if ($sealed === '') {
+            $out['failed']++;
+            continue;
+        }
+        $rel = se_journey_media_object_rel((string) $m['storage_ref']);
+        if (se_media_r2_put($rel, $sealed, 'application/octet-stream') !== '') {
+            $out['failed']++;
+            continue;
+        }
+        $back = se_media_r2_get($rel);
+        if ($back === '' || !hash_equals(hash('sha256', $sealed), hash('sha256', $back))) {
+            $out['failed']++;
+            continue;
+        }
+        $CI->db->where('id', (int) $m['id'])->update($table, ['storage' => 'r2']);
+        @unlink(se_journey_media_dir() . '/' . $m['storage_ref']);
+        $out['moved']++;
+    }
+
+    return $out;
 }
 
 /* ===========================================================================
@@ -234,9 +345,17 @@ function se_journey_media_ingest($j, $bytes, array $meta)
 
         return ['ok' => false, 'reason' => $v['reason'], 'id' => 0];
     }
-    $ref = se_journey_media_store_bytes((int) $j->brand_id, (int) $j->id, $v['bytes']);
-    if ($ref === '') {
+    $stored = se_journey_media_store_bytes((int) $j->brand_id, (int) $j->id, $v['bytes']);
+    if (!$stored['ok']) {
+        se_journey_event($j, 'media_store_failed', $stored['error'], [], 'system', null, null, null, (string) ($meta['wamid'] ?? ''));
+
         return ['ok' => false, 'reason' => 'storage_unavailable', 'id' => 0];
+    }
+    $ref = $stored['ref'];
+    if ($stored['fallback']) {
+        // Gateway unreachable at write time: the photo is safe locally and the
+        // cron moves it to R2 — visible to staff, never silent.
+        se_journey_event($j, 'media_store_fallback', 'R2 gateway unreachable — sealed locally, migration pending', [], 'system', null, null, null, (string) ($meta['wamid'] ?? ''));
     }
     $kind = in_array((string) ($meta['kind'] ?? ''), se_journey_media_kinds(), true) ? (string) $meta['kind'] : 'unclassified';
     $phase = in_array((string) $j->state, ['procedure_completed', 'aftercare_active', 'followup_due', 'completed'], true) ? 'followup' : 'evaluation';
@@ -252,14 +371,14 @@ function se_journey_media_ingest($j, $bytes, array $meta)
             'inbox_media_id' => !empty($meta['inbox_media_id']) ? (int) $meta['inbox_media_id'] : null,
             'wamid' => isset($meta['wamid']) && $meta['wamid'] !== '' ? mb_substr((string) $meta['wamid'], 0, 128) : null,
             'mime' => $v['mime'], 'width' => $v['width'], 'height' => $v['height'], 'bytes' => strlen($v['bytes']),
-            'sha256' => hash('sha256', $v['bytes']), 'storage_ref' => $ref, 'key_version' => se_journey_key_version(),
+            'sha256' => hash('sha256', $v['bytes']), 'storage_ref' => $ref, 'storage' => $stored['storage'], 'key_version' => se_journey_key_version(),
             'metadata_stripped' => $v['stripped'] ? 1 : 0, 'state' => 'received',
             'evaluation_use_permitted' => 1, 'publication_permitted' => $consent['photo_publication'] ? 1 : 0,
             'uploaded_at' => $now, 'date_created' => $now,
         ]);
     } catch (Exception $e) {
         // Duplicate wamid: the same WhatsApp image delivered twice.
-        @unlink(se_journey_media_dir() . '/' . $ref);
+        se_journey_media_delete_object($stored['storage'], $ref);
 
         return ['ok' => false, 'reason' => 'duplicate', 'id' => 0];
     }
@@ -452,7 +571,45 @@ function se_journey_ingest_parked($j, array $parked, array $inboxRow)
         return ['handled' => true, 'reason' => 'media_' . $r['reason'], 'journey_id' => (int) $j->id];
     }
 
+    // Optional (per brand): once the sealed copy exists, drop the plain
+    // thread copy so the photo is only reachable through view_photos.
+    if ((int) get_option('se_journey_purge_inbox_copy_' . (int) $j->brand_id) === 1) {
+        se_journey_purge_inbox_copy($j, $inboxRow, $corr);
+    }
+
     return se_journey_after_media_received($j, $corr);
+}
+
+/**
+ * Remove the inbox store's plain copy of a photo that is now sealed in the
+ * journey store. Local: unlink; R2: gateway DELETE (kept, with a task, when
+ * the deployed Worker predates the route). The tblse_media row stays as a
+ * placeholder so the thread still shows that a photo was received.
+ */
+function se_journey_purge_inbox_copy($j, array $inboxRow, $corr = '')
+{
+    if (($inboxRow['state'] ?? '') !== 'stored' || empty($inboxRow['path'])) {
+        return false;
+    }
+    $CI = &get_instance();
+    $table = db_prefix() . 'se_media';
+    if (($inboxRow['storage'] ?? 'local') === 'r2') {
+        $err = function_exists('se_media_r2_delete') ? se_media_r2_delete((string) $inboxRow['path']) : 'unsupported';
+        if ($err !== '') {
+            se_journey_task($j, 'inbox_purge_pending', 'Inbox copy of a sealed photo could not be purged from R2 (' . $err . ') — redeploy crm-media with the DELETE route', 'low', null, 'r2');
+
+            return false;
+        }
+    } else {
+        $abs = function_exists('se_media_abs_path') ? se_media_abs_path($inboxRow) : '';
+        if ($abs !== '' && is_file($abs) && !@unlink($abs)) {
+            return false;
+        }
+    }
+    $CI->db->where('id', (int) $inboxRow['id'])->update($table, ['state' => 'purged', 'path' => null, 'last_error' => 'sealed into the patient journey store']);
+    se_journey_event($j, 'inbox_copy_purged', 'plain thread copy removed after sealing', ['inbox_media_id' => (int) $inboxRow['id']], 'system', null, null, null, $corr);
+
+    return true;
 }
 
 /**

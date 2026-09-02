@@ -132,6 +132,24 @@ function se_media_r2_get($rel)
     return $r['code'] >= 200 && $r['code'] < 300 ? (string) $r['body'] : '';
 }
 
+/**
+ * Delete an object (bearer). '' on success (204/200, or 404 = already gone),
+ * 'unsupported' when the deployed Worker predates the DELETE route (405), else
+ * an error string. Callers keep their row when the answer is not ''.
+ */
+function se_media_r2_delete($rel)
+{
+    $r = se_media_http('DELETE', se_media_r2_url() . '/o/' . str_replace('%2F', '/', rawurlencode(se_media_r2_object_key($rel))),
+        ['Authorization: Bearer ' . se_media_r2_key()]);
+    if ($r['code'] === 405) {
+        return 'unsupported';
+    }
+    if ($r['code'] === 404 || ($r['code'] >= 200 && $r['code'] < 300)) {
+        return '';
+    }
+    return 'r2 delete failed (HTTP ' . $r['code'] . ')';
+}
+
 /* ------------------------------------------------- driver-neutral surface */
 
 /**

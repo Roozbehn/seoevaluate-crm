@@ -367,6 +367,9 @@ class Se_journey extends AdminController
             'preop_text_approved' => (int) get_option('se_journey_preop_text_approved_' . $brand),
             'preop_info_url' => (string) get_option('se_journey_preop_info_url_' . $brand),
             'technical_fields' => (int) get_option('se_journey_technical_fields_' . $brand),
+            'media_storage' => (string) get_option('se_journey_media_storage') ?: 'auto',
+            'media_storage_status' => se_journey_media_storage_status(),
+            'purge_inbox_copy' => (int) get_option('se_journey_purge_inbox_copy_' . $brand),
             'ask_infectious' => (int) get_option('se_journey_ask_infectious_' . $brand),
             'consent_bypass' => se_journey_consent_bypass_active($brand) ? 1 : 0,
             'consent_bypass_reason' => (string) get_option('se_journey_consent_bypass_reason_' . $brand),
@@ -400,6 +403,8 @@ class Se_journey extends AdminController
             update_option('se_journey_public_base_url', preg_match('#^https://[a-z0-9.-]+(?::\d+)?(/.*)?$#i', $base) ? $base : '');
             update_option('se_journey_quote_amount_policy_' . $brand, in_array((string) $this->input->post('quote_amount_policy'), ['hidden', 'range', 'exact'], true) ? (string) $this->input->post('quote_amount_policy') : 'range');
             update_option('se_journey_technical_fields_' . $brand, (int) $this->input->post('technical_fields') === 1 ? 1 : 0);
+            update_option('se_journey_media_storage', in_array((string) $this->input->post('media_storage'), ['auto', 'r2', 'local'], true) ? (string) $this->input->post('media_storage') : 'auto');
+            update_option('se_journey_purge_inbox_copy_' . $brand, (int) $this->input->post('purge_inbox_copy') === 1 ? 1 : 0);
             se_journey_audit($brand, 0, 'settings_saved', null, null, 'flags');
         } elseif ($section === 'clinical') {
             if (!se_journey_can('manage_consent')) { access_denied('se_journey'); }

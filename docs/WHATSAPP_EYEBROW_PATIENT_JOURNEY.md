@@ -4,7 +4,7 @@ Built 2026-09-02 on `main` `81d9118`, then rebased the same day onto `main` `3f0
 (the inbox media store, shared chat UI, voice/attachment composer and R2 attachment storage that
 landed in parallel — see §0.1) for the Azin Asgari – Kaş Ekimi, İstanbul CRM
 (Perfex 3.4.1, PHP 8.1.34, MariaDB 10.11, cPanel). Everything in this document was
-exercised by the network-free suite (`php modules/se_core/tests/run.php` → **2,579 pass, 0 fail**,
+exercised by the network-free suite (`php modules/se_core/tests/run.php` → **2,635 pass, 0 fail**,
 every pre-existing suite included) and rendered for the 390 px / 768 px screenshots in
 `docs/evidence/journey/`.
 Nothing below claims a live Meta status the session could not observe; §11 marks those.
@@ -38,18 +38,20 @@ on top and reconciled rather than duplicated:
 |---|---|
 | own downloader `se_whatsapp/media.php` (`se_wa_fetch_media`, 5 MB, sha256) | **removed** — the inbox store's fetch is the single Graph media path |
 | listener fetched the photo synchronously | listener **parks** a placeholder (`pending_fetch`, `inbox_media_id`) and a new dispatcher step **`journey_media`** (right after `media`; also the 15-min cron) seals the bytes from the inbox row (`se_media_local_copy`, R2-aware) into the journey store — the "never fetch inside an event" rule now holds for the journey too |
-| `SE_MEDIA_DIR` constant for the journey store | renamed **`SE_JOURNEY_MEDIA_DIR`** — the inbox store owns `SE_MEDIA_DIR`; the journey store is a separate sibling directory (default `<home>/_se_journey_media`), sealed |
+| `SE_MEDIA_DIR` constant for the journey store | renamed **`SE_JOURNEY_MEDIA_DIR`** — the inbox store owns `SE_MEDIA_DIR`; the journey store is separate and **lives in R2** (`azin-media`, keys `crm/journey/…`, sealed before upload) through the same `crm-media` gateway, with the local directory as a fallback only (§5) |
 | schema v14 = journey | journey is **v17** (14–16 = inbox media); `se_wa_outbound` gained `media_id` upstream and `payload_json`/`origin` here |
 | failed-status error shown in the WhatsApp view | moved into the shared thread renderer `se_ui_chat_thread` (`se_chat_ui.php`) so WhatsApp and Instagram threads both show it |
 | `kind=media` outbound (upstream) | obeys the same 24-hour-window re-check as text/interactive; `se_journey_on_outbound_skipped` sees it |
 
-**Consequence the owner must decide (not code):** the inbox store keeps a plain (not sealed) copy of
-every inbound attachment for the thread — including a patient's evaluation photos — readable by any
-staff member who can open that WhatsApp conversation, whereas the journey copy needs `view_photos`.
-That is upstream's own 2026-09-02 design, left untouched. Options: (a) accept (thread staff already
-see the message); (b) restrict inbox media viewing per role (`se_core/se_media/view` checks
-`staff_can('view', se_whatsapp)` + brand scope — i.e. anyone who can read the thread); (c) purge the inbox copy after the journey seals it — possible for local
-storage today, **not for R2** (`crm-media` has no DELETE route). Recorded in §15.
+**Owner decision, now a switch:** the inbox store keeps a plain (not sealed) copy of every
+inbound attachment for the thread — including a patient's evaluation photos — readable by any staff
+member who can open that WhatsApp conversation (`se_core/se_media/view` checks
+`staff_can('view', se_whatsapp)` + brand scope), whereas the journey copy needs `view_photos`. That
+is upstream's own 2026-09-02 design. Journeys → Settings → *"After sealing, remove the plain copy
+from the WhatsApp thread store"* (`se_journey_purge_inbox_copy_<brand>`, default **off**) deletes
+the thread copy once the sealed one exists (local unlink, or gateway `DELETE` — the route added to
+`services/crm-media` in this branch; a Worker deployed without it answers 405, the copy is kept and a
+task says so). The thread keeps a "photo received" placeholder.
 
 ## 1. What was built (extends, never duplicates)
 
@@ -253,10 +255,20 @@ Staff takeover: any reply from the WhatsApp composer pauses automation on that t
   rejection, `finfo` MIME allow-list jpeg/png/webp, extension agreement, `getimagesize`,
   300–8000 px), and re-encodes through GD (drops EXIF/metadata and neutralises appended
   payloads); without GD a polyglot is rejected.
-* Storage: sealed bytes under `SE_JOURNEY_MEDIA_DIR` (option `se_journey_media_dir`, default a
-  sibling of the inbox store: `/home/hyundaic/_se_journey_media`, 0700) as
-  `<brand>/<journey>/<random>.enc`. No public URL exists. Deliberately separate from the inbox
-  store `_se_media` / R2, whose files are plain and thread-visible (§0.1).
+* Storage: bytes are **sealed in PHP first** (libsodium secretbox, `journey_key`), then written
+  by the driver `se_journey_media_storage_driver()` — option `se_journey_media_storage`
+  `auto` (default: **Cloudflare R2** as soon as the `crm-media` gateway is ready, i.e. option
+  `se_media_r2_url` + secret `r2_media_key`), `r2`, or `local`. R2 objects are
+  `crm/journey/<brand>/<journey>/<random>.enc` in bucket `azin-media` (the CRM host holds no R2
+  credential; the Worker holds the binding; a leaked signed URL yields ciphertext only, and the CRM
+  never mints signed URLs for journey objects — staff views stream the decrypted bytes through the
+  capability-gated route). When the gateway is unreachable at write time the photo is sealed into the
+  local directory (`SE_JOURNEY_MEDIA_DIR` / option `se_journey_media_dir`, default
+  `/home/hyundaic/_se_journey_media`, 0700) with a visible `media_store_fallback` event, and the
+  15-minute cron (`media_to_r2`) uploads, reads back, compares and unlinks. Every row records its
+  `storage`. Erasure goes through `se_journey_media_delete_object` (gateway `DELETE`, idempotent).
+  Inbox attachments (voice, video, documents) are R2-backed by upstream's own driver when
+  `se_media_storage=r2` — that is where the "video archive" lives; the journey stores photos only.
 * Staff view: `se_journey/se_journey/media/<id>?e=<exp>&s=<hmac>` — capability `view_photos`,
   signature bound to media id + staff id + expiry (10 min), `no-store`, audited (`view_photo`).
 * WhatsApp media download: the inbox media store (`se_core/se_media.php`) registers the
@@ -330,7 +342,10 @@ Options (Journeys → Settings; presence only, no values shown anywhere):
 | `se_journey_preop_text_approved_<brand>`, `se_journey_preop_info_url_<brand>` | 0 / — | pre-op gate |
 | `se_journey_technical_fields_<brand>`, `se_journey_ask_infectious_<brand>` | 0 | clinic choices |
 | `se_journey_consent_bypass_<brand>` (+`_reason`) | 0 | admin emergency bypass |
-| `se_journey_media_dir` | `<home>/_se_journey_media` | sealed journey store (or constant `SE_JOURNEY_MEDIA_DIR`); the inbox store's `SE_MEDIA_DIR` / R2 is separate |
+| `se_journey_media_storage` | auto | sealed photo store: auto (R2 when ready) / r2 / local |
+| `se_journey_purge_inbox_copy_<brand>` | 0 | drop the plain thread copy after sealing (needs the DELETE route for R2 copies) |
+| `se_media_r2_url`, secret `r2_media_key`, `se_media_storage=r2` (upstream) | — | the crm-media gateway; shared by inbox attachments and sealed journey photos |
+| `se_journey_media_dir` | `<home>/_se_journey_media` | local fallback store (or constant `SE_JOURNEY_MEDIA_DIR`) |
 | `se_journey_key_version` | k1 | recorded on sealed rows |
 | `se_journey_aftercare_protocols_<brand>`, `se_journey_copy_<brand>` | — | JSON, versioned |
 | `se_meta_graph_version` (existing) | v23.0 | Graph version |
@@ -393,7 +408,8 @@ session could not query Meta/CRM (no credentials in the build environment, by de
 | WhatsApp Flows (`eyebrow_pre_evaluation_tr`) | **not implemented** (no Flow endpoint, RSA key upload, AES-GCM data exchange, ping/421 handling in this repo) | secure CRM form + interactive messages are the fallback (implemented). Flow work is a separate, gated project |
 | Business verification | deferred (not required so far) | — |
 | `journey_key` secret | **not installed** (new) | `se-secret-install.sh journey_key` with 32 random bytes base64 |
-| Private journey media dir | **not created** (new) | `mkdir -m 700 /home/hyundaic/_se_journey_media` (owner = PHP user) |
+| R2 gateway for sealed photos | bucket `azin-media` + Worker `crm-media` **exist** (Cloudflare API, 2026-09-02); whether the CRM's `se_media_r2_url` option and `r2_media_key` secret are set is **not observable from here**; the Worker needs a redeploy for the new `DELETE` route | Journeys → Settings shows "Currently: r2"; `npx wrangler deploy` in `services/crm-media` |
+| Local fallback dir | **not created** (new; only used while the gateway is unreachable) | `mkdir -m 700 /home/hyundaic/_se_journey_media` (owner = PHP user) |
 | Health-data consent text (KVKK special category) | **not configured** — counsel text pending | Consent Settings → health_data TR+EN + version |
 | Sandbox | ON by default → real sends only to test recipients | Settings → test recipients (e.g. the owner's own number) |
 
@@ -433,8 +449,8 @@ rewritten; sealed columns start empty).
 
 1. Merge/pull the branch on the host; `touch ~/.lsphp_restart.txt`; open `/admin` once (migration).
 2. Activate module **SE Journey** (Setup → Modules) — idempotent install.
-3. Install `journey_key`; create `/home/hyundaic/_se_journey_media` (0700, PHP user); confirm on Journeys → Settings.
-4. Run `php modules/se_core/tests/run.php` on the host (expect 2,579 pass) and `php modules/se_core/tests/secret_diag.php`.
+3. Install `journey_key`; confirm on Journeys → Settings that storage says **Currently: r2** (else set option `se_media_r2_url` to the crm-media Worker URL, install `r2_media_key`, and set `se_media_storage=r2` so inbox voice/video/documents go to R2 too); redeploy the Worker (`cd services/crm-media && npx wrangler deploy`) for the `DELETE` route; create the fallback dir `/home/hyundaic/_se_journey_media` (0700, PHP user).
+4. Run `php modules/se_core/tests/run.php` on the host (expect 2,635 pass) and `php modules/se_core/tests/secret_diag.php`.
 5. Consent Settings → `health_data` (counsel-approved TR+EN, version, enabled); optionally `photo_publication`.
 6. Journeys → Templates → Submit the 11 templates → wait for APPROVED → Sync.
 7. Journeys → Settings: Enabled = on, **Sandbox = on**, test recipients = the owner's personal number.
@@ -468,7 +484,7 @@ rewritten; sealed columns start empty).
 | 19 | Urgent aftercare answer pauses + alerts, no diagnosis | **PASS** | "urgent aftercare answer…" |
 | 20 | Unauthorised staff cannot view/export health answers/photos | **PASS** | staff suite "default-deny" + foreign-brand isolation + signed URL binding |
 | 21 | 390 px and 768 px views: no clipped controls / unusable tables | **PASS** (rendered harness) / **BLOCKED** (live theme) | `docs/evidence/journey/*.png` — 22 renders, 0 overflow, 0 clipped; Perfex dark theme + sidebar must be eyeballed on the host |
-| 22 | Existing patients, appointments, inbox, outbox, cron, reports, dark theme keep working | **PASS** (suites) / **BLOCKED** (host) | full suite 2,579 pass incl. every pre-existing suite and upstream's new media/media_out/media_r2 suites; dark theme not renderable here |
+| 22 | Existing patients, appointments, inbox, outbox, cron, reports, dark theme keep working | **PASS** (suites) / **BLOCKED** (host) | full suite 2,635 pass incl. every pre-existing suite and upstream's new media/media_out/media_r2 suites; dark theme not renderable here |
 | E2E | inbound → dedup → welcome → consent → form → photos → review → approved quote → consultation → procedure → aftercare | **PASS** (synthetic) | `test_journey_staff.php` runs the full path on one synthetic patient |
 
 ## 15. Blocked items — smallest exact next action
@@ -477,8 +493,9 @@ rewritten; sealed columns start empty).
 |---|---|---|
 | Counsel-approved KVKK health-data + photo-publication texts | clinic counsel / owner | Consent Settings → health_data (TR+EN) + photo_publication; version e.g. `kvkk-2026-09-v2` |
 | `journey_key` secret | owner (SSH) | `head -c 32 /dev/urandom \| base64 \| /home/hyundaic/bin/se-secret-install.sh journey_key` |
-| Private journey media directory | owner (SSH) | `mkdir -m 700 /home/hyundaic/_se_journey_media` |
-| Inbox copy of patient photos (plain, thread-visible — upstream design, §0.1) | owner | decide (a) accept / (b) role-gate `se_core/se_media/view` / (c) purge-after-seal (local only until `crm-media` gets a DELETE route) |
+| R2 for sealed photos | owner (SSH + wrangler) | verify `se_media_r2_url` / `r2_media_key` / `se_media_storage=r2` on the host; `npx wrangler deploy` in `services/crm-media` (DELETE route) |
+| Local fallback directory | owner (SSH) | `mkdir -m 700 /home/hyundaic/_se_journey_media` |
+| Inbox copy of patient photos (plain, thread-visible — upstream design, §0.1) | owner | Journeys → Settings → purge-after-seal on, or leave off |
 | Template approval | owner + Meta | Journeys → Templates → Submit (11) → wait → Sync |
 | Aftercare protocol content | clinic medical director | write instruction texts, set `approved: 1` in Settings → protocols |
 | Pre-op information text/link | counsel + medical director | Settings → clinical: approved + URL |

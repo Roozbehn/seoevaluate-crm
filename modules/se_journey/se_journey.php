@@ -114,7 +114,8 @@ function se_journey_cron()
 {
     $out = [];
     foreach (['reminders' => 'se_journey_run_reminders', 'aftercare' => 'se_journey_run_aftercare',
-              'parked_media' => 'se_journey_retry_parked_media', 'appointments' => 'se_journey_sync_appointments'] as $k => $fn) {
+              'parked_media' => 'se_journey_retry_parked_media', 'appointments' => 'se_journey_sync_appointments',
+              'media_to_r2' => 'se_journey_media_migrate_to_r2'] as $k => $fn) {
         try {
             $out[$k] = call_user_func($fn);
         } catch (Throwable $e) {
