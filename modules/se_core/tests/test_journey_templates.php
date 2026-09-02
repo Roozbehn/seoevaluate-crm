@@ -287,6 +287,40 @@ se_group('Journey templates: sandbox allow-list accepts national and internation
 update_option('se_journey_test_recipients_1', '0 531 000 00 09, +90 532 000 00 10; 905330000011');
 se_eq(['905310000009', '905320000010', '905330000011'], se_journey_test_recipients(1), 'every spelling normalises to the Meta wa_id form');
 
+/* ======================================================================== */
+se_group('Journey: automation sends work from the dispatcher, where no staff session exists');
+
+se_test_seed_journey();
+se_test_act_as(10, [], true);
+$db = se_test_db();
+se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, SE_JOURNEY_PREFILLED_MESSAGE, se_test_wamid(), ['name' => 'Ayşe']));
+se_eq('welcome_sent', se_test_journey_row()->state, 'welcome out');
+
+// The patient's tap is processed by the per-minute dispatcher: no logged-in staff, no admin.
+se_test_act_as(0, [], false);
+se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, 'Değerlendirme Başlat', se_test_wamid()));
+se_eq('consent_pending', se_test_journey_row()->state, 'privacy notice + link went out without a staff session (production 2026-09-03 00:48 failure)');
+se_eq(0, count(array_filter($db->rows('tblse_journey_events'), function ($e) { return $e['kind'] === 'send_blocked'; })), 'no send_blocked event');
+se_eq('', (string) get_option('se_wa_listener_last_error'), 'no listener error');
+$last = end($GLOBALS['se_wa_sent']);
+se_ok(strpos((string) $last['body'], '/se_journey/intake/') !== false, 'the secure link was sent');
+
+// A staff-originated send is still brand-scoped: a staff member with no brands cannot queue.
+se_test_act_as(20, ['se_whatsapp.create'], false);   // mapped to brand 2 only
+$r = se_wa_queue_message((int) se_test_journey_row()->wa_conversation_id, ['kind' => 'text', 'body' => 'hello'], 20);
+se_eq('not_found', $r['reason'], 'a staff caller outside the brand scope is still refused');
+
+// The listener's error note is masked: digits and long tokens never reach the options table.
+$GLOBALS['SE_WA_INBOUND_LISTENERS']['boom'] = function ($ctx) { throw new RuntimeException('Duplicate entry \'wamid.HBgMOTA1MzE0MzI4NTQ5FQIAERgSNzg5\' for key 905314000000 col'); };
+se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, 'merhaba', se_test_wamid()));
+$err = (string) get_option('se_wa_listener_last_error');
+se_ok(strpos($err, 'RuntimeException') !== false && strpos($err, 'Duplicate entry') !== false, 'class and message kept');
+se_ok(strpos($err, '905314') === false && strpos($err, 'HBgMOTA1') === false, 'phone-like digits and the wamid are masked');
+se_ok(preg_match('/\(test_journey_templates\.php:\d+\)/', $err) === 1, 'file:line kept');
+unset($GLOBALS['SE_WA_INBOUND_LISTENERS']['boom']);
+update_option('se_wa_listener_last_error', '');
+se_test_act_as(10, [], true);
+
 /* Leave the shared fixture stores as this suite found them. */
 $GLOBALS['SE_JOURNEY_TEMPLATE_SUBMITTER'] = null;
 se_test_remove_secret('wa_token');

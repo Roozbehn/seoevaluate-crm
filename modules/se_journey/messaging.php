@@ -342,7 +342,10 @@ function se_journey_send($j, array $spec)
 
     if ($policy['mode'] === 'freeform') {
         $kind = ($spec['kind'] ?? 'text') === 'interactive' ? 'interactive' : 'text';
-        $msg  = ['kind' => $kind, 'body' => (string) ($spec['body'] ?? ''), 'origin' => $origin, 'dedup_salt' => $salt];
+        // 'system': the journey resolved the thread by (id, brand) itself; the
+        // queue must not apply STAFF scope — automation runs from the dispatcher
+        // and the cron, where there is no staff session at all.
+        $msg  = ['kind' => $kind, 'body' => (string) ($spec['body'] ?? ''), 'origin' => $origin, 'dedup_salt' => $salt, 'system' => true];
         if ($kind === 'interactive') {
             $msg['buttons'] = (array) ($spec['buttons'] ?? []);
             if (!empty($spec['footer'])) { $msg['footer'] = (string) $spec['footer']; }
@@ -373,7 +376,7 @@ function se_journey_send($j, array $spec)
             return $blocked('template_' . $tpl['reason']);
         }
         $msg = ['kind' => 'template', 'template' => $tpl['meta_name'], 'variables' => array_values((array) ($spec['template_vars'] ?? [])),
-                'origin' => $origin, 'dedup_salt' => $salt];
+                'origin' => $origin, 'dedup_salt' => $salt, 'system' => true];
         if ($sendAfter > time()) {
             $msg['send_after'] = $sendAfter;
         }

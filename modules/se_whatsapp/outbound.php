@@ -204,8 +204,15 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
 {
     $CI = &get_instance();
 
+    // Staff callers are scoped to their brands. SYSTEM callers (journey
+    // automation, appointment reminders) run from the dispatcher / cron with
+    // no staff session — the scope would resolve to "nothing" and the send
+    // would silently fail with not_found; they have already resolved the
+    // thread by (id, brand) and say so with 'system' => true.
     $CI->db->where('id', (int) $conversation_id);
-    se_apply_scope_in('brand_id');
+    if (empty($message['system'])) {
+        se_apply_scope_in('brand_id');
+    }
     $conv = $CI->db->get(db_prefix() . 'se_wa_conversations')->row();
 
     if (!$conv) {
@@ -716,6 +723,7 @@ function se_wa_consume_due_reminders($limit = 50)
         $res = se_wa_queue_message((int) $conv->id, [
             'kind'     => 'template',
             'template' => (string) $rem['template_ref'],
+            'system'   => true,   // cron: no staff session, thread resolved by brand above
         ]);
 
         if ($res['ok'] || $res['reason'] === 'duplicate') {

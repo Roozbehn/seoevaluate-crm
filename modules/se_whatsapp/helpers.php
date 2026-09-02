@@ -591,8 +591,14 @@ function se_wa_notify_inbound_listeners(array $ctx)
             call_user_func($listener, $ctx);
         } catch (Throwable $e) {
             if (function_exists('update_option')) {
+                // Class + a masked, bounded message + file:line. Digit runs and
+                // long tokens are masked so a phone number, wamid, token hash or
+                // body fragment can never land in the options table; a column
+                // name, a SQL state or a code location can.
+                $masked = preg_replace(['/[0-9]{3,}/', '/[A-Za-z0-9_.\-]{24,}/'], ['#', '…'], (string) $e->getMessage());
                 update_option('se_wa_listener_last_error', (is_string($key) ? $key : 'listener')
-                    . ': ' . get_class($e) . ' @ ' . date('Y-m-d H:i:s'));
+                    . ': ' . get_class($e) . ' — ' . mb_substr($masked, 0, 200)
+                    . ' (' . basename((string) $e->getFile()) . ':' . (int) $e->getLine() . ') @ ' . date('Y-m-d H:i:s'));
             }
         }
     }
