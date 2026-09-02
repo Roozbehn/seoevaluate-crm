@@ -412,7 +412,7 @@ function se_integration_health($brand_id)
         $note('meta_leadgen_advanced_access',
              'Meta Lead Ads operational at standard access (business-owned assets)',
              'Nothing is blocked: the brand\'s own Page, forms and lead retrieval work (verified by a live fetch). Advanced access would only be needed for assets outside this business',
-             'Optional: submit App Review for leads_retrieval and pages_manage_ads if leads from another business\'s Page must ever be retrieved',
+             'Submit App Review for leads_retrieval and pages_manage_ads only if leads from another business\'s Page must ever be retrieved',
              se_health_link('se_core/se_meta'));
     }
     if (empty($meta['active_form_count'])) {

@@ -43,7 +43,7 @@ se_ok(is_array($h['notes']), 'the snapshot carries a separate notes list');
 $noteKeys = array_map(function ($n) { return $n['key']; }, $h['notes']);
 se_eq(['meta_leadgen_advanced_access'], $noteKeys, 'the optional advanced-access follow-up lives under notes');
 se_ok(stripos($h['notes'][0]['impact'], 'Nothing is blocked') === 0, 'the note says plainly that nothing is blocked');
-se_ok(stripos($h['notes'][0]['action'], 'Optional') === 0, 'and its action is labelled optional');
+se_ok(stripos($h['notes'][0]['action'], 'Optional') !== 0, 'the action carries no "Optional:" prefix (the view adds it once)');
 
 /* The Meta screen's reconcile gate agrees: standard-operational is not gated. */
 $st = se_meta_ui_status(1);
