@@ -114,11 +114,23 @@ class Se_whatsapp extends AdminController
         }
 
         $kind = $this->input->post('kind') === 'template' ? 'template' : 'text';
+        $template = (string) $this->input->post('template');
+
+        // Placeholder values are posted per template (variables[<name>][<n>]);
+        // only the chosen template's set is used, in placeholder order.
+        $posted    = $this->input->post('variables');
+        $variables = [];
+        if ($kind === 'template' && is_array($posted) && isset($posted[$template]) && is_array($posted[$template])) {
+            foreach ($posted[$template] as $k => $v) {
+                $variables[(string) $k] = trim((string) $v);
+            }
+        }
 
         $result = se_wa_queue_message((int) $id, [
-            'kind'     => $kind,
-            'body'     => (string) $this->input->post('body'),
-            'template' => (string) $this->input->post('template'),
+            'kind'      => $kind,
+            'body'      => (string) $this->input->post('body'),
+            'template'  => $template,
+            'variables' => $variables,
         ], (int) get_staff_user_id());
 
         if ($result['ok']) {

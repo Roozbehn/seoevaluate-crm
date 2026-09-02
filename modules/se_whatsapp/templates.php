@@ -87,6 +87,24 @@ function se_wa_parse_template($brand_id, array $tpl)
     ];
 }
 
+/**
+ * Placeholder keys a mirror row expects, in body order ('1','2',… or names).
+ * Reads the stored `variables` column; falls back to parsing `body` for rows
+ * inserted by a status webhook before a full sync filled the column in.
+ */
+function se_wa_template_variables(array $row)
+{
+    $stored = trim((string) ($row['variables'] ?? ''));
+    if ($stored !== '') {
+        return array_values(array_filter(array_map('trim', explode(',', $stored)), 'strlen'));
+    }
+    if (preg_match_all('/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/', (string) ($row['body'] ?? ''), $m)) {
+        return array_values(array_unique($m[1]));
+    }
+
+    return [];
+}
+
 /* ---------------------------------------------------------------------------
  * Persistence.
  * ------------------------------------------------------------------------- */

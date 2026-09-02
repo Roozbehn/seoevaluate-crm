@@ -238,19 +238,43 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
         $name = (string) ($message['template'] ?? '');
 
         // Only an APPROVED template for THIS brand may be queued.
-        $approved = false;
+        $approved = null;
 
         foreach (se_wa_approved_templates((int) $conv->brand_id) as $t) {
-            if ($t['name'] === $name) { $approved = true; break; }
+            if ($t['name'] === $name) { $approved = $t; break; }
         }
 
-        if (!$approved) {
+        if ($approved === null) {
             return ['ok' => false, 'id' => 0, 'reason' => 'template_not_approved'];
         }
 
+        // Placeholder values must match the template EXACTLY, in order. Meta
+        // rejects a mismatch at send time (#132000 "Number of parameters does
+        // not match"), which used to surface only as a failed queue row an
+        // hour later; refuse it here, at queue time, where the operator is.
+        $expected = function_exists('se_wa_template_variables') ? se_wa_template_variables($approved) : [];
+        $given    = (array) ($message['variables'] ?? []);
+        $isList   = array_keys($given) === range(0, count($given) - 1);
+        $ordered  = [];
+        foreach ($expected as $pos => $key) {
+            // Accept values keyed by placeholder ('1', 'name') or as a plain list.
+            $val = isset($given[$key]) ? $given[$key] : ($isList && isset($given[$pos]) ? $given[$pos] : '');
+            $val = trim((string) $val);
+            if ($val === '') {
+                return ['ok' => false, 'id' => 0, 'reason' => 'template_variables', 'missing' => (string) $key];
+            }
+            $ordered[] = mb_substr($val, 0, 1024);
+        }
+        if (!$expected) {
+            // Placeholder list unknown for this row (never fully synced): pass
+            // through whatever the caller supplied, in order, and let Meta judge.
+            $ordered = array_map(function ($v) { return mb_substr(trim((string) $v), 0, 1024); }, array_values($given));
+        }
+        $message['variables'] = $ordered;
+
         $body      = null;
         $template  = $name;
-        $signature = hash('sha256', $name . '|' . json_encode($message['variables'] ?? []));
+        $signature = hash('sha256', $name . '|' . json_encode($ordered));
     } else {
         return ['ok' => false, 'id' => 0, 'reason' => 'unsupported_kind'];
     }
@@ -271,7 +295,7 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
             'kind'            => $kind,
             'body'            => $body,
             'template_name'   => $template,
-            'variables_json'  => isset($message['variables']) ? json_encode($message['variables']) : null,
+            'variables_json'  => $kind === 'template' ? json_encode(array_values((array) $message['variables'])) : null,
             'idempotency_key' => $key,
             'status'          => 'pending',
             'attempts'        => 0,

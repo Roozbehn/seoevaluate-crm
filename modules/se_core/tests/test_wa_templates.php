@@ -172,6 +172,39 @@ se_eq('en', $sent[0]['template_language'] ?? null, 'the transport receives the t
 $q = se_wa_queue_message(901, ['kind' => 'template', 'template' => 'azin_reengagement_tr'], 10);
 se_eq('template_not_approved', $q['reason'], 'a rejected template cannot be queued');
 
+/* --- placeholders are validated at QUEUE time, not discovered at send time -- */
+se_wa_register_template_fetcher(function ($waba) use ($fixture) { return ['ok' => true, 'templates' => $fixture, 'error' => '']; });
+se_wa_sync_templates(1);   // azin_reengagement_tr back to approved, with body + variables '1,2'
+$tpl = null; foreach (se_wa_approved_templates(1) as $t) { if ($t['name'] === 'azin_reengagement_tr') { $tpl = $t; } }
+se_eq(['1', '2'], se_wa_template_variables($tpl), 'the mirror knows the template\'s placeholders');
+se_eq([], se_wa_template_variables(['variables' => null, 'body' => 'no placeholders here']), 'a template without placeholders expects none');
+se_eq(['name', 'date'], se_wa_template_variables(['variables' => '', 'body' => 'Hi {{name}}, see you {{date}}']),
+    'placeholders are parsed from the body when the column is empty');
+
+$q = se_wa_queue_message(901, ['kind' => 'template', 'template' => 'azin_reengagement_tr'], 10);
+se_eq('template_variables', $q['reason'], 'a template with placeholders is refused without values (was: Meta #132000 an hour later)');
+se_eq('1', $q['missing'], 'and names the first missing placeholder');
+
+$q = se_wa_queue_message(901, ['kind' => 'template', 'template' => 'azin_reengagement_tr',
+    'variables' => ['1' => 'Ayşe', '2' => '']], 10);
+se_eq('template_variables', $q['reason'], 'an empty value counts as missing');
+se_eq('2', $q['missing'], 'the second placeholder');
+
+$q = se_wa_queue_message(901, ['kind' => 'template', 'template' => 'azin_reengagement_tr',
+    'variables' => ['2' => '10 Eylül', '1' => 'Ayşe']], 10);
+se_eq(true, $q['ok'], 'keyed values in any order are accepted');
+$row = null; foreach (se_test_db()->rows('tblse_wa_outbound') as $r) { if ((int) $r['id'] === (int) $q['id']) { $row = $r; } }
+se_eq(['Ayşe', '10 Eylül'], json_decode($row['variables_json'], true), 'and stored as an ordered list matching the placeholders');
+
+$sent = [];
+se_wa_out_drain();
+se_eq(['Ayşe', '10 Eylül'], $sent[0]['variables'] ?? null, 'the transport receives the ordered values');
+se_eq('tr', $sent[0]['template_language'] ?? null, 'with the template\'s language');
+
+$q = se_wa_queue_message(901, ['kind' => 'template', 'template' => 'azin_reengagement_tr',
+    'variables' => ['Mehmet', '11 Eylül']], 10);
+se_eq(true, $q['ok'], 'a plain positional list is accepted too');
+
 /* --- cron throttle ------------------------------------------------------- */
 $calls = [];
 se_wa_register_template_fetcher(function ($waba) use (&$calls, $fixture) {

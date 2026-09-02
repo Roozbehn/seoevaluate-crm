@@ -102,7 +102,8 @@ $contact_label = $evidence_redacted ? se_wa_redacted_contact($c->wa_user_id) : $
           <input type="hidden" name="kind" value="template" />
           <div class="form-group">
             <label for="template" class="control-label"><?php echo html_escape(_l('se_wa_template')); ?></label>
-            <select class="form-control" id="template" name="template" required>
+            <select class="form-control" id="template" name="template" required
+                    onchange="seWaTemplatePick(this.value)">
               <?php foreach ($templates as $t) { ?>
                 <option value="<?php echo html_escape($t['name']); ?>">
                   <?php echo html_escape($t['name'] . ' (' . $t['language'] . ')'); ?>
@@ -110,6 +111,36 @@ $contact_label = $evidence_redacted ? se_wa_redacted_contact($c->wa_user_id) : $
               <?php } ?>
             </select>
           </div>
+          <?php foreach ($templates as $i => $t) {
+              $vars = function_exists('se_wa_template_variables') ? se_wa_template_variables($t) : []; ?>
+            <div class="se-wa-tpl" data-template="<?php echo html_escape($t['name']); ?>"<?php echo $i === 0 ? '' : ' style="display:none"'; ?>>
+              <?php if ((string) ($t['body'] ?? '') !== '') { ?>
+                <pre class="mbot10" style="white-space:pre-wrap;font-size:12px"><?php echo html_escape($t['body']); ?></pre>
+              <?php } ?>
+              <?php if ($vars) { ?>
+                <p class="text-muted" style="font-size:12px"><?php echo html_escape(_l('se_wa_template_variables_hint')); ?></p>
+                <?php foreach ($vars as $v) { ?>
+                  <div class="form-group">
+                    <label class="control-label">{{<?php echo html_escape($v); ?>}}</label>
+                    <input type="text" class="form-control" maxlength="1024"
+                           name="variables[<?php echo html_escape($t['name']); ?>][<?php echo html_escape($v); ?>]"
+                           <?php echo $i === 0 ? 'required' : 'disabled'; ?> />
+                  </div>
+                <?php } ?>
+              <?php } else { ?>
+                <p class="text-muted" style="font-size:12px"><?php echo html_escape(_l('se_wa_template_no_variables')); ?></p>
+              <?php } ?>
+            </div>
+          <?php } ?>
+          <script>
+            function seWaTemplatePick(name) {
+              document.querySelectorAll('.se-wa-tpl').forEach(function (el) {
+                var on = el.getAttribute('data-template') === name;
+                el.style.display = on ? '' : 'none';
+                el.querySelectorAll('input').forEach(function (inp) { inp.disabled = !on; inp.required = on; });
+              });
+            }
+          </script>
           <button type="submit" class="btn btn-primary"><?php echo html_escape(_l('se_wa_queue_reply')); ?></button>
         <?php echo form_close(); ?>
       <?php } ?>
