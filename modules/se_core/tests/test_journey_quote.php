@@ -193,6 +193,25 @@ se_eq(1, count(array_filter($db->rows('tblse_reminders'), function ($x) use ($ap
 se_eq(1, (int) $a['reminder_queued'], 'and the row is marked reminder_queued');
 se_eq(1, count(array_filter($db->rows('tblse_appointment_status_history'), function ($x) use ($apptId) { return (int) $x['appointment_id'] === $apptId && $x['new_status'] === 'scheduled'; })), 'status history written');
 
+// "Add to calendar": the confirmation carries a link to an .ics of the booking; the file is right.
+$conf = end($GLOBALS['se_wa_sent'])['body'];
+preg_match('#/se_journey/intake/([A-Za-z0-9_-]+)/calendar#', $conf, $cm);
+se_ok(!empty($cm[1]), 'the confirmation links to the calendar file');
+$cv = se_journey_verify_token($cm[1], 'calendar', '203.0.113.9', 'UA');
+se_eq(true, $cv['ok'], 'a calendar token (45 days)');
+$ics = se_journey_calendar_ics($j, se_journey_consultation_appointment($j));
+se_ok(strpos($ics, "BEGIN:VCALENDAR\r\n") === 0 && substr($ics, -15) === "END:VCALENDAR\r\n", 'iCalendar envelope with CRLF line ends');
+se_ok(strpos($ics, 'SUMMARY:Klinikte ön görüşme – ') !== false, 'face-to-face summary');
+se_ok(strpos($ics, 'LOCATION:Klinik\, İstanbul') !== false, 'clinic address, RFC-escaped comma');
+$startUtc = (new DateTime($pick, new DateTimeZone(get_option('default_timezone') ?: 'Europe/Istanbul')))->setTimezone(new DateTimeZone('UTC'))->format('Ymd\THis\Z');
+se_ok(strpos($ics, 'DTSTART:' . $startUtc) !== false, 'start converted to UTC');
+se_ok(strpos($ics, 'DTEND:') !== false && strpos($ics, 'UID:journey-' . (int) $j->id . '-appointment-' . (int) $r['appointment_id'] . '@') !== false, 'end and a stable UID');
+se_ok(strpos($ics, 'TRIGGER:-P1D') !== false, 'a reminder one day before');
+se_ok(strpos($ics, SE_TEST_PATIENT) === false && stripos($ics, 'aspirin') === false, 'no patient number, no health data in the file');
+se_eq(0, count(array_filter(explode("\r\n", $ics), function ($l) { return strlen($l) > 75; })), 'lines folded at 75 octets');
+se_ok(strpos(se_journey_calendar_google_url($j, se_journey_consultation_appointment($j)), 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=') === 0, 'Google Calendar link');
+se_eq(1, count(array_filter($db->rows('tblse_journey_tokens'), function ($t) { return $t['purpose'] === 'calendar'; })), 'one calendar token for the confirmation');
+
 $r2 = se_journey_booking_pick($j, $pick, 'page');
 se_eq('already_booked', $r2['reason'], 'a second pick is refused');
 $avail2 = se_journey_booking_slots(1);
@@ -259,6 +278,22 @@ se_eq('quote_sent', se_test_journey_row()->state, 'state: quote_sent');
 se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, '', se_test_wamid(), ['button' => ['payload' => 'jr_quote_accept', 'text' => 'Teklifi Kabul Et']]));
 se_eq('quote_accepted', se_test_journey_row()->state, 'template quick reply → quote_accepted');
 se_ok(strpos(end($GLOBALS['se_wa_sent'])['body'], '/book') !== false, 'calendar link sent');
+
+// Then a booking whose confirmation must go as a template: the 4-variable calendar template when approved.
+foreach ($db->tables['tblse_journey_templates'] as &$row) { if ($row['logical_name'] === 'eyebrow_consultation_calendar_tr') { $row['approval_status'] = 'approved'; } }
+unset($row);
+$db->tables['tblse_wa_templates'][] = ['id' => 3, 'brand_id' => 1, 'name' => 'eyebrow_consultation_calendar_tr', 'language' => 'tr', 'category' => 'UTILITY', 'approval_state' => 'approved', 'variables' => '1,2,3,4'];
+foreach ($db->tables['tblse_wa_conversations'] as &$c) { $c['window_expires_at'] = date('Y-m-d H:i:s', time() - 86400); }   // the tap's window has passed
+unset($c);
+se_test_act_as(10, [], true);
+$slotT = date('Y-m-d', strtotime('+6 days')) . ' 11:00:00';
+$rb = se_journey_book_appointment(se_test_journey_row(), ['start_at' => $slotT, 'staff_id' => 10, 'consultation_format' => 'in_person'], 10, 'consultation');
+se_wa_out_drain();
+se_eq(true, $rb['ok'], 'staff booking while the window is closed');
+$lastT = end($GLOBALS['se_wa_sent']);
+se_eq(['template', 'eyebrow_consultation_calendar_tr'], [$lastT['kind'], $lastT['template']], 'confirmation as the calendar template');
+se_eq(4, count($lastT['variables']), 'name, date, format, link');
+se_ok(strpos($lastT['variables'][3], '/calendar') !== false && $lastT['variables'][2] === 'klinikte', 'the fourth variable is the .ics link');
 
 // Without an approved quick-reply template the plain evaluation template is used (no payloads).
 se_test_journey_reviewed();

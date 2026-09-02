@@ -73,7 +73,7 @@ function se_journey_copy_defaults()
             'quote_revision_ack' =>
                 "Talebinizi aldık {{name}}. Danışmanınız teklifinizi gözden geçirip en kısa sürede bu numaradan sizinle iletişime geçecektir. Bu arada sorularınızı bu mesaja yanıt olarak yazabilirsiniz.",
             'consultation_confirmation' =>
-                "Merhaba {{name}}, {{when}} tarihli {{format}} görüşmeniz oluşturuldu. Değişiklik veya iptal için bu mesaja yanıt verebilirsiniz.",
+                "Merhaba {{name}}, {{when}} tarihli {{format}} görüşmeniz oluşturuldu. Görüşmeyi takviminize eklemek için: {{link}}\n\nDeğişiklik veya iptal için bu mesaja yanıt verebilirsiniz.",
             'consultation_reminder' =>
                 "Merhaba {{name}}, {{when}} tarihli görüşmenizi hatırlatırız. Katılamayacaksanız lütfen bu mesaja yanıt verin.",
             'procedure_confirmation' =>
@@ -732,6 +732,13 @@ function se_journey_template_definitions()
             'category' => 'UTILITY', 'language' => 'tr',
             'body' => 'Merhaba {{1}}, {{2}} tarihli {{3}} görüşmeniz oluşturuldu. Değişiklik veya iptal için bu mesaja yanıt verebilirsiniz.',
             'samples' => ['Ayşe', '12.09.2026 14:00', 'online'],
+        ],
+        'eyebrow_consultation_calendar_tr' => [
+            // The confirmation with the "add to calendar" (.ics) link; preferred over
+            // eyebrow_consultation_confirmation_tr once Meta approves it.
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, {{2}} tarihli {{3}} görüşmeniz oluşturuldu. Görüşmeyi takviminize eklemek için güvenli bağlantıyı kullanabilirsiniz: {{4}}. Değişiklik veya iptal için bu mesaja yanıt verebilirsiniz.',
+            'samples' => ['Ayşe', '12.09.2026 14:00', 'klinikte', 'https://crm.example.com/se_journey/intake/abc/calendar'],
         ],
         'eyebrow_consultation_reminder_tr' => [
             'category' => 'UTILITY', 'language' => 'tr',

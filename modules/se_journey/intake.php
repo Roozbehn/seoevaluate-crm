@@ -150,7 +150,7 @@ function se_journey_set_consent_bypass($brand_id, $on, $reason, $staff_id)
 
 function se_journey_token_purposes()
 {
-    return ['intake', 'upload', 'quote', 'checkin', 'info', 'book'];
+    return ['intake', 'upload', 'quote', 'checkin', 'info', 'book', 'calendar'];
 }
 
 function se_journey_token_ttl_seconds($purpose)
@@ -158,6 +158,7 @@ function se_journey_token_ttl_seconds($purpose)
     switch ($purpose) {
         case 'quote':   return 14 * 86400;
         case 'book':    return 14 * 86400;   // consultation slot picker after an accepted quote
+        case 'calendar': return 45 * 86400;  // "add to calendar" file for a booked consultation
         case 'info':    return 30 * 86400;
         case 'checkin': return 3 * 86400;
         default:        return se_journey_intake_ttl_hours() * 3600;
@@ -702,6 +703,9 @@ function se_journey_apply_identity($j, array $clean)
         }
     }
     $CI->db->where('id', (int) $j->id)->update(db_prefix() . 'se_journeys', $upd);
+    if (function_exists('se_journey_lead_apply_identity')) {
+        se_journey_lead_apply_identity($j, $clean);   // country / city / language / age / contact preference → lead
+    }
 
     // Patient record (brand-scoped, one per lead) — created now that clinical data exists.
     if ((int) $j->patient_id <= 0 && (int) $j->lead_id > 0 && function_exists('se_patient_create')) {
@@ -783,11 +787,14 @@ function se_journey_record_form_consent($j, array $input, $ip = '', $ua = '')
             se_journey_send_copy($j, 'consent_declined_ack', [], ['purpose' => 'consent_declined_ack']);
         }
 
+        if (function_exists('se_journey_sync_lead')) { se_journey_sync_lead($j, 'consent'); }
+
         return ['ok' => true, 'reason' => 'declined'];
     }
     if (in_array((string) $j->state, ['consent_pending', 'intake_link_sent', 'consent_declined'], true)) {
         se_journey_transition($j, 'intake_started', 'form_consent_granted', 'patient');
     }
+    if (function_exists('se_journey_sync_lead')) { se_journey_sync_lead($j, 'consent'); }   // the optional consents change without a transition
 
     return ['ok' => true, 'reason' => ''];
 }

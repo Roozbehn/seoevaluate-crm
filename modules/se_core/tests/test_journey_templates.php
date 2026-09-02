@@ -20,7 +20,7 @@ require_once __DIR__ . '/journey_fixtures.php';
 se_group('Journey templates: every definition is Meta-shaped');
 
 $defs = se_journey_template_definitions();
-se_eq(14, count($defs), 'fourteen logical templates (11 + the out-of-window start + the quote with quick replies + the calendar link)');
+se_eq(15, count($defs), 'fifteen logical templates (11 + start + quote with quick replies + booking link + consultation with calendar)');
 se_ok(isset($defs['eyebrow_quote_ready_tr']) && count($defs['eyebrow_quote_ready_tr']['buttons']) === 3, 'the quote template carries three quick-reply buttons');
 foreach ($defs['eyebrow_quote_ready_tr']['buttons'] as $qb) { se_ok(mb_strlen($qb['text']) <= 25 && $qb['type'] === 'QUICK_REPLY' && strpos($qb['payload'], 'jr_') === 0, 'quick reply "' . $qb['text'] . '": ≤ 25 chars, QUICK_REPLY, jr_* payload'); }
 se_ok(isset($defs['eyebrow_journey_start_tr']), 'the start template exists for enquiries whose window closed');
@@ -53,8 +53,8 @@ se_test_seed_journey();
 se_test_act_as(10, [], true);
 $db = se_test_db();
 $n = se_journey_seed_templates(1);
-se_eq(14, $n, 'first seeding registers all fourteen');
-se_eq(14, count($db->rows('tblse_journey_templates')), 'fourteen rows');
+se_eq(15, $n, 'first seeding registers all fifteen');
+se_eq(15, count($db->rows('tblse_journey_templates')), 'fifteen rows');
 se_eq(0, se_journey_seed_templates(1), 'a second run changes nothing');
 
 // Simulate what production holds: the v1 retake refused by Meta, another template pending.

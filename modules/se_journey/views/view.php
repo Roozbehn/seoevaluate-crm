@@ -71,6 +71,9 @@ $phase = se_journey_ui_phase($j->state);
     <?php } elseif ($j->state !== 'opted_out') { ?>
       <?php echo form_open($act('resume'), ['style' => 'display:inline-block']); ?><input type="hidden" name="reason" value="staff_resume" /><button class="btn btn-success btn-sm" type="submit"><i class="fa fa-play"></i> <?php echo html_escape($j->automation_state === 'error' ? _l('se_journey_retry_resume') : _l('se_journey_resume')); ?></button><?php echo form_close(); ?>
     <?php } ?>
+    <?php if ((int) $j->lead_id > 0) { ?>
+      <?php echo form_open($act('lead_sync'), ['style' => 'display:inline-block']); ?><button class="btn btn-default btn-sm" type="submit" title="<?php echo html_escape(_l('se_journey_lead_sync_hint')); ?>"><i class="fa fa-refresh"></i> <?php echo html_escape(_l('se_journey_lead_sync')); ?></button><?php echo form_close(); ?>
+    <?php } ?>
     <?php if ($j->state === 'opted_out') { ?>
       <?php echo form_open($act('reactivate'), ['class' => 'form-inline', 'style' => 'display:inline-block']); ?>
         <input type="text" class="form-control input-sm" name="evidence" placeholder="<?php echo html_escape(_l('se_journey_evidence_placeholder')); ?>" required />

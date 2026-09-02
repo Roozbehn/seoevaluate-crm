@@ -421,6 +421,37 @@ Secrets (file provider `SE_SECRET_DIR=/home/hyundaic/_secrets`, installed with
 placeholders; presence/absence is shown on Integration Credentials, Integration Health and
 Journeys → Settings.
 
+### 6.1 The lead record follows the journey (`modules/se_journey/leadsync.php`)
+
+Automatic, at every state transition, the form's consent step, the identity section of the form
+(captured at submit time — the sealed answers are never re-read), each photo, appointment changes,
+and on demand (journey page → *Fırsata eşitle*). Writes are by id + brand, so they work from the
+dispatcher and token pages (no staff session). Per brand: `se_journey_lead_sync_<brand>` (default
+on) and `se_journey_lead_sync_status_<brand>` (default on).
+
+| Where on the lead | What |
+|---|---|
+| native columns | `name` (at intake, existing), `country` (form ISO code/name → Perfex country id, only when empty), `city` (only when empty), `default_language` (tr→turkish, en→english; only when empty), `lastcontact` (latest patient touch) |
+| pipeline `status` | forward only along the se_core stages: WhatsApp Engaged → Qualified (form) → Photos Received → Quote Sent → Consultation Booked → Consultation Held → Treated → Follow-up; never on a converted, lost or junk lead; a stage staff set further along is left alone; a Perfex-style status line lands on the timeline |
+| custom fields ("Hasta yolculuğu", created idempotently by slug `leads_journey_*`) | stage, age, preferred language, contact preference, health-data / marketing / photo-publication consent (+ text version), form date, photo count, review decision, quote (`v1 · 1.500–2.200 EUR · gönderildi … · kabul edildi …` — the amount only when the patient was shown one), consultation (`08.09.2026 14:00 · klinikte · planlandı`), procedure, last sync |
+| timeline | one line per stage change, attributed to "Hasta yolculuğu" |
+
+**Never copied:** the health questionnaire (complaint, history, medication, pregnancy, allergies …).
+It is special-category data, sealed at rest, shown only on the journey's Intake tab to staff with
+the view-health capability; the lead record is plain, exportable and visible to everyone with lead
+access. `test_journey_leadsync.php` asserts none of it reaches the lead.
+
+### 6.2 "Add to calendar" for a booked consultation
+
+WhatsApp cannot carry `text/calendar` as a document (Meta's document types are PDF/Office/plain
+text), so the confirmation links to the file: `GET /se_journey/intake/<token>/calendar` (token
+purposes `calendar` — 45 days, issued with the confirmation — or the page's own `book`/`quote`
+token) returns an RFC 5545 `.ics` (UTC times from the clinic timezone, clinic address, a reminder
+one day before, no patient number, no health data); the booking and quote pages also offer it plus
+a Google Calendar link. In-window the confirmation text carries the link; outside the window the
+4-variable template `eyebrow_consultation_calendar_tr` goes once Meta approves it, else the
+original 3-variable confirmation (the pages still offer the file).
+
 ### 8.1 Patient self-booking (Journey Settings → flags section)
 
 | Option | Default | Meaning |
@@ -616,6 +647,15 @@ assumed. Secrets were generated on the host and never displayed.
 * Suite: **3,033 pass, 0 fail** (`test_journey_quote.php` added: buttons, template quick
   replies + Cloud API payload, accept / revision / page answers, calendar generation, self-booking
   through the model with no staff session, model guard).
+
+### 16.2 Addendum — lead sync + calendar file (2026-09-03)
+
+* Blank page after picking a slot: fixed (`6193dc4`) — the appointment model's post-write hooks read
+  through the staff scope; without a session Perfex's `is_admin()` queried mid-build and threw after
+  the insert. Hooks now read by id; the authz helpers answer "no" without querying when there is no
+  session. Four stray appointments (#91–#94, 8 Sep) from the failed attempts are the owner's to cancel.
+* Lead sync (§6.1) and the calendar file (§6.2) shipped; no schema change. Templates to submit:
+  `eyebrow_consultation_calendar_tr`. Suite: **3,123 pass, 0 fail**.
 
 **Not done, by design (owner steps, in order):**
 

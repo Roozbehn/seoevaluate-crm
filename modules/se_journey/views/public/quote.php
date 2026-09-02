@@ -40,6 +40,10 @@ $answerable = in_array($state, ['quote_sent', 'quote_accepted', 'quote_revision_
   <?php if ($booking) { ?>
     <p class="ok">Klinikte ön görüşmeniz planlandı: <strong><?php echo html_escape(date('d.m.Y H:i', strtotime((string) $booking->start_at))); ?></strong>.
       Değişiklik için WhatsApp üzerinden bize yazabilirsiniz.</p>
+    <?php if (!empty($ics_url)) { ?>
+      <a class="btn primary" href="<?php echo html_escape($ics_url); ?>">Takvime ekle (.ics)</a>
+      <?php if (!empty($gcal_url)) { ?><a class="btn ghost" href="<?php echo html_escape($gcal_url); ?>" target="_blank" rel="noopener">Google Takvim'e ekle</a><?php } ?>
+    <?php } ?>
   <?php } elseif ($response === 'accepted') { ?>
     <p class="ok">Teklifi kabul ettiğinizi kaydettik. Klinikte yüz yüze ön görüşme için size uygun tarih ve saati seçebilirsiniz.</p>
     <form method="post" action="<?php echo html_escape($action); ?>">

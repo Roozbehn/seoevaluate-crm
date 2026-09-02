@@ -97,10 +97,22 @@ function se_journey_book_appointment($j, array $data, $staff_id, $type = 'consul
         }
         se_journey_event($j, 'consultation_booked', $format . ' ' . $start . ($actor === 'patient' ? ' (patient self-booked)' : ''), [], $actor, $staff_id ?: null, 'appointment', (string) $id);
         if (function_exists('se_journey_send_copy')) {
-            se_journey_send_copy($j, 'consultation_confirmation', ['when' => date('d.m.Y H:i', strtotime($start)), 'format' => $format === 'online' ? 'online' : 'klinikte'],
-                ['purpose' => 'consultation_confirmation', 'bypass_pause' => true, 'template' => 'eyebrow_consultation_confirmation_tr',
-                 'template_vars' => [se_journey_template_name($j), date('d.m.Y H:i', strtotime($start)), $format === 'online' ? 'online' : 'klinikte'],
-                 'dedup_salt' => 'a' . (int) $id]);
+            // The confirmation carries an "add to calendar" link (.ics). Outside the
+            // window the 4-variable template goes when Meta has approved it; else
+            // the original 3-variable one (the booking page still offers the file).
+            $when = date('d.m.Y H:i', strtotime($start));
+            $fmt  = $format === 'online' ? 'online' : 'klinikte';
+            $cal  = se_journey_calendar_link($j, (int) $staff_id);
+            $tpl  = se_journey_template_ready((int) $j->brand_id, 'eyebrow_consultation_calendar_tr');
+            $spec = ['purpose' => 'consultation_confirmation', 'bypass_pause' => true, 'dedup_salt' => 'a' . (int) $id];
+            if ($tpl['ready'] && $cal !== '') {
+                $spec['template'] = 'eyebrow_consultation_calendar_tr';
+                $spec['template_vars'] = [se_journey_template_name($j), $when, $fmt, $cal];
+            } else {
+                $spec['template'] = 'eyebrow_consultation_confirmation_tr';
+                $spec['template_vars'] = [se_journey_template_name($j), $when, $fmt];
+            }
+            se_journey_send_copy($j, 'consultation_confirmation', ['when' => $when, 'format' => $fmt, 'link' => $cal], $spec);
         }
     } else {
         $upd = ['procedure_appointment_id' => (int) $id, 'last_updated' => $now];
@@ -149,6 +161,7 @@ function se_journey_appointment_update($j, $appointment_id, array $data, $staff_
     }
     se_journey_event($j, 'appointment_updated', implode(',', array_keys($allowed)), [], 'staff', $staff_id, 'appointment', (string) $appointment_id);
     se_journey_reflect_appointment($j, (int) $appointment_id, $staff_id, isset($data['outcome_note']) ? (string) $data['outcome_note'] : '');
+    if (function_exists('se_journey_sync_lead')) { se_journey_sync_lead($j, 'appointment'); }   // a reschedule/confirm changes no state
 
     return ['ok' => true, 'reason' => ''];
 }
@@ -249,7 +262,7 @@ function se_journey_booking_settings($brand_id)
 }
 
 /** The calendar (staff member) patient bookings land on: the setting, else the brand's first active staff. */
-function se_journey_booking_staff($brand_id, array $cfg = null)
+function se_journey_booking_staff($brand_id, ?array $cfg = null)
 {
     $cfg = $cfg ?: se_journey_booking_settings($brand_id);
     if ((int) $cfg['staff_id'] > 0) {
@@ -441,6 +454,123 @@ function se_journey_send_booking_link($j, $issued_by = 0, $correlation = '', $co
     ]);
 
     return ['ok' => (bool) $r['ok'], 'reason' => (string) $r['reason'], 'link' => $link, 'mode' => (string) $r['mode']];
+}
+
+/* ===========================================================================
+ * "Add to calendar": an iCalendar file for the booked consultation, served
+ * from a token page (WhatsApp cannot carry text/calendar as a document —
+ * Meta's document types are PDF/Office/plain text — so the message links
+ * to the file; a tap opens the phone's calendar with the event).
+ * ======================================================================== */
+
+/** A fresh calendar link for the journey's consultation ('' when nothing is booked). */
+function se_journey_calendar_link($j, $issued_by = 0)
+{
+    if (!se_journey_consultation_appointment($j)) {
+        return '';
+    }
+    $tok = se_journey_issue_token($j, 'calendar', (int) $issued_by, false);   // earlier links stay valid
+
+    return $tok['ok'] ? se_journey_public_url('se_journey/intake/' . $tok['token'] . '/calendar') : '';
+}
+
+/** RFC 5545 text escaping. */
+function se_journey_ics_text($v)
+{
+    return str_replace(["\\", ";", ",", "\r\n", "\n"], ["\\\\", "\;", "\\,", "\\n", "\\n"], (string) $v);
+}
+
+/** RFC 5545 line folding (75 octets, continuation lines start with a space). */
+function se_journey_ics_fold($line)
+{
+    $out = '';
+    while (strlen($line) > 75) {
+        $cut = 75;
+        while ($cut > 0 && (ord($line[$cut]) & 0xC0) === 0x80) { $cut--; }   // never split a UTF-8 sequence
+        $out .= substr($line, 0, $cut) . "\r\n ";
+        $line = substr($line, $cut);
+    }
+
+    return $out . $line;
+}
+
+/** A stored (app-timezone) datetime as an iCalendar UTC stamp. */
+function se_journey_ics_utc($datetime, $tz)
+{
+    try {
+        $d = new DateTime((string) $datetime, new DateTimeZone($tz));
+        $d->setTimezone(new DateTimeZone('UTC'));
+
+        return $d->format('Ymd\THis\Z');
+    } catch (Exception $e) {
+        return gmdate('Ymd\THis\Z', strtotime((string) $datetime));
+    }
+}
+
+/**
+ * The .ics for one appointment of the journey (consultation or procedure).
+ * Times are converted from the clinic timezone to UTC; the phone shows them
+ * in its own zone. No health data, no phone number of the patient.
+ */
+function se_journey_calendar_ics($j, $a)
+{
+    $tz     = function_exists('se_appt_clinic_tz') ? se_appt_clinic_tz((int) $j->brand_id) : (get_option('default_timezone') ?: 'Europe/Istanbul');
+    $cfg    = function_exists('se_journey_booking_settings') ? se_journey_booking_settings((int) $j->brand_id) : ['location' => ''];
+    $isProc = (string) ($a->appointment_type ?? '') === 'procedure';
+    $online = (string) ($a->consultation_format ?? '') === 'online';
+    $clinic = defined('SE_CLINIC_NAME') ? SE_CLINIC_NAME : 'Azin Asgari – Kaş Ekimi Uzmanı';
+    $summary = $isProc ? 'Kaş ekimi işlemi – ' . $clinic : ($online ? 'Online ön görüşme – ' : 'Klinikte ön görüşme – ') . $clinic;
+    $desc = ($isProc ? 'Kaş ekimi işleminiz.' : ($online ? 'Online ön görüşmeniz.' : 'Klinikte yüz yüze ön görüşmeniz.'))
+          . ' Değişiklik veya iptal için WhatsApp üzerinden yazabilirsiniz: +90 547 120 70 70';
+    $location = !empty($a->location) ? (string) $a->location : (string) ($cfg['location'] ?? '');
+    $end = !empty($a->end_at) ? (string) $a->end_at : date('Y-m-d H:i:s', strtotime((string) $a->start_at) + 30 * 60);
+    $host = parse_url(se_journey_public_url(''), PHP_URL_HOST) ?: 'crm';
+
+    $lines = [
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//' . se_journey_ics_text($clinic) . '//Patient journey//TR', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        'UID:journey-' . (int) $j->id . '-appointment-' . (int) $a->id . '@' . $host,
+        'DTSTAMP:' . gmdate('Ymd\THis\Z'),
+        'DTSTART:' . se_journey_ics_utc($a->start_at, $tz),
+        'DTEND:' . se_journey_ics_utc($end, $tz),
+        'SUMMARY:' . se_journey_ics_text($summary),
+        'DESCRIPTION:' . se_journey_ics_text($desc),
+    ];
+    if ($location !== '' && !$online) {
+        $lines[] = 'LOCATION:' . se_journey_ics_text($location);
+    }
+    $lines[] = 'STATUS:' . (in_array((string) $a->status, ['cancelled', 'no_show'], true) ? 'CANCELLED' : 'CONFIRMED');
+    $lines[] = 'BEGIN:VALARM';
+    $lines[] = 'TRIGGER:-P1D';
+    $lines[] = 'ACTION:DISPLAY';
+    $lines[] = 'DESCRIPTION:' . se_journey_ics_text('Yarın: ' . $summary);
+    $lines[] = 'END:VALARM';
+    $lines[] = 'END:VEVENT';
+    $lines[] = 'END:VCALENDAR';
+
+    return implode("\r\n", array_map('se_journey_ics_fold', $lines)) . "\r\n";
+}
+
+/** Google Calendar "add event" URL for the same appointment (a link, no file). */
+function se_journey_calendar_google_url($j, $a)
+{
+    $tz  = function_exists('se_appt_clinic_tz') ? se_appt_clinic_tz((int) $j->brand_id) : 'Europe/Istanbul';
+    $cfg = function_exists('se_journey_booking_settings') ? se_journey_booking_settings((int) $j->brand_id) : ['location' => ''];
+    $end = !empty($a->end_at) ? (string) $a->end_at : date('Y-m-d H:i:s', strtotime((string) $a->start_at) + 30 * 60);
+    $online = (string) ($a->consultation_format ?? '') === 'online';
+    $q = [
+        'action'   => 'TEMPLATE',
+        'text'     => ((string) ($a->appointment_type ?? '') === 'procedure' ? 'Kaş ekimi işlemi' : ($online ? 'Online ön görüşme' : 'Klinikte ön görüşme')) . ' – Azin Asgari',
+        'dates'    => se_journey_ics_utc($a->start_at, $tz) . '/' . se_journey_ics_utc($end, $tz),
+        'details'  => 'Değişiklik veya iptal için WhatsApp: +90 547 120 70 70',
+        'ctz'      => $tz,
+    ];
+    $loc = !empty($a->location) ? (string) $a->location : (string) ($cfg['location'] ?? '');
+    if ($loc !== '' && !$online) {
+        $q['location'] = $loc;
+    }
+
+    return 'https://calendar.google.com/calendar/render?' . http_build_query($q, '', '&', PHP_QUERY_RFC3986);
 }
 
 /* ===========================================================================

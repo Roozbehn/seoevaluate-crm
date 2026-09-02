@@ -17,6 +17,10 @@ $cfg     = $avail['cfg'];
   <?php if ($booking) { ?>
     <p class="ok">Görüşmeniz planlandı: <strong><?php echo html_escape($fmtDay(date('Y-m-d', strtotime((string) $booking->start_at))) . ', ' . date('H:i', strtotime((string) $booking->start_at))); ?></strong></p>
     <?php if (!empty($cfg['location'])) { ?><p><strong>Adres:</strong> <?php echo html_escape($cfg['location']); ?></p><?php } ?>
+    <?php if (!empty($ics_url)) { ?>
+      <a class="btn primary" href="<?php echo html_escape($ics_url); ?>">Takvime ekle (.ics)</a>
+      <?php if (!empty($gcal_url)) { ?><a class="btn ghost" href="<?php echo html_escape($gcal_url); ?>" target="_blank" rel="noopener">Google Takvim'e ekle</a><?php } ?>
+    <?php } ?>
     <p class="muted">Onay mesajı WhatsApp üzerinden gönderildi. Değişiklik veya iptal için WhatsApp'tan bize yazmanız yeterlidir.</p>
   <?php } else { ?>
     <?php if ($result && !$result['ok']) { ?>

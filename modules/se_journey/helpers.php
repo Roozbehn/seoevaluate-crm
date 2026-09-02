@@ -622,6 +622,16 @@ function se_journey_transition($journey, $to, $trigger, $actor_type = 'system', 
         $j->$k = $v;
     }
 
+    // The CRM lead follows the journey (non-health fields, pipeline stage, timeline line).
+    if (function_exists('se_journey_sync_lead')) {
+        try {
+            se_journey_lead_log_transition($j, $to);
+            se_journey_sync_lead($j, 'transition:' . $to);
+        } catch (Throwable $e) {
+            se_journey_audit((int) $j->brand_id, (int) $j->id, 'lead_sync_failed', null, null, mb_substr(basename($e->getFile()) . ':' . $e->getLine(), 0, 191));
+        }
+    }
+
     return ['ok' => true, 'reason' => '', 'from' => $from, 'to' => $to];
 }
 

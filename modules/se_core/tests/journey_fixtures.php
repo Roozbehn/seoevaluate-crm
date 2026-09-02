@@ -43,6 +43,11 @@ function se_test_seed_journey($opts = [])
     $db->seed('tblse_appointment_status_history', []);
     $db->seed('tblse_working_hours', []);
     $db->seed('tblse_reminders', []);
+    // The lead record the journey keeps in sync (custom fields, timeline, countries for the ISO map).
+    $db->seed('tblcustomfields', []);
+    $db->seed('tblcustomfieldsvalues', []);
+    $db->seed('tbllead_activity_log', []);
+    $db->seed('tblcountries', [['country_id' => 228, 'iso2' => 'TR', 'short_name' => 'Turkey'], ['country_id' => 83, 'iso2' => 'DE', 'short_name' => 'Germany']]);
     foreach (['se_journeys', 'se_journey_transitions', 'se_journey_events', 'se_journey_tokens', 'se_journey_intakes',
               'se_journey_media', 'se_journey_reviews', 'se_journey_quotes', 'se_journey_aftercare_plans',
               'se_journey_aftercare_events', 'se_journey_templates', 'se_journey_tasks', 'se_journey_audit', 'se_journey_throttle'] as $t) {

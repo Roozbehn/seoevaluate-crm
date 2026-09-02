@@ -15,6 +15,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  *   POST se_journey/intake/<token>/quote      the patient's answer (accept / revision / human)
  *   GET  se_journey/intake/<token>/book       face-to-face consultation slot picker (calendar)
  *   POST se_journey/intake/<token>/book       book the chosen slot
+ *   GET  se_journey/intake/<token>/calendar   the booked consultation as an .ics file (calendar or book token)
  *
  * The token is the ONLY identity; nothing else in the URL. Every request
  * re-verifies it (purpose, expiry, revocation, opt-out), rate-limits by IP,
@@ -41,6 +42,9 @@ class Intake extends App_Controller
             }
 
             return $this->quote($token, $ip, $ua);
+        }
+        if ($sub === 'calendar') {
+            return $this->calendar($token, $ip, $ua);
         }
         if ($sub === 'book') {
             if ($method === 'post' && se_journey_throttle_hit('post:' . hash('sha256', $ip), 120, 600)) {
@@ -217,6 +221,8 @@ class Intake extends App_Controller
         }
         $this->load->view('se_journey/public/quote', [
             'snapshot' => $r['snapshot'], 'response' => $r['response'], 'booking' => $r['booking'], 'notice' => $notice,
+            'ics_url' => $r['booking'] ? se_journey_public_url('se_journey/intake/' . $token . '/calendar') : '',
+            'gcal_url' => $r['booking'] ? se_journey_calendar_google_url($r['journey'], $r['booking']) : '',
             'state' => (string) $r['journey']->state,
             'csrf_name' => $this->security->get_csrf_token_name(), 'csrf_hash' => $this->security->get_csrf_hash(),
             'action' => se_journey_public_url('se_journey/intake/' . $token . '/quote'),
@@ -254,6 +260,30 @@ class Intake extends App_Controller
         return $this->fail('unknown');
     }
 
+    /** The booked consultation as an iCalendar file ("add to calendar"). */
+    private function calendar($token, $ip, $ua)
+    {
+        $v = se_journey_verify_token($token, 'calendar', $ip, $ua);
+        foreach (['book', 'quote'] as $alt) {   // the booking and quote pages link with their own tokens
+            if (!$v['ok'] && $v['reason'] === 'wrong_purpose') {
+                $v = se_journey_verify_token($token, $alt, $ip, $ua);
+            }
+        }
+        if (!$v['ok']) {
+            return $this->fail($v['reason']);
+        }
+        $j = $v['journey'];
+        $a = se_journey_consultation_appointment($j);
+        if (!$a) {
+            return $this->fail('no_appointment');
+        }
+        $ics = se_journey_calendar_ics($j, $a);
+        header('Content-Type: text/calendar; charset=utf-8');
+        header('Content-Disposition: attachment; filename="on-gorusme.ics"');
+        header('Content-Length: ' . strlen($ics));
+        echo $ics;
+    }
+
     /** Calendar: free face-to-face slots; POST books one. */
     private function book($token, $ip, $ua, $post)
     {
@@ -268,9 +298,12 @@ class Intake extends App_Controller
             $j = se_journey_get_raw((int) $j->id);
         }
         $avail = se_journey_booking_slots((int) $j->brand_id);
+        $booking = se_journey_consultation_upcoming($j);
         $this->load->view('se_journey/public/book', [
             'token' => $token, 'j' => $j, 'avail' => $avail, 'result' => $result,
-            'booking' => se_journey_consultation_upcoming($j),
+            'booking' => $booking,
+            'ics_url' => $booking ? se_journey_public_url('se_journey/intake/' . $token . '/calendar') : '',
+            'gcal_url' => $booking ? se_journey_calendar_google_url($j, $booking) : '',
             'csrf_name' => $this->security->get_csrf_token_name(), 'csrf_hash' => $this->security->get_csrf_hash(),
             'action' => se_journey_public_url('se_journey/intake/' . $token . '/book'),
         ]);

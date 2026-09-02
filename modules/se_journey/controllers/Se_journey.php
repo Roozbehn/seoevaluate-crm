@@ -243,6 +243,11 @@ class Se_journey extends AdminController
                 $r = se_journey_book_appointment($j, $this->input->post(), $staff, $type);
                 $msg = $r['ok'] ? ['success', _l('se_journey_booked')] : ['warning', _l('se_journey_blocked') . ': ' . _l('se_journey_reason_' . $r['reason'])];
                 break;
+            case 'lead_sync':
+                $this->need('view');
+                $r = se_journey_sync_lead($j, 'staff');
+                $msg = $r['ok'] ? ['success', _l('se_journey_lead_synced')] : ['warning', _l('se_journey_blocked') . ': ' . $r['reason']];
+                break;
             case 'book_link':
                 // The calendar link (face-to-face consultation slot picker), by hand.
                 $this->need('manage_consultation');
@@ -425,6 +430,8 @@ class Se_journey extends AdminController
             'media_storage' => (string) get_option('se_journey_media_storage') ?: 'auto',
             'media_storage_status' => se_journey_media_storage_status(),
             'purge_inbox_copy' => (int) get_option('se_journey_purge_inbox_copy_' . $brand),
+            'lead_sync' => se_journey_lead_sync_enabled($brand) ? 1 : 0,
+            'lead_sync_status' => se_journey_lead_sync_status_enabled($brand) ? 1 : 0,
             'booking' => se_journey_booking_settings($brand),
             'booking_staff_options' => $brand > 0 && function_exists('se_appt_selectable_staff') ? se_appt_selectable_staff($brand) : [],
             'ask_infectious' => (int) get_option('se_journey_ask_infectious_' . $brand),
@@ -462,6 +469,8 @@ class Se_journey extends AdminController
             update_option('se_journey_technical_fields_' . $brand, (int) $this->input->post('technical_fields') === 1 ? 1 : 0);
             update_option('se_journey_media_storage', in_array((string) $this->input->post('media_storage'), ['auto', 'r2', 'local'], true) ? (string) $this->input->post('media_storage') : 'auto');
             update_option('se_journey_purge_inbox_copy_' . $brand, (int) $this->input->post('purge_inbox_copy') === 1 ? 1 : 0);
+            update_option('se_journey_lead_sync_' . $brand, (int) $this->input->post('lead_sync') === 1 ? 1 : 0);
+            update_option('se_journey_lead_sync_status_' . $brand, (int) $this->input->post('lead_sync_status') === 1 ? 1 : 0);
             // Patient self-booking calendar (face-to-face consultation after an accepted quote).
             update_option('se_journey_booking_staff_' . $brand, max(0, (int) $this->input->post('booking_staff')));
             update_option('se_journey_booking_slot_' . $brand, max(15, min(180, (int) $this->input->post('booking_slot'))));

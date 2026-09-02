@@ -684,6 +684,7 @@ function se_journey_after_media_received($j, $corr = '')
     } elseif (!$inPhotoStep) {
         se_journey_task($j, 'additional_photo', 'Additional photo received', 'normal', null, $corr);
     }
+    if (function_exists('se_journey_sync_lead')) { se_journey_sync_lead($j, 'photo'); }   // count only; no transition yet
 
     return ['handled' => true, 'reason' => 'photo_stored', 'journey_id' => (int) $j->id];
 }

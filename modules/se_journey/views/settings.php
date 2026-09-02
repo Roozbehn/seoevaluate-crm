@@ -62,6 +62,11 @@
           <div class="col-sm-6"><div class="checkbox checkbox-primary" style="margin-top:28px"><input type="checkbox" id="cb_purge_inbox_copy" name="purge_inbox_copy" value="1" <?php echo $v['purge_inbox_copy'] ? 'checked' : ''; ?> /><label for="cb_purge_inbox_copy"><?php echo html_escape(_l('se_journey_flag_purge_inbox')); ?></label></div></div>
         </div>
         <hr />
+        <h5><?php echo html_escape(_l('se_journey_lead_sync_settings')); ?></h5>
+        <p class="text-muted"><small><?php echo html_escape(_l('se_journey_lead_sync_note')); ?></small></p>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_lead_sync" name="lead_sync" value="1" <?php echo $v['lead_sync'] ? 'checked' : ''; ?> /><label for="cb_lead_sync"><?php echo html_escape(_l('se_journey_flag_lead_sync')); ?></label></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_lead_sync_status" name="lead_sync_status" value="1" <?php echo $v['lead_sync_status'] ? 'checked' : ''; ?> /><label for="cb_lead_sync_status"><?php echo html_escape(_l('se_journey_flag_lead_sync_status')); ?></label></div>
+        <hr />
         <h5><?php echo html_escape(_l('se_journey_booking_settings')); ?></h5>
         <p class="text-muted"><small><?php echo html_escape(_l('se_journey_booking_note')); ?></small></p>
         <?php $bk = $v['booking']; ?>
