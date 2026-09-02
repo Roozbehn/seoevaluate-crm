@@ -9,7 +9,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * Two flows, both driven by this CRM as their Data Endpoint (encrypted
  * data_exchange, Meta's "Flows Data API" v3.0):
  *
- *   intake   CONSENT → IDENTITY → CONCERN → HEALTH_1 → HEALTH_2 → SUCCESS
+ *   intake   CONSENT → IDENTITY → CONCERN → HEALTH_A → HEALTH_B → SUCCESS
  *            every screen is validated and sealed by the same functions the
  *            web form uses (se_journey_record_form_consent, _intake_save,
  *            _intake_submit) — one questionnaire, two front doors.
@@ -404,9 +404,9 @@ function se_journey_flow_intake_screens($brand_id)
 
     return [
         'IDENTITY' => ['title' => 'Kimlik ve iletişim',     'fields' => $bySection['identity'] ?? [], 'next' => 'CONCERN'],
-        'CONCERN'  => ['title' => 'Kaş şikâyeti',           'fields' => $bySection['concern'] ?? [],  'next' => 'HEALTH_1'],
-        'HEALTH_1' => ['title' => 'Sağlık taraması (1/2)',  'fields' => $h1, 'next' => 'HEALTH_2'],
-        'HEALTH_2' => ['title' => 'Sağlık taraması (2/2)',  'fields' => $h2, 'next' => null],
+        'CONCERN'  => ['title' => 'Kaş şikâyeti',           'fields' => $bySection['concern'] ?? [],  'next' => 'HEALTH_A'],
+        'HEALTH_A' => ['title' => 'Sağlık taraması (1/2)',  'fields' => $h1, 'next' => 'HEALTH_B'],
+        'HEALTH_B' => ['title' => 'Sağlık taraması (2/2)',  'fields' => $h2, 'next' => null],
     ];
 }
 
@@ -576,7 +576,9 @@ function se_journey_flow_intake_step($j, $action, $screen, array $data, $flowTok
             }
         }
 
-        return ['screen' => 'HEALTH_2', 'data' => ['error_message' => '']];
+        $last = array_key_last($screens);   // everything answered: the final screen (ids: letters and underscores only — Meta refuses digits)
+
+        return ['screen' => $last, 'data' => ['error_message' => '']];
     }
 
     if ($action !== 'data_exchange') {

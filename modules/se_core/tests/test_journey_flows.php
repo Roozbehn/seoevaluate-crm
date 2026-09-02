@@ -121,6 +121,7 @@ foreach (['intake', 'booking'] as $kind) {
     se_eq('3.0', $fj['data_api_version'], "$kind: data API 3.0 (endpoint flows)");
     $ids = array_column($fj['screens'], 'id');
     se_eq(array_keys($fj['routing_model']), $ids, "$kind: routing model covers every screen in order");
+    foreach ($ids as $id) { se_ok(preg_match('/^[A-Za-z_]+$/', $id) === 1, "$kind: screen id '$id' is letters/underscores only (Meta refused HEALTH_1: PATTERN_MISMATCH)"); }
     se_ok(!in_array('SUCCESS', $ids, true), "$kind: SUCCESS is reserved");
     $terminals = array_filter($fj['screens'], function ($s) { return !empty($s['terminal']); });
     se_eq(1, count($terminals), "$kind: exactly one terminal screen");
@@ -151,7 +152,7 @@ foreach (['intake', 'booking'] as $kind) {
     }
 }
 $fj = se_journey_flow_json(1, 'intake');
-se_eq(['CONSENT', 'IDENTITY', 'CONCERN', 'HEALTH_1', 'HEALTH_2'], array_column($fj['screens'], 'id'), 'intake screens');
+se_eq(['CONSENT', 'IDENTITY', 'CONCERN', 'HEALTH_A', 'HEALTH_B'], array_column($fj['screens'], 'id'), 'intake screens');
 // Every required questionnaire field is asked, with the same keys and option ids as the web form.
 $asked = [];
 foreach ($fj['screens'] as $s) { foreach ($s['layout']['children'] as $c) { if ($c['type'] === 'Form') { foreach ($c['children'] as $f) { if (isset($f['name'])) { $asked[$f['name']] = $f; } } } } }
@@ -232,25 +233,25 @@ se_eq('Ayşe Örnek', se_journey_intake_answers(se_journey_intake_get(se_test_jo
 // CONCERN with a required field left out ('areas') → still saved (autosave), moves on.
 $r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'CONCERN', 'flow_token' => $flowToken,
     'data' => ['main_concern' => ['sparse'], 'onset' => 'gt3y', 'progression' => 'stable', 'previous_transplant' => 'no', 'previous_procedures' => ['none'], 'timing' => 'asap']]);
-se_eq('HEALTH_1', $r['screen'], 'CONCERN → HEALTH_1');
+se_eq('HEALTH_A', $r['screen'], 'CONCERN → HEALTH_A');
 // An invalid value → same screen with the validation message.
-$r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'HEALTH_1', 'flow_token' => $flowToken,
+$r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'HEALTH_A', 'flow_token' => $flowToken,
     'data' => ['pregnancy' => 'maybe', 'chronic' => ['none'], 'skin' => ['none'], 'allergies' => ['none']]]);
-se_eq('HEALTH_1', $r['screen'], 'an invalid option keeps the screen');
+se_eq('HEALTH_A', $r['screen'], 'an invalid option keeps the screen');
 se_ok($r['data']['error_message'] !== '', 'with an error message: ' . $r['data']['error_message']);
-$r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'HEALTH_1', 'flow_token' => $flowToken,
+$r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'HEALTH_A', 'flow_token' => $flowToken,
     'data' => ['pregnancy' => 'no', 'chronic' => ['none'], 'skin' => ['none'], 'allergies' => ['none']]]);
-se_eq('HEALTH_2', $r['screen'], 'HEALTH_1 → HEALTH_2');
+se_eq('HEALTH_B', $r['screen'], 'HEALTH_A → HEALTH_B');
 // Final screen: the missing 'areas' from CONCERN sends the patient back there.
 $h2 = ['blood_thinners' => 'yes', 'blood_thinners_detail' => 'aspirin', 'smoking' => 'no', 'alcohol' => 'no', 'anesthesia_complications' => 'no'];
-$r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'HEALTH_2', 'flow_token' => $flowToken, 'data' => $h2]);
+$r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'HEALTH_B', 'flow_token' => $flowToken, 'data' => $h2]);
 se_eq('CONCERN', $r['screen'], 'submit with a missing earlier answer → back to that screen');
 se_ok(strpos($r['data']['error_message'], 'Etkilenen bölgeler') !== false, 'naming the field');
 $r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'CONCERN', 'flow_token' => $flowToken, 'data' => ['areas' => ['tail']]]);
-se_eq('HEALTH_1', $r['screen'], 'the missing answer saved');
-$r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'HEALTH_2', 'flow_token' => $flowToken, 'data' => $h2]);
+se_eq('HEALTH_A', $r['screen'], 'the missing answer saved');
+$r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'HEALTH_B', 'flow_token' => $flowToken, 'data' => $h2]);
 se_wa_out_drain();
-se_eq(['SUCCESS', 'intake_submitted'], [$r['screen'], $r['data']['extension_message_response']['params']['result']], 'HEALTH_2 → SUCCESS (intake_submitted)');
+se_eq(['SUCCESS', 'intake_submitted'], [$r['screen'], $r['data']['extension_message_response']['params']['result']], 'HEALTH_B → SUCCESS (intake_submitted)');
 se_eq($flowToken, $r['data']['extension_message_response']['params']['flow_token'], 'the flow_token travels back');
 $j = se_test_journey_row();
 se_eq('photos_requested', $j->state, 'state: photos_requested (the photo request went out as before)');

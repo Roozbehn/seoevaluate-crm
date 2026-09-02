@@ -474,7 +474,7 @@ inside it. Decrypted content is never logged.
 
 **Flow JSON** is generated from `se_journey_questionnaire()` (`se_journey_flow_json()`), so both
 doors ask the same questions with the same keys and option ids: `CONSENT` (notice from Consent
-Settings + three OptIns, health required) → `IDENTITY` → `CONCERN` → `HEALTH_1` → `HEALTH_2`
+Settings + three OptIns, health required) → `IDENTITY` → `CONCERN` → `HEALTH_A` → `HEALTH_B`
 (terminal) for the intake; `DAY` → `TIME` (terminal) for booking, days/slots from
 `se_journey_booking_slots()`. Meta's limits are honoured (labels 20/30, options ≤ 20/200, ≤ 50
 components, `routing_model`, `data_api_version 3.0`, version 6.3) and asserted by the suite. Every
