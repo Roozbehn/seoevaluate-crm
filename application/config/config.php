@@ -566,7 +566,11 @@ $config['rewrite_short_tags'] = false;
 | Comma-separated:  '10.0.1.200,192.168.5.0/24'
 | Array:        array('10.0.1.200', '192.168.5.0/24')
 */
-$config['proxy_ips'] = '';
+// Cloudflare sits in front of crm.roozbeh.com.tr (AZCRM-SEC-005 / CRM-M062): trust
+// X-Forwarded-For / CF-Connecting-IP only from Cloudflare's published ranges so
+// rate limits, audit rows and "real IP" checks see the visitor, not the edge.
+// Ranges: https://www.cloudflare.com/ips/ (reviewed 2026-09). Empty string = trust nobody.
+$config['proxy_ips'] = defined('APP_PROXY_IPS') ? APP_PROXY_IPS : '173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22';
 
 /*
 |--------------------------------------------------------------------------
