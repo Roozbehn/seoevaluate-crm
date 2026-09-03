@@ -23,7 +23,7 @@
 }
 
 /* Light theme tokens (Perfex light mode / no dark-theme plugin) */
-body.se-theme-light,html[data-theme=light] body,body.light-mode{
+body.se-theme-light,html[data-theme=light] body,html[data-perfex-theme="light"] body,body.light-mode{
   --se-bg:#f4f4f7; --se-surface:#ffffff; --se-surface-2:#eef0f5; --se-surface-3:#e2e5ee; --se-border:#dcdfe8; --se-border-strong:#8b90a6;
   --se-text:#1f2937; --se-text-2:#4b5563; --se-text-3:#6b7280;
   --se-primary:#4650e0; --se-primary-hover:#3d46c9; --se-primary-soft:rgba(70,80,224,.10); --se-link:#3d46c9; --se-focus:#3d46c9;
