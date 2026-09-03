@@ -72,3 +72,10 @@
 - Tests: **4 376 pass / 0 fail** (+101: per-statement guard checks for the 15 new DDL statements, redaction, worker). Copy gate OK. Worker smoke test (node): no key → 503, empty sig → 404 bad_sig, empty bearer → falls to signed path → 404.
 - Tickets: M053 (code; host apply pending) M061 M073 — PLANNED with reasons: M050 M052 M054 M055 M056 M057 M051 M060 M074 M062 (host).
 - Deploy note for v21: `php migrate_cli.php --verify` shows 15 pending statements; `--apply` after a DB backup; each is IF NOT EXISTS so a partial apply is safe to re-run.
+
+## Wave 9 — Accessibility / responsive / RTL completion
+- Start SHA: de9f84b → End SHA: 70f4d25
+- Files: modules/se_core/assets/se-ds.css (RTL block, motion, focus), modules/se_journey/views/public/{_shell.php, book, intake, intake_done, photos, quote}.php
+- Tests: **4 376 pass / 0 fail** (CSS + view changes; verified by lint and the live/Playwright pass in the verification wave).
+- Tickets: M063 (evidence across Waves 2–5) M064 M020 (patient blocks) M015 (motion/focus completion).
+- Live checks queued for the verification wave: focus ring visible on every control at 1440; 390 no horizontal scroll; RTL smoke by switching one staff member to a Persian locale is NOT done on production (would alter a real staff record) — verified with a  injected on the html element instead.
