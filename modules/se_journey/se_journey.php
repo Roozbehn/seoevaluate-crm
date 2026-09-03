@@ -40,6 +40,10 @@ hooks()->add_action('after_cron_run', 'se_journey_cron');
 // Journey summary on the lead profile.
 hooks()->add_action('after_lead_tabs_content', 'se_journey_lead_tab');
 
+// A lead deleted in the CRM must not strand its journey (the website pipeline
+// re-creates the lead under a new id; the journey re-links to it).
+hooks()->add_action('after_lead_deleted', 'se_journey_on_lead_deleted');
+
 function se_journey_activation()
 {
     require_once __DIR__ . '/install.php';

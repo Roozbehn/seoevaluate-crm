@@ -279,6 +279,18 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
         // not match"), which used to surface only as a failed queue row an
         // hour later; refuse it here, at queue time, where the operator is.
         $expected = function_exists('se_wa_template_variables') ? se_wa_template_variables($approved) : [];
+        // The journey registry submitted its own templates and knows their
+        // placeholders and buttons before the mirror does (a status webhook
+        // inserts the approval alone; the full pull follows on the cron).
+        $hint = function_exists('se_journey_template_hint') ? se_journey_template_hint((int) $conv->brand_id, $name) : null;
+        if (!$expected && $hint) {
+            $expected = $hint['variables'];
+        }
+        // A FLOW button is sent with a per-message flow token; without one Meta
+        // refuses the send (#132000). Only the journey issues tokens.
+        if ($hint && $hint['flow_kind'] !== '' && empty($message['flow_button'])) {
+            return ['ok' => false, 'id' => 0, 'reason' => 'flow_button_required'];
+        }
         $given    = (array) ($message['variables'] ?? []);
         $isList   = array_keys($given) === range(0, count($given) - 1);
         $ordered  = [];

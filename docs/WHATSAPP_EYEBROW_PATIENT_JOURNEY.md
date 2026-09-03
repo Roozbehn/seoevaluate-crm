@@ -717,6 +717,42 @@ Flows* ON — both cards read "In use". WhatsApp Manager → Flows lists both as
 WhatsApp; outside the 24 h window the flow-button templates go once Meta approves them, and the
 links remain the fallback for anything not ready.
 
+### 16.4 Addendum — a deleted lead, and a Flow template sent from the composer (2026-09-03 03:00–03:30 +03)
+
+Two production findings on the first patient with a new number.
+
+**Lead vanished.** The website form created lead #900712 (01:23 +03) and the journey (#2) was
+started from it; at 02:56 +03 the lead was deleted on the CRM's Leads screen
+(`GET /admin/leads/delete/900712`, admin session). The patient re-submitted the form twice; the
+website pipeline (Supabase `lead_os` + the `azin-web` worker) already held
+`leads.turquai_contact_ref = 900712` and its CRM adapter short-circuits on that field, so the CRM
+was never asked again — no lead, while journey #2 kept pointing at a row that no longer existed.
+Fixed on both sides: the Supabase marker was reset (`turquai_contact_ref`, `lead_sync_state`)
+and the associate event re-queued → the CRM created **#900713** (03:12 +03). In the CRM
+(`se_journey_on_lead_deleted`, Perfex `after_lead_deleted`): a deleted lead detaches its journey
+and thread (`lead_id = 0`), writes a `lead_deleted` timeline line and opens a `lead_deleted` staff
+task; **Start journey on the new lead re-links** the existing journey and thread
+(`se_journey_relink_lead`, reason `relinked`, timeline `lead_linked`, immediate lead sync) — also
+when the old id was never cleared (deleted before this release). Rule for staff: a website lead is
+never deleted; mark it *Junk*/*Lost* instead — the website remembers the CRM id.
+
+**#132000 on `eyebrow_intake_flow_tr`.** Outbound #900626 (`origin=staff`) came from the
+conversation composer as a plain template: zero variables, no FLOW button component. Two causes.
+(a) The mirror row had been inserted by the approval webhook alone (no body, no variables), so
+the composer asked for no placeholder and the queue could not validate;
+`se_wa_handle_template_status` now fills body/variables from the journey registry
+(`se_journey_template_hint`) at once and flags a forced re-pull (`se_wa_templates_resync_<brand>`,
+honoured by the cron regardless of the six-hour throttle; Meta's copy then replaces the
+registry's). (b) A FLOW button carries a per-patient `flow_token` that only the journey issues:
+`se_wa_queue_message` refuses such a template without one (`flow_button_required`), and the
+composer routes a flow template through the journey (`se_journey_compose_template` → *Resend
+link* for intake, *Send calendar link* for booking): in-window → the interactive Flow message,
+otherwise the template with `{{1}}` + the flow-button component; the journey **sandbox applies**
+(recorded, not sent, unless the number is a test recipient). Composer notices:
+`se_wa_reply_queued_via_journey`, `se_wa_reply_sandbox_not_sent`,
+`se_wa_reply_blocked_flow_button_required|journey_required|journey_permission`. Suite **3,577
+pass, 0 fail** (`test_journey_relink.php` + the composer group in `test_journey_flows.php`).
+
 **Not done, by design (owner steps, in order):**
 
 1. Log in once as admin (seeds the 11 template rows, grants the journey capabilities to Clinic Owner / Sales).
