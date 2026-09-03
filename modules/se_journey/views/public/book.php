@@ -1,6 +1,6 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
 require __DIR__ . '/_shell.php';
-se_journey_public_shell_open('Görüşme tarihi seçin');
+se_journey_public_shell_open('Görüşme tarihi seçin', isset($j) && !empty($j->language) ? (string) $j->language : 'tr');
 $days_tr   = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
 $months_tr = [1 => 'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 $fmtDay = function ($date) use ($days_tr, $months_tr) {

@@ -1,6 +1,6 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
 require __DIR__ . '/_shell.php';
-se_journey_public_shell_open('Fotoğraf yükleme');
+se_journey_public_shell_open('Fotoğraf yükleme', isset($j) && !empty($j->language) ? (string) $j->language : 'tr');
 $kinds = $followup ? ['followup' => 'Güncel fotoğraf (takip)'] : ['frontal' => '1. Tam karşıdan (iki kaş birlikte)', 'left' => '2. Sol kaş yakın plan', 'right' => '3. Sağ kaş yakın plan', 'donor' => '4. Donör alan (yalnızca ekibimiz istediyse)'];
 $reasons = ['ok' => 'Yüklendi ✓', 'too_large' => 'Dosya çok büyük (en fazla 5 MB)', 'unsupported_type' => 'Yalnızca JPEG, PNG veya WebP', 'too_small' => 'Fotoğraf çok küçük (en az 300 px)',
             'too_large_dimensions' => 'Fotoğraf boyutu çok büyük', 'undecodable' => 'Dosya okunamadı', 'not_an_image' => 'Bu bir fotoğraf değil', 'extension_mismatch' => 'Dosya türü uzantıyla uyuşmuyor',

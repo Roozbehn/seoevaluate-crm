@@ -1,6 +1,6 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
 require __DIR__ . '/_shell.php';
-se_journey_public_shell_open('Ön değerlendirme sonucu');
+se_journey_public_shell_open('Ön değerlendirme sonucu', isset($j) && !empty($j->language) ? (string) $j->language : 'tr');
 $s = $snapshot;
 $fmt = function ($n, $cur) { return number_format((float) $n, 0, ',', '.') . ' ' . html_escape($cur); };
 $response = (string) ($response ?? '');

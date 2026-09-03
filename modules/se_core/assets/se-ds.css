@@ -332,3 +332,20 @@ body.se-clinic #wrapper .content{padding:24px}
 .se-cal-host .fc a{color:inherit}
 .se-cal-host .fc .ev-consult{border-color:#93c5fd;color:#93c5fd}.se-cal-host .fc .ev-proc{border-color:#fdba74;color:#fdba74}.se-cal-host .fc .ev-check{border-color:#6ee7b7;color:#6ee7b7}.se-cal-host .fc .ev-follow{border-color:#c4b5fd;color:#c4b5fd}
 .se-cal-host .fc .st-cancelled{text-decoration:line-through;opacity:.6}
+
+/* ---- RTL sweep (CRM-M064 / UX-X04 / A11Y-004): Perfex sets dir=rtl from the staff language but leaves Bootstrap 3's physical helpers alone. Scoped to the clinic shell. */
+[dir="rtl"] body.se-clinic .pull-right{float:left!important}
+[dir="rtl"] body.se-clinic .pull-left{float:right!important}
+[dir="rtl"] body.se-clinic .text-right{text-align:left}
+[dir="rtl"] body.se-clinic .text-left{text-align:right}
+[dir="rtl"] body.se-clinic .se-iconbtn .se-dot{right:auto;left:8px}
+[dir="rtl"] body.se-clinic .se-tabbar a .se-count{right:auto;left:calc(50% - 22px)}
+[dir="rtl"] body.se-clinic .se-fab{right:auto;left:16px}
+[dir="rtl"] body.se-clinic .se-msg.out{margin-inline-start:auto}
+[dir="rtl"] body.se-clinic .se-phone,[dir="rtl"] body.se-clinic bdi,[dir="rtl"] body.se-clinic .num,[dir="rtl"] body.se-clinic .se-mini .t,[dir="rtl"] body.se-clinic .se-agenda .t{direction:ltr;unicode-bidi:isolate}
+[dir="rtl"] body.se-clinic .se-chip[data-view]::before,[dir="rtl"] body.se-clinic #se-cal-prev,[dir="rtl"] body.se-clinic #se-cal-next{transform:scaleX(-1)}
+/* ---- Motion + colour (UX-X05 / A11Y-003): nothing animates for people who asked for less motion; every status badge carries text, never colour alone. */
+@media (prefers-reduced-motion:reduce){ body.se-clinic *,body.se-clinic *::before,body.se-clinic *::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important} }
+body.se-clinic .se-badge:empty{display:none}
+/* ---- Focus (UX-X01 / A11Y-001): a visible ring on every focusable, including Perfex's own controls inside the shell. */
+body.se-clinic a:focus-visible,body.se-clinic button:focus-visible,body.se-clinic input:focus-visible,body.se-clinic select:focus-visible,body.se-clinic textarea:focus-visible,body.se-clinic [tabindex]:focus-visible,body.se-clinic summary:focus-visible{outline:2px solid var(--se-focus,#8ab4f8);outline-offset:2px}

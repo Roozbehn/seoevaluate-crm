@@ -5,9 +5,12 @@
  * source strings. $title and $body are provided by the including view.
  */
 if (!function_exists('se_journey_public_shell_open')) {
-    function se_journey_public_shell_open($title)
+    function se_journey_public_shell_open($title, $lang = 'tr')
     {
-        echo '<!DOCTYPE html><html lang="tr"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />'
+        // Patient blocks carry the PATIENT's language (UX-X03 / CRM-M020): Persian/Arabic read right-to-left.
+        $lang = preg_match('/^[a-z]{2}$/', (string) $lang) ? (string) $lang : 'tr';
+        $dir  = in_array($lang, ['fa', 'ar', 'he', 'ur'], true) ? 'rtl' : 'ltr';
+        echo '<!DOCTYPE html><html lang="' . $lang . '" dir="' . $dir . '"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />'
            . '<meta name="robots" content="noindex, nofollow" /><title>' . html_escape($title) . '</title><style>'
            . ':root{--ink:#1d1d1f;--muted:#6b6b70;--line:#dcdce0;--accent:#8a4b5e;--accent-2:#f3e7eb;--ok:#2f7d4f;--warn:#a05a00;--bad:#b3261e;--bg:#fbf8f6}'
            . '*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}'

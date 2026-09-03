@@ -1,6 +1,6 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
 require __DIR__ . '/_shell.php';
-se_journey_public_shell_open('Ön değerlendirme formu');
+se_journey_public_shell_open('Ön değerlendirme formu', isset($j) && !empty($j->language) ? (string) $j->language : 'tr');
 $csrf = '<input type="hidden" name="' . html_escape($csrf_name) . '" value="' . html_escape($csrf_hash) . '" />';
 ?>
 
