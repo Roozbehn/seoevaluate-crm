@@ -9,7 +9,14 @@ Version: 1.0.0
 Requires at least: 3.4.1
 */
 
-define('SE_DS_VERSION', '1.0.0');
+define('SE_DS_VERSION', '1.1.0');
+
+/** Cache-busting asset version: DS version + file mtime, so an edited CSS/JS is never served stale by the browser or the CDN edge. */
+function se_asset_v($rel)
+{
+    $f = __DIR__ . '/assets/' . $rel;
+    return SE_DS_VERSION . '.' . (is_file($f) ? (string) filemtime($f) : '0');
+}
 define('SE_CORE_MODULE_NAME', 'se_core');
 
 $CI = &get_instance();
@@ -281,18 +288,18 @@ function se_pwa_admin_head()
     // desktop viewport unless told otherwise.
     echo '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' . "\n";
     echo '<script>window.SE_PWA={base:' . json_encode($base) . '};</script>' . "\n";
-    echo '<script defer src="' . $base . '/modules/se_core/assets/pwa.js"></script>' . "\n";
-    echo '<link rel="stylesheet" href="' . $base . '/modules/se_core/assets/pwa.css">' . "\n";
+    echo '<script defer src="' . $base . '/modules/se_core/assets/pwa.js?v=' . se_asset_v('pwa.js') . '"></script>' . "\n";
+    echo '<link rel="stylesheet" href="' . $base . '/modules/se_core/assets/pwa.css?v=' . se_asset_v('pwa.css') . '">' . "\n";
     // Azin CRM design system (docs/design/AZIN-CRM-DESIGN-SYSTEM-v1.md). One
     // stylesheet for every SE screen; option se_clinic_ds=0 disables it.
     if ((string) get_option('se_clinic_ds') !== '0') {
-        echo '<link rel="stylesheet" href="' . $base . '/modules/se_core/assets/se-ds.css?v=' . SE_DS_VERSION . '">' . "\n";
+        echo '<link rel="stylesheet" href="' . $base . '/modules/se_core/assets/se-ds.css?v=' . se_asset_v('se-ds.css') . '">' . "\n";
         echo '<script>window.SE_CLINIC_L=' . json_encode([
             'menu' => _l('se_ui_a11y_menu'), 'timers' => _l('se_ui_a11y_timers'), 'notifications' => _l('se_ui_a11y_notifications'),
             'todo' => _l('se_ui_a11y_todo'), 'theme' => _l('se_ui_a11y_theme'), 'quick' => _l('se_ui_a11y_quick'),
             'search' => _l('se_ui_a11y_search'), 'skip' => _l('se_ui_skip_to_content'),
         ]) . ';</script>' . "\n";
-        echo '<script defer src="' . $base . '/modules/se_core/assets/se-clinic.js?v=' . SE_DS_VERSION . '"></script>' . "\n";
+        echo '<script defer src="' . $base . '/modules/se_core/assets/se-clinic.js?v=' . se_asset_v('se-clinic.js') . '"></script>' . "\n";
     }
 }
 
