@@ -27,7 +27,7 @@ ALLOWED="meta_app meta_page_22 meta_capi_22 meta_mm_capi_22 google_sa_22 wa_toke
 
 usage() {
     echo "Usage: $0 <provider>            (one of: $ALLOWED)" >&2
-    echo "       $0 google_sa_22 --file <path-to-json>" >&2
+    echo "       $0 <provider> --file <path>   (any provider; JSON is validated for google_sa_22, webpush_vapid)" >&2
     exit 2
 }
 
@@ -49,13 +49,26 @@ validate_json() {
     php -r '$d=file_get_contents($argv[1]); json_decode($d); if (json_last_error()!==JSON_ERROR_NONE){fwrite(STDERR,"not valid JSON\n");exit(1);}' "$1"
 }
 
-if [ "$prov" = "google_sa_22" ] && [ "${2:-}" = "--file" ]; then
+# Providers whose value is a JSON document rather than a single line.
+case " google_sa_22 webpush_vapid " in
+    *" $prov "*) is_json=1 ;;
+    *) is_json=0 ;;
+esac
+
+# --file works for EVERY provider, not just the Google key. It was written for
+# google_sa_22 alone, so installing a generated secret — the VAPID keypair, a
+# journey key — meant a hidden interactive prompt that a non-interactive
+# session simply hangs on. A file on the host keeps the value out of argv,
+# history and process lists exactly as the prompt does.
+if [ "${2:-}" = "--file" ]; then
     src="${3:-}"
     [ -f "$src" ] || { echo "Refused: no such file: $src" >&2; exit 1; }
-    validate_json "$src" || { echo "Refused: file is not valid JSON." >&2; exit 1; }
+    if [ "$is_json" = "1" ]; then
+        validate_json "$src" || { echo "Refused: file is not valid JSON." >&2; exit 1; }
+    fi
     cat "$src" > "$tmp"
-elif [ "$prov" = "google_sa_22" ]; then
-    echo "Paste the service-account JSON, then press Ctrl-D on a new line:" >&2
+elif [ "$is_json" = "1" ]; then
+    echo "Paste the JSON for $prov, then press Ctrl-D on a new line:" >&2
     cat > "$tmp"
     validate_json "$tmp" || { echo "Refused: pasted text is not valid JSON." >&2; exit 1; }
 else
