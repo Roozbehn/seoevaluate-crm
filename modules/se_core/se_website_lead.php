@@ -260,6 +260,13 @@ function se_website_lead_upsert($brand_id, array $data)
 
     $CI->db->trans_commit();
     hooks()->do_action('lead_created', $leadId);
+
+    /* A new enquiry is the one notification nobody minds receiving. Brand
+     * staff rather than an assignee: a lead has no owner yet, and that is
+     * precisely why someone should look. */
+    if (function_exists('se_push_notify_lead')) {
+        se_push_notify_lead((int) $brand_id, (int) $leadId, 'website');
+    }
     log_activity('Website lead ingested [ID: ' . $leadId . ']');
 
     return ['ok' => true, 'lead_id' => $leadId, 'duplicate' => false];

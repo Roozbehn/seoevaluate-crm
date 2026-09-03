@@ -1,0 +1,50 @@
+/*
+ * Mobile polish for the SE screens.
+ *
+ * Perfex's admin theme is Bootstrap 3 and is broadly responsive already; what
+ * breaks on a phone are the custom SE surfaces — the chat threads, the journey
+ * page, the wide data tables — which were laid out for a desktop.
+ *
+ * Everything here is inside a media query. Nothing changes on desktop, so a
+ * regression on a phone cannot become a regression at a desk.
+ */
+
+/* The notification bell in the top bar. */
+#se-push-toggle { background: none; border: 0; padding: 8px 10px; cursor: pointer; opacity: .55; }
+#se-push-toggle[data-state="on"] { opacity: 1; }
+#se-push-toggle[data-state="denied"] { opacity: .3; cursor: not-allowed; }
+
+@media (max-width: 768px) {
+  /* Wide tables scroll inside their own box rather than pushing the page
+     sideways — a horizontally scrolling page makes every other control hard
+     to hit. */
+  .table-responsive, .se-chat-wrap, .se-journey-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* A conversation should fill the screen on a phone; the desktop layout
+     pins it to a fixed height that leaves half the display empty. */
+  .se-chat-thread { max-height: none; height: calc(100vh - 260px); }
+  .se-chat-message { max-width: 88%; }
+
+  /* Composer controls wrap instead of overflowing, and the textarea gets a
+     16px font: anything smaller makes iOS zoom the whole page on focus, which
+     then never zooms back. */
+  .se-composer { flex-wrap: wrap; }
+  .se-composer textarea, .se-composer input[type="text"] { font-size: 16px; }
+
+  /* Touch targets. 44px is Apple's minimum and roughly where a thumb stops
+     missing. */
+  .se-composer .btn, #se-push-toggle, .se-journey-actions .btn { min-height: 44px; min-width: 44px; }
+
+  .se-journey-actions .btn { display: block; width: 100%; margin: 0 0 8px; }
+
+  /* Panels lose their side padding — on a 390px screen that padding is a
+     tenth of the width. */
+  .panel_s .panel-body { padding: 12px; }
+}
+
+/* Standalone mode: the app is running from the home screen with no browser
+   chrome, so nothing is going to draw over the notch or the home indicator
+   unless we account for it ourselves. */
+@media (display-mode: standalone) {
+  body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+}

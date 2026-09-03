@@ -343,6 +343,8 @@ require_once $SE_MODULES . '/se_core/se_outbox.php';
 require_once $SE_MODULES . '/se_core/se_asset_registry.php';
 require_once $SE_MODULES . '/se_core/se_capi.php';
 require_once $SE_MODULES . '/se_core/se_capi_messaging.php';
+require_once $SE_MODULES . '/se_core/se_push.php';
+require_once $SE_MODULES . '/se_core/se_push_events.php';
 require_once $SE_MODULES . '/se_core/se_google_auth.php';
 require_once $SE_MODULES . '/se_core/se_google_dm.php';
 require_once $SE_MODULES . '/se_core/se_meta_leadgen.php';
@@ -354,6 +356,7 @@ require_once $SE_MODULES . '/se_appointments/gcal.php';
 require_once $SE_MODULES . '/se_core/se_secret_provider.php';
 require_once $SE_MODULES . '/se_core/se_website_lead.php';
 require_once $SE_MODULES . '/se_whatsapp/helpers.php';
+require_once $SE_MODULES . '/se_whatsapp/calls.php';
 require_once $SE_MODULES . '/se_whatsapp/outbound.php';
 require_once $SE_MODULES . '/se_whatsapp/templates.php';
 /* Patient journey (se_journey). Its sealed media store AND the inbox media

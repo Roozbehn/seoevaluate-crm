@@ -632,6 +632,15 @@ function se_journey_transition($journey, $to, $trigger, $actor_type = 'system', 
         }
     }
 
+    /* Notify the phone in someone's pocket. Only states a HUMAN must act on
+     * are pushed (se_push_notify_journey filters); a journey moves through
+     * many states by itself, and buzzing on each one teaches people to swipe
+     * notifications away — after which the ones that matter are gone too. */
+    if (function_exists('se_push_notify_journey')) {
+        se_push_notify_journey((int) $j->brand_id, (int) $j->id, $to,
+                               isset($j->assigned_staff) ? (int) $j->assigned_staff : 0);
+    }
+
     return ['ok' => true, 'reason' => '', 'from' => $from, 'to' => $to];
 }
 

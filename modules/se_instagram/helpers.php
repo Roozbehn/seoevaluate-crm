@@ -614,6 +614,13 @@ function se_ig_handle_inbound($brand_id, $account, $e)
         se_media_enqueue('ig', (int) $CI->db->insert_id(), (int) $brand_id, $kind, (string) $e['media_url'],
             $e['text'] !== '' ? $e['text'] : null);
     }
+
+    /* Push to the staff phone. Reached only past the mid dedup guard at the
+     * top of this function, so a redelivered mid never buzzes twice. No
+     * sender, no handle, no text in the payload. */
+    if (function_exists('se_push_notify_inbound')) {
+        se_push_notify_inbound('ig', (int) $brand_id, (int) $conv->id, (int) $conv->assigned_staff);
+    }
 }
 
 /**
