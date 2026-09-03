@@ -239,6 +239,14 @@ class Se_journey extends AdminController
                 $r = se_journey_quote_send((int) $this->input->post('quote_id'), $staff);
                 $msg = $r['ok'] ? ['success', _l('se_journey_quote_sent')] : ['warning', _l('se_journey_blocked') . ': ' . $r['reason']];
                 break;
+            case 'consultation_info_send':
+                // Manual resend: the automatic send only fires at the moment a quote goes out, so a
+                // quote sent before the approval checkbox was ticked never got it. Idempotent per
+                // journey (se_journey_send_copy's own dedup), so a repeat click is harmless.
+                $this->need('edit_review');
+                $r = se_journey_send_consultation_information($j);
+                $msg = $r['ok'] ? ['success', _l('se_journey_consultation_info_sent')] : ['warning', _l('se_journey_blocked') . ': ' . $r['reason']];
+                break;
             case 'book':
                 $this->need('manage_consultation');
                 $type = (string) $this->input->post('type') === 'procedure' ? 'procedure' : 'consultation';

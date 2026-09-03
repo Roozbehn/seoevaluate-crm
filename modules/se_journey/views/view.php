@@ -281,6 +281,9 @@ $phase = se_journey_ui_phase($j->state);
           <?php if ($can['manage_consultation'] && in_array($j->state, ['quote_sent', 'quote_accepted', 'quote_revision_requested', 'consultation_recommended'], true)) { ?>
             <?php echo form_open($act('book_link'), ['style' => 'display:inline-block;margin-left:8px']); ?><input type="hidden" name="tab" value="review" /><button class="btn btn-default btn-xs" type="submit" title="<?php echo html_escape(_l('se_journey_book_link_hint')); ?>"><i class="fa fa-calendar"></i> <?php echo html_escape(_l('se_journey_send_book_link')); ?></button><?php echo form_close(); ?>
           <?php } ?>
+          <?php if ($can['edit_review']) { ?>
+            <?php echo form_open($act('consultation_info_send'), ['style' => 'display:inline-block;margin-left:8px']); ?><input type="hidden" name="tab" value="review" /><button class="btn btn-default btn-xs" type="submit" title="<?php echo html_escape(_l('se_journey_send_consultation_info_hint')); ?>"><i class="fa fa-info-circle"></i> <?php echo html_escape(_l('se_journey_send_consultation_info')); ?></button><?php echo form_close(); ?>
+          <?php } ?>
         </div>
         <details class="mtop10"><summary><?php echo html_escape(_l('se_journey_snapshot')); ?></summary><pre style="white-space:pre-wrap;font-size:11px"><?php echo html_escape(json_encode(json_decode((string) $quote->snapshot_json, true), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); ?></pre></details>
       <?php } ?>
