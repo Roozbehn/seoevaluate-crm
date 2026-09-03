@@ -24,7 +24,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * (scripts/tests) is the second line of defence.
  */
 
-define('SE_JOURNEY_COPY_VERSION', 2);   // v2: retake + donor requests carry the secure upload link (2026-09-03)
+define('SE_JOURNEY_COPY_VERSION', 3);   // v3: consultation_information — procedure/prep/recovery links sent after the quote (2026-09-03)
 define('SE_JOURNEY_DEFAULT_QUIET', '21:00-09:00');
 define('SE_JOURNEY_DEFAULT_DAILY_CAP', 3);
 define('SE_JOURNEY_REMINDER_HOURS', '24,72');
@@ -84,6 +84,8 @@ function se_journey_copy_defaults()
                 "Merhaba {{name}}, işleminiz {{when}} tarihine planlandı. Hazırlık bilgilerini ekibimiz sizinle paylaşacaktır. Sorularınız için bu mesaja yanıt verebilirsiniz.",
             'preop_information' =>
                 "Merhaba {{name}}, işlem öncesi bilgilendirme: {{link}}\n\nİlaç kullanımıyla ilgili her türlü değişiklik yalnızca ekibimizin size özel yönlendirmesiyle yapılmalıdır.",
+            'consultation_information' =>
+                "Merhaba {{name}}, teklifinizle ilgili kararınızı yukarıdaki seçeneklerden iletebilirsiniz. Karar vermeden önce süreci daha yakından tanımanız için birkaç kaynak paylaşıyoruz:\n\n• Kaş ekimi günü nasıl geçiyor: {{procedure_link}}\n• İşlem öncesi hazırlık: {{preparation_link}}\n• İyileşme dönemi ve dikkat edilmesi gerekenler: {{recovery_link}}\n\nBunlar genel bir çerçevedir; size özel notları konsültasyonda birlikte konuşuruz. Sorularınız için bu mesaja yanıt verebilirsiniz.",
             'aftercare_checkin' =>
                 "Merhaba {{name}}, işleminizin {{day}}. günündeyiz. Nasıl hissediyorsunuz? Lütfen kısaca yazın; ağrı, şişlik, kızarıklık veya başka bir durum varsa belirtin.\n\nŞiddetli ya da hızla kötüleşen bir şikâyetiniz olursa lütfen beklemeden 112'yi arayın.",
             'followup_photo_request' =>

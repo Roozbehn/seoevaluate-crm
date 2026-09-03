@@ -101,6 +101,8 @@
         <input type="hidden" name="section" value="clinical" /><input type="hidden" name="brand" value="<?php echo (int) $brand; ?>" />
         <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_preop_text_approved" name="preop_text_approved" value="1" <?php echo $v['preop_text_approved'] ? 'checked' : ''; ?> /><label for="cb_preop_text_approved"><?php echo html_escape(_l('se_journey_preop_approved')); ?></label></div>
         <div class="form-group"><label><?php echo html_escape(_l('se_journey_preop_url')); ?></label><input class="form-control" name="preop_info_url" value="<?php echo html_escape($v['preop_info_url']); ?>" placeholder="https://…" /></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_consultation_info_approved" name="consultation_info_approved" value="1" <?php echo $v['consultation_info_approved'] ? 'checked' : ''; ?> /><label for="cb_consultation_info_approved"><?php echo html_escape(_l('se_journey_consultation_info_approved')); ?></label></div>
+        <p class="text-muted"><small><?php echo html_escape(_l('se_journey_consultation_info_note')); ?></small></p>
         <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_ask_infectious" name="ask_infectious" value="1" <?php echo $v['ask_infectious'] ? 'checked' : ''; ?> /><label for="cb_ask_infectious"><?php echo html_escape(_l('se_journey_ask_infectious')); ?></label></div>
         <div class="form-group"><label><?php echo html_escape(_l('se_journey_protocols')); ?></label>
           <textarea class="form-control" name="protocols_json" rows="10" style="font-family:monospace;font-size:11px"><?php echo html_escape($v['protocols_json']); ?></textarea>

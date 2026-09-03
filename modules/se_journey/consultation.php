@@ -597,6 +597,43 @@ function se_journey_preop_checklist($brand_id)
             'Tercüman ihtiyacı soruldu', 'Depozito durumu kaydedildi', 'Klinisyen hazırlık talimatları (kişiye özel) iletildi'];
 }
 
+/**
+ * The three azinasgari.com pages that already carry the clinically reviewed,
+ * published account of the procedure, pre-op preparation and recovery — the
+ * CRM never restates this content in a WhatsApp message, it only links to it,
+ * so a wording change is made once, on the site, and nothing here can drift
+ * out of sync with what passed the content-safety and clinical-claims gates.
+ */
+function se_journey_consultation_info_urls()
+{
+    return [
+        'procedure_link'   => 'https://azinasgari.com/tr/procedure',
+        'preparation_link' => 'https://azinasgari.com/tr/preparation',
+        'recovery_link'    => 'https://azinasgari.com/tr/recovery',
+    ];
+}
+
+/**
+ * Right after a quote is sent: general information about the procedure, what
+ * to do before it and what recovery looks like — three links, no restated
+ * clinical content. Sent ONLY when a staff member has ticked "Consultation
+ * information approved", the same gate as the pre-op message, because turning
+ * this on changes what an automated message tells a real patient. Until then
+ * the same moment creates a staff task so nothing silently goes unsent.
+ */
+function se_journey_send_consultation_information($j)
+{
+    $approved = (int) get_option('se_journey_consultation_info_approved_' . (int) $j->brand_id) === 1;
+    if (!$approved || !function_exists('se_journey_send_copy')) {
+        se_journey_task($j, 'consultation_info_unapproved', 'Consultation information (procedure/prep/recovery links) is not approved yet — share manually if needed', 'normal', null, '');
+
+        return ['ok' => false, 'reason' => 'not_approved', 'mode' => 'skipped', 'outbound_id' => 0];
+    }
+
+    return se_journey_send_copy($j, 'consultation_information', se_journey_consultation_info_urls(),
+        ['purpose' => 'consultation_information', 'bypass_pause' => true, 'dedup_salt' => 'ci' . (int) $j->id]);
+}
+
 /** Move to pre-op; send the information message ONLY when the approved text/link exists. */
 function se_journey_preop_start($j, $staff_id)
 {

@@ -57,6 +57,10 @@ se_ok(strpos($last['body'], '/quote') !== false && strpos($last['body'], 'garant
 se_ok(strpos($last['body'], 'yüz yüze') !== false, 'and says a face-to-face slot follows an acceptance');
 se_ok(mb_strlen($last['body']) <= 1024, 'interactive body within the limit');
 se_eq(null, $sent['quote']['patient_response'] ?? null, 'no answer yet');
+// Consultation information (procedure/prep/recovery links) is gated separately and defaults to
+// unapproved: no extra message goes out, and staff see a task instead of a silent no-op.
+se_eq($last, end($GLOBALS['se_wa_sent']), 'unapproved: no consultation-information message follows the quote');
+se_eq(1, count(array_filter($db->rows('tblse_journey_tasks'), function ($t) { return $t['kind'] === 'consultation_info_unapproved'; })), 'staff task created instead');
 
 // A typed question after the quote: staff task + the options repeated once, not on every message.
 se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, 'Depozito ne kadar?', se_test_wamid()));
@@ -409,3 +413,23 @@ foreach ($db->tables['tblse_journey_quotes'] as &$qr) { $qr['patient_response'] 
 unset($qr);
 se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, 'Merhaba, bir sorum var', se_test_wamid()));
 se_eq('ready_for_review', se_test_journey_row()->state, 'a question does not move the state');
+
+/* ======================================================================== */
+se_group('Journey quote: once approved, consultation information (procedure/prep/recovery links) follows the quote');
+
+se_eq(['https://azinasgari.com/tr/procedure', 'https://azinasgari.com/tr/preparation', 'https://azinasgari.com/tr/recovery'],
+      array_values(se_journey_consultation_info_urls()), 'the three published, already-reviewed pages — nothing invented here');
+
+se_test_journey_reviewed();
+$GLOBALS['se_test']['options']['se_journey_consultation_info_approved_1'] = 1;
+$tasksBefore = count($db->rows('tblse_journey_tasks'));
+$sent = se_test_quote_sent();
+se_eq(true, $sent['send']['ok'], 'quote still sends');
+$msgs = array_values(array_filter($db->rows('tblse_wa_outbound'), function ($o) { return $o['origin'] === 'journey:consultation_information'; }));
+se_eq(1, count($msgs), 'one consultation-information message queued, right behind the quote');
+$body = $msgs[0]['body'];
+foreach (se_journey_consultation_info_urls() as $url) { se_ok(strpos($body, $url) !== false, 'body carries ' . $url); }
+se_ok(strpos($body, 'garanti') === false && strpos($body, 'Dr.') === false && strpos($body, 'Doktor') === false, 'no guarantee language, no clinical title');
+se_eq(0, count(array_filter($db->rows('tblse_journey_tasks'), function ($t) use ($tasksBefore) { return $t['kind'] === 'consultation_info_unapproved'; })), 'approved: no "unapproved" task this time');
+
+$GLOBALS['se_test']['options']['se_journey_consultation_info_approved_1'] = 0;
