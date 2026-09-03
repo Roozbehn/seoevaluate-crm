@@ -44,6 +44,10 @@ hooks()->add_action('after_lead_tabs_content', 'se_journey_lead_tab');
 // re-creates the lead under a new id; the journey re-links to it).
 hooks()->add_action('after_lead_deleted', 'se_journey_on_lead_deleted');
 
+// Website leads start their journey on arrival when the brand switch is on.
+// Priority 30: after se_core stamped the brand (10, 20) on the new lead.
+hooks()->add_action('lead_created', 'se_journey_on_lead_created', 30);
+
 function se_journey_activation()
 {
     require_once __DIR__ . '/install.php';

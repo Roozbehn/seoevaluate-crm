@@ -775,6 +775,27 @@ would hit any returning patient. `se_journey_send` now prefixes every dedup salt
 (`j<id>[:salt]`): one row per message per journey, still one row for a repeat inside a journey.
 Regression tests: `test_journey_relink.php` (restart group), `test_journey_flows.php`.
 
+### 16.6 Addendum — GO-LIVE (2026-09-03 13:25 +03) and website auto-start
+
+After the owner's end-to-end test on his own number passed ("every thing is perfect now"), **sandbox
+was switched OFF** through Journeys → Settings (section *flags*, from his session):
+`se_journey_sandbox_22 = 0`, journey enabled, Flows on, organic auto-start on. Real patients now
+receive the automated messages. Readiness: every technical gate ✓; four amber items remain that are
+clinic decisions (pre-op template approval at Meta — 16/17; aftercare protocol not marked approved;
+pre-op text approval option; on-call staff ids for urgent alerts — admins are alerted meanwhile).
+
+**Website auto-start** (owner: "switch it to automatically"): new switch *Auto-start the journey for
+every website lead on arrival* (`se_journey_auto_start_website_<brand>`, default off, Settings →
+flags). `se_journey_on_lead_created` listens to Perfex `lead_created` at priority 30 (after se_core
+stamped the brand), acts only on a lead with `website_lead_id` (the form on azinasgari.com), skips a
+lead that already has a journey, and calls `se_journey_start_from_lead($id, 0, ['detail' =>
+'auto_start_website'])` — the system path goes by id (no staff scope, no session). The approved start
+template goes to the number on the form; the journey timeline says `auto_started`; the lead's own
+timeline says "Hasta yolculuğu otomatik başlatıldı (…)" or, when blocked, the reason plus a pointer
+to the Start button; audit `auto_start` / `auto_start_blocked` / `auto_start_failed`. Leads typed in
+by staff, imports and the journey's own organic-enquiry leads are untouched. Suite:
+`test_journey_autostart.php`.
+
 **Not done, by design (owner steps, in order):**
 
 1. Log in once as admin (seeds the 11 template rows, grants the journey capabilities to Clinic Owner / Sales).

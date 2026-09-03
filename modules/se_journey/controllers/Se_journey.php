@@ -490,6 +490,7 @@ class Se_journey extends AdminController
             'sandbox'      => se_journey_sandbox($brand) ? 1 : 0,
             'interactive'  => se_journey_interactive_enabled($brand) ? 1 : 0,
             'auto_organic' => se_journey_auto_start_organic($brand) ? 1 : 0,
+            'auto_website' => se_journey_auto_start_website($brand) ? 1 : 0,
             'test_recipients' => implode(', ', se_journey_test_recipients($brand)),
             'intake_ttl_hours' => se_journey_intake_ttl_hours(),
             'reminder_hours' => implode(',', se_journey_reminder_hours()),
@@ -531,6 +532,7 @@ class Se_journey extends AdminController
             update_option('se_journey_sandbox_' . $brand, (int) $this->input->post('sandbox') === 1 ? 1 : 0);
             update_option('se_journey_interactive_' . $brand, (int) $this->input->post('interactive') === 1 ? 1 : 0);
             update_option('se_journey_auto_start_organic_' . $brand, (int) $this->input->post('auto_organic') === 1 ? 1 : 0);
+            update_option('se_journey_auto_start_website_' . $brand, (int) $this->input->post('auto_website') === 1 ? 1 : 0);
             update_option('se_journey_test_recipients_' . $brand, mb_substr(preg_replace('/[^\d,\s;]/', '', (string) $this->input->post('test_recipients')), 0, 500));
             update_option('se_journey_intake_ttl_hours', max(1, min(336, (int) $this->input->post('intake_ttl_hours'))));
             update_option('se_journey_reminder_hours', preg_replace('/[^\d,]/', '', (string) $this->input->post('reminder_hours')));
