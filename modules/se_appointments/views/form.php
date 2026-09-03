@@ -132,7 +132,8 @@ foreach ($leads as $l) { if ($relType === 'lead' && (int) $l['id'] === $relId) {
   var radios = form.querySelectorAll('input[name=appointment_type]'), dur = document.getElementById('duration'), hint = document.getElementById('se-type-hint'), endHint = document.getElementById('se-end-hint');
   var dateEl = document.getElementById('date'), timeEl = document.getElementById('time'), rel = document.getElementById('rel_id'), relType = document.getElementById('rel_type'), title = document.getElementById('title');
   var labels = <?php echo json_encode(array_map(function ($t) { return $t['label']; }, se_appt_types()), JSON_UNESCAPED_UNICODE); ?>;
-  var L = { defaultDur: <?php echo json_encode(_l('se_appt_type_default_duration')); ?>, ends: <?php echo json_encode(_l('se_appt_ends_at')); ?>, h: <?php echo json_encode(_l('se_appt_hours')); ?>, m: <?php echo json_encode(_l('se_appt_minutes')); ?> };
+  /* Placeholders must survive Perfex's _l() (it sprintf's the line): pass literal '%s' through. */
+  var L = { defaultDur: <?php echo json_encode(_l('se_appt_type_default_duration', ['%s', '%s'])); ?>, ends: <?php echo json_encode(_l('se_appt_ends_at', ['%s'])); ?>, h: <?php echo json_encode(_l('se_appt_hours')); ?>, m: <?php echo json_encode(_l('se_appt_minutes')); ?> };
   function fmt(m) { return m >= 60 && m % 60 === 0 ? (m / 60) + ' ' + L.h : (m >= 60 ? Math.floor(m / 60) + ' ' + L.h + ' ' + (m % 60) + ' ' + L.m : m + ' ' + L.m); }
   function pick(r) { var m = parseInt(r.getAttribute('data-minutes'), 10); if (!dur.querySelector('option[value="' + m + '"]')) { var o = document.createElement('option'); o.value = m; o.textContent = fmt(m); dur.appendChild(o); } dur.value = m;
     hint.textContent = L.defaultDur.replace('%s', labels[r.value]).replace('%s', fmt(m)); if (title) { title.placeholder = labels[r.value]; }

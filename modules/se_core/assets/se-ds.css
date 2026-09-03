@@ -35,7 +35,8 @@ body.se-theme-light,html[data-theme=light] body,body.light-mode{
 .se-page{color:var(--se-text);font-size:var(--se-fs-body);line-height:1.45;-webkit-font-smoothing:antialiased}
 .se-page a{color:var(--se-link);text-decoration:none}
 .se-page a:hover{text-decoration:underline}
-.se-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.se-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.se-table th,.se-table td{position:relative}   /* keeps .se-sr inside the scrolling table, never widening the page */
 /* header helpers */
 .se-iconbtn{width:var(--se-ctrl);height:var(--se-ctrl);border-radius:var(--se-r-md);border:0;background:transparent;color:var(--se-text-2);display:inline-flex;align-items:center;justify-content:center;font-size:18px;position:relative}
 .se-iconbtn .se-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--se-action)}
@@ -146,7 +147,7 @@ body.se-theme-light,html[data-theme=light] body,body.light-mode{
 /* timeline */
 .se-tl{list-style:none;margin:0;padding:0;position:relative}
 .se-tl li.se-tl-day{padding:14px 0 2px}.se-tl li.se-tl-day .m{font-weight:600;text-transform:uppercase;letter-spacing:.06em}
-.se-more{position:relative}.se-more summary{list-style:none;cursor:pointer}.se-more summary::-webkit-details-marker{display:none}.se-more .se-more-panel{position:absolute;inset-inline-end:0;top:calc(100% + 6px);z-index:30;min-width:260px;display:flex;flex-direction:column;gap:8px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
+.se-more{position:relative}.se-more summary{list-style:none;cursor:pointer}.se-more:not([open]) .se-more-panel{display:none}.se-more-panel form,.se-more-panel .se-btn-block{width:100%}.se-more summary::-webkit-details-marker{display:none}.se-more .se-more-panel{position:absolute;inset-inline-end:0;top:calc(100% + 6px);z-index:30;min-width:260px;display:flex;flex-direction:column;gap:8px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
 @media (max-width:767px){.se-ph{grid-template-columns:auto minmax(0,1fr)}.se-ph .se-ph-actions{grid-column:1/-1;justify-content:flex-start!important}.se-more .se-more-panel{position:fixed;inset-inline:12px;top:auto;bottom:80px;min-width:0}}
 .se-tl li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:12px;padding:10px 0}
 .se-tl .dot{width:12px;height:12px;border-radius:50%;background:var(--se-surface-3);margin:5px 4px;position:relative}
@@ -155,7 +156,9 @@ body.se-theme-light,html[data-theme=light] body,body.light-mode{
 .se-tl .m{color:var(--se-text-3);font-size:var(--se-fs-meta)}
 .se-tl .b{color:var(--se-text-2);font-size:var(--se-fs-sm);margin-top:4px;background:var(--se-bg);border-radius:var(--se-r-md);padding:8px 10px}
 /* chat (markup: .se-thread > .se-msg.in|out > .se-bubble; composer: .se-composer) */
-.se-wa{display:grid;grid-template-columns:320px minmax(0,1fr) 340px;gap:0;border:1px solid var(--se-border);border-radius:var(--se-r-lg);overflow:hidden;background:var(--se-surface);min-height:calc(100vh - 140px)}
+.se-wa{display:grid;grid-template-columns:320px minmax(0,1fr) 340px;gap:0;border:1px solid var(--se-border);border-radius:var(--se-r-lg);overflow:hidden;background:var(--se-surface);height:calc(100vh - 150px);min-height:480px}
+.se-wa .se-thread{flex:1 1 auto;min-height:0;max-height:none}
+.se-wa .se-convlist,.se-wa .se-threadcol,.se-wa .se-ctx{min-height:0;max-height:100%}
 .se-convlist{border-inline-end:1px solid var(--se-border);display:flex;flex-direction:column;min-height:0}
 .se-convlist .se-toolbar{padding:12px;margin:0;border-bottom:1px solid var(--se-border)}
 .se-convscroll{overflow:auto;flex:1}
@@ -277,7 +280,9 @@ body.se-theme-light,html[data-theme=light] body,body.light-mode{
   .se-wa{grid-template-columns:1fr;min-height:0;border:0;border-radius:0}
   .se-wa.se-wa-thread .se-convlist,.se-wa.se-wa-thread .se-ctx{display:none}
   .se-wa.se-wa-list .se-threadcol,.se-wa.se-wa-list .se-ctx{display:none}
-  .se-threadcol{min-height:calc(100vh - 120px)}
+  .se-wa.se-wa-thread{height:calc(100vh - 70px);min-height:0}
+  .se-wa.se-wa-list{height:calc(100vh - 130px);min-height:0}
+  .se-threadcol{min-height:0}
   .se-thread{min-height:40vh}
   .se-composer{position:sticky;bottom:0;z-index:4;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   .se-bubble{max-width:88%}
@@ -349,3 +354,16 @@ body.se-clinic #wrapper .content{padding:24px}
 body.se-clinic .se-badge:empty{display:none}
 /* ---- Focus (UX-X01 / A11Y-001): a visible ring on every focusable, including Perfex's own controls inside the shell. */
 body.se-clinic a:focus-visible,body.se-clinic button:focus-visible,body.se-clinic input:focus-visible,body.se-clinic select:focus-visible,body.se-clinic textarea:focus-visible,body.se-clinic [tabindex]:focus-visible,body.se-clinic summary:focus-visible{outline:2px solid var(--se-focus,#8ab4f8);outline-offset:2px}
+
+/* ---- Phone touch sizes (DS §1 / UX-X01): 44 px controls at ≤767, incl. chips, inputs, pills and sub-links. */
+@media (max-width:767px){
+  body.se-clinic .se-btn,body.se-clinic .se-input,body.se-clinic .se-iconbtn{min-height:var(--se-ctrl-m);height:auto}
+  body.se-clinic .se-btn{height:var(--se-ctrl-m)} body.se-clinic .se-iconbtn{width:var(--se-ctrl-m);height:var(--se-ctrl-m)}
+  body.se-clinic .se-input:not(textarea){height:var(--se-ctrl-m)}
+  body.se-clinic .se-chip{height:var(--se-ctrl-m);padding:0 16px}
+  body.se-clinic .se-pipe span{min-height:40px;display:inline-flex;align-items:center;padding:0 14px}
+  body.se-clinic .se-help a,body.se-clinic .se-page-head .se-sub a{display:inline-flex;align-items:center;min-height:44px}
+  body.se-clinic .se-mini a.n{display:inline-flex;align-items:center;min-height:44px}
+  body.se-clinic .se-hastalar-chips .se-help{width:100%;margin-inline-start:0;display:flex;gap:12px;flex-wrap:wrap}
+  body.se-clinic .se-hastalar-chips .se-help a{display:inline-flex;align-items:center;min-height:44px}
+}
