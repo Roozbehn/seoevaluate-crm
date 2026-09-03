@@ -273,3 +273,18 @@ se_eq(false, isset($db->rows('tblleads')[0]['name']), 'no field was written duri
 $r = se_leadgen_upsert_lead(1, 'm-101', ['name' => 'Same brand update']);
 se_eq(101, $r, 'a same-brand webhook still updates the lead');
 se_eq('Same brand update', $db->rows('tblleads')[0]['name'], 'same-brand update applies');
+
+/* ---- audit J15 / AZCRM-PJ-004: a NEW ad lead goes through the same downstream as a website lead ---- */
+$db->seed('tblleads_status', [['id' => 5, 'statusorder' => 1]]);
+$db->seed('tblleads_sources', [['id' => 7]]);
+hooks()->fired = [];
+$firedBefore = count(hooks()->fired);
+$new = se_leadgen_upsert_lead(1, 'm-202', ['name' => 'Ad Person', 'phonenumber' => '+905550000202']);
+se_ok((int) $new > 0 && $new !== 101, 'a new ad lead is inserted');
+$fired = array_values(array_filter(hooks()->fired, function ($f) { return $f[0] === 'lead_created'; }));
+se_eq(1, count($fired), 'lead_created fires exactly once for the new lead');
+se_eq((int) $new, (int) $fired[0][1], 'with the new lead id');
+$again = se_leadgen_upsert_lead(1, 'm-202', ['name' => 'Ad Person again']);
+se_eq((int) $new, (int) $again, 'a redelivered notification updates the same lead');
+se_eq(1, count(array_filter(hooks()->fired, function ($f) { return $f[0] === 'lead_created'; })), 'and does NOT fire lead_created again');
+se_ok(array_key_exists('leadgen', se_dispatch_steps()) && se_dispatch_steps()['leadgen'] === 'se_leadgen_process_pending', 'the dispatcher drains Lead Ads notifications every minute');

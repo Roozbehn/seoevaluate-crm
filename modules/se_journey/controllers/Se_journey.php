@@ -232,28 +232,16 @@ class Se_journey extends AdminController
                 se_journey_task_done((int) $this->input->post('task_id'), $staff);
                 break;
             case 'note':             // internal note (CRM-M028 / UX-P06): never sent to the patient
-                $note = trim(mb_substr((string) $this->input->post('note'), 0, 500));
-                if ($note === '') {
-                    $msg = ['warning', _l('se_journey_note_empty')];
-                    break;
-                }
-                se_journey_event($j, 'note', $note, [], 'staff', (string) $staff);
-                $this->db->where('id', (int) $j->id)->where('brand_id', (int) $j->brand_id)->update(db_prefix() . 'se_journeys', ['last_updated' => date('Y-m-d H:i:s')]);
+                $r = se_journey_add_note($j, (string) $this->input->post('note'), $staff);
+                if (!$r['ok']) { $msg = ['warning', _l('se_journey_note_empty')]; }
                 break;
             case 'reopen':           // closed / not suitable → back to review (CRM-M030 / UX-P08), reason recorded
                 $this->need('edit_review');
-                $reason = trim(mb_substr((string) $this->input->post('reason'), 0, 500));
-                if ($reason === '') {
-                    $msg = ['warning', _l('se_journey_reopen_reason_required')];
-                    break;
-                }
-                $target = (string) $j->state === 'closed_lost' && (int) $j->lead_id <= 0 ? 'new_whatsapp_enquiry' : 'ready_for_review';
-                if (!in_array((string) $j->state, ['closed_lost', 'not_suitable'], true)) {
-                    $msg = ['warning', _l('se_journey_unknown_action')];
-                    break;
-                }
-                $ok = se_journey_transition($j, $target, 'staff_reopen', 'staff', $staff, null, $reason);
-                $msg = !empty($ok['ok']) ? ['success', _l('se_journey_reopened')] : ['warning', _l('se_journey_blocked') . ': ' . (string) ($ok['reason'] ?? '')];
+                $ok = se_journey_reopen($j, (string) $this->input->post('reason'), $staff);
+                if (!empty($ok['ok']))                           { $msg = ['success', _l('se_journey_reopened')]; }
+                elseif ($ok['reason'] === 'reason_required')     { $msg = ['warning', _l('se_journey_reopen_reason_required')]; }
+                elseif ($ok['reason'] === 'not_reopenable')      { $msg = ['warning', _l('se_journey_unknown_action')]; }
+                else                                             { $msg = ['warning', _l('se_journey_blocked') . ': ' . (string) $ok['reason']]; }
                 break;
             case 'photo_classify':
                 $this->need('view_photos');
@@ -570,6 +558,7 @@ class Se_journey extends AdminController
             'interactive'  => se_journey_interactive_enabled($brand) ? 1 : 0,
             'auto_organic' => se_journey_auto_start_organic($brand) ? 1 : 0,
             'auto_website' => se_journey_auto_start_website($brand) ? 1 : 0,
+            'auto_ads'     => se_journey_auto_start_ads($brand) ? 1 : 0,
             'ads_from_intake' => function_exists('se_journey_ads_consent_from_intake') && se_journey_ads_consent_from_intake($brand) ? 1 : 0,
             'timers'       => function_exists('se_journey_timers_enabled') && se_journey_timers_enabled() ? 1 : 0,
             'test_recipients' => implode(', ', se_journey_test_recipients($brand)),
@@ -615,6 +604,7 @@ class Se_journey extends AdminController
             update_option('se_journey_interactive_' . $brand, (int) $this->input->post('interactive') === 1 ? 1 : 0);
             update_option('se_journey_auto_start_organic_' . $brand, (int) $this->input->post('auto_organic') === 1 ? 1 : 0);
             update_option('se_journey_auto_start_website_' . $brand, (int) $this->input->post('auto_website') === 1 ? 1 : 0);
+            update_option('se_journey_auto_start_ads_' . $brand, (int) $this->input->post('auto_ads') === 1 ? 1 : 0);
             // Owner/legal decision (CRM-M010): recorded as an explicit option, default off.
             update_option('se_consent_ads_from_intake_' . $brand, (int) $this->input->post('ads_from_intake') === 1 ? 1 : 0);
             update_option('se_journey_timers', (int) $this->input->post('timers') === 1 ? '1' : '0');   // CRM-M045 kill switch

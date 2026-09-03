@@ -95,24 +95,9 @@ class Se_appointments extends AdminController
      */
     private function prefill(array $g)
     {
-        $pf = ['appointment_type' => se_appt_type_key((string) ($g['type'] ?? 'consultation'))];
-        if (!empty($g['from'])) {
-            $src = $this->se_appointments_model->get((int) $g['from']);   // brand-scoped
-            if ($src) {
-                $pf['rel_type'] = $src->rel_type; $pf['rel_id'] = (int) $src->rel_id; $pf['staff_id'] = (int) $src->staff_id;
-                $pf['brand_id'] = (int) $src->brand_id; $pf['location'] = (string) $src->location; $pf['consultation_format'] = (string) ($src->consultation_format ?? 'in_person');
-                $pf['appointment_type'] = se_appt_type_key((string) ($g['type'] ?? 'procedure'));
-                $pf['start_at'] = $src->end_at ?: $src->start_at;
-                $pf['from_id'] = (int) $src->id;
-            }
-        }
-        if (!empty($g['lead'])) { $pf['rel_type'] = 'lead'; $pf['rel_id'] = (int) $g['lead']; }
-        if (!empty($g['journey'])) { $pf['journey_id'] = (int) $g['journey']; }
-        if (!empty($g['start']) && strtotime((string) $g['start'])) { $pf['start_at'] = date('Y-m-d H:i:s', strtotime((string) $g['start'])); }
-        if (!empty($g['staff'])) { $pf['staff_id'] = (int) $g['staff']; }
-        $pf['duration'] = se_appt_type_minutes($pf['appointment_type']);
+        $src = !empty($g['from']) ? $this->se_appointments_model->get((int) $g['from']) : null;   // brand-scoped lookup
 
-        return $pf;
+        return se_appt_prefill_from($g, $src ?: null);
     }
 
     /** end_at from date + time + duration when the form did not post an explicit end. */

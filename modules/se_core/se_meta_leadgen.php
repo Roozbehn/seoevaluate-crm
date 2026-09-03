@@ -72,10 +72,8 @@ function se_meta_page_token($brand_id)
  *
  * Reads the FILE secret store first (meta_capi_<brand>, then the shared
  * meta_capi), so this matches se_capi_ready()/health exactly: "ready" now
- * truthfully implies the send path has a token. Legacy option storage
- * (se_meta_capi_token_<brand>, then se_meta_capi_token) is honoured last, only
- * so a pre-existing option-based install keeps working. The file store is the
- * documented, diagnosable location.
+ * truthfully implies the send path has a token. There is NO tbloptions
+ * fallback (H.L8 / SEC-006): the file store is the only, diagnosable location.
  */
 function se_meta_capi_token($brand_id)
 {
@@ -93,13 +91,9 @@ function se_meta_capi_token($brand_id)
     $page = se_secret_read('meta_page', (int) $brand_id);
     if ($page !== '') { return $page; }
 
-    $page = se_secret_read('meta_page', 0);
-    if ($page !== '') { return $page; }
-
-    $opt = (string) get_option('se_meta_capi_token_' . (int) $brand_id);
-    if ($opt !== '') { return $opt; }
-
-    return (string) get_option('se_meta_capi_token');
+    // No tbloptions fallback (H.L8 / SEC-006): the file store is the only
+    // source of secrets, so a missing file reads as "not configured".
+    return se_secret_read('meta_page', 0);
 }
 
 /** Is a CAPI-capable token available (dedicated meta_capi, or inherited meta_page)? */
@@ -733,7 +727,20 @@ function se_leadgen_upsert_lead($brand_id, $leadgen_id, $fields)
     $data['addedfrom'] = 0;
     $data['dateadded'] = date('Y-m-d H:i:s');
     $CI->db->insert($table, $data);
-    return (int) $CI->db->insert_id();
+    $newId = (int) $CI->db->insert_id();
+
+    /* Same downstream as the website form (audit J15 / AZCRM-PJ-004): the
+     * lead_created hook (brand stamp, clinic stamp, optional journey auto-start)
+     * and the "new enquiry" push to brand staff. Before this an ad lead sat in
+     * the pipeline with nobody told and no journey ever started. */
+    if ($newId > 0) {
+        hooks()->do_action('lead_created', $newId);
+        if (function_exists('se_push_notify_lead')) {
+            se_push_notify_lead((int) $brand_id, $newId, 'meta_lead_ads');
+        }
+    }
+
+    return $newId;
 }
 
 /**

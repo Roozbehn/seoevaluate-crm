@@ -21,6 +21,7 @@ function se_dispatch_steps()
         'wa_queue'  => 'se_wa_out_drain',
         'ig_events' => 'se_ig_process_pending',
         'ig_queue'  => 'se_ig_out_drain',
+        'leadgen'   => 'se_leadgen_process_pending',   // Meta Lead Ads notifications (leased, idempotent) — within a minute, not the cron cadence (PJ-004)
         'media'     => 'se_media_fetch_pending',   // attachments referenced by the events above
         'journey_media' => 'se_journey_retry_parked_media',   // seal fetched patient photos (se_journey)
     ];

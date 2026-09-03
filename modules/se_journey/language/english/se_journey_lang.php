@@ -589,3 +589,5 @@ $lang['se_ev_timer']                  = 'Reminder task created';
 $lang['se_ev_quote_expired']          = 'The quote expired';
 $lang['se_journey_settings_timers']   = 'Staff reminders (same thresholds as the Today queue)';
 $lang['se_journey_settings_timers_hint'] = 'When off, no tasks or pushes are produced; the Today queue is unaffected.';
+$lang['se_journey_flag_auto_ads']      = 'Auto-start the journey for Meta Lead Ads submissions';
+$lang['se_journey_flag_auto_ads_hint'] = 'A patient arriving from an ad form is greeted with the start template when a phone number exists. When off, staff start it from Bugün.';

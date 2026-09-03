@@ -727,3 +727,5 @@ $lang['se_task_timer_welcome']        = 'Karşılamaya yanıt yok — hastaya ya
 $lang['se_ev_timer']                  = 'Hatırlatma görevi oluşturuldu';
 $lang['se_journey_settings_timers']   = 'Personel hatırlatmaları (Bugün kuyruğuyla aynı eşikler)';
 $lang['se_journey_settings_timers_hint'] = 'Kapatıldığında görev ve bildirim üretilmez; Bugün kuyruğu etkilenmez.';
+$lang['se_journey_flag_auto_ads']      = 'Meta Lead Ads başvurularında süreci otomatik başlat';
+$lang['se_journey_flag_auto_ads_hint'] = 'Reklam formundan gelen hasta, telefon numarası varsa başlangıç şablonuyla karşılanır. Kapalıyken Bugün listesinde personel başlatır.';

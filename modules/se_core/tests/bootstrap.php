@@ -236,7 +236,8 @@ class SeTestHooks
 
     public function add_action($tag, $fn, $prio = 10, $args = 1) { $this->actions[$tag][] = $fn; }
     public function add_filter($tag, $fn, $prio = 10, $args = 1) { $this->filters[$tag][] = $fn; }
-    public function do_action($tag, $arg = null) {}
+    public $fired = [];
+    public function do_action($tag, $arg = null) { $this->fired[] = [$tag, $arg]; }
     public function apply_filters($tag, $value) { return $value; }
 }
 

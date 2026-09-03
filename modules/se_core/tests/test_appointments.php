@@ -230,3 +230,21 @@ $msg = se_appt_conflict_message($c, 'Azin A.', '11:30');
 se_ok(strpos($msg, 'Azin A.') !== false && strpos($msg, '10:00') !== false && strpos($msg, '11:00') !== false && strpos($msg, 'Ayşe Y.') !== false && strpos($msg, '11:30') !== false, 'message: who, when, what, next free — ' . $msg);
 se_eq(240, se_appt_type_minutes('procedure'), 'procedure default duration 4 h');
 se_eq(30, se_appt_type_minutes('bogus'), 'unknown type → consultation 30 min');
+
+/* ======================================================================== */
+se_group('Same-day procedure prefill (CRM-M041 / UX-A04)');
+$src = (object) ['id' => 801, 'brand_id' => 1, 'staff_id' => 10, 'rel_type' => 'lead', 'rel_id' => 101, 'location' => 'Kaş Ekimi Merkezi',
+    'consultation_format' => 'in_person', 'start_at' => '2026-06-01 10:00:00', 'end_at' => '2026-06-01 10:30:00', 'appointment_type' => 'consultation'];
+$pf = se_appt_prefill_from(['from' => '801', 'type' => 'procedure'], $src);
+se_eq(['lead', 101, 10, 1, 'Kaş Ekimi Merkezi', 'in_person', 'procedure', '2026-06-01 10:30:00', 801, 240],
+    [$pf['rel_type'], $pf['rel_id'], $pf['staff_id'], $pf['brand_id'], $pf['location'], $pf['consultation_format'], $pf['appointment_type'], $pf['start_at'], $pf['from_id'], $pf['duration']],
+    'patient, performer, brand, place, format copied; starts when the consultation ends; procedure 4 h');
+$pf = se_appt_prefill_from(['from' => '801'], $src);
+se_eq('procedure', $pf['appointment_type'], 'from a consultation the default is a procedure');
+$pf = se_appt_prefill_from(['from' => '801', 'start' => '2026-06-01 14:00', 'staff' => '11'], $src);
+se_eq(['2026-06-01 14:00:00', 11], [$pf['start_at'], $pf['staff_id']], 'explicit query values win over the copied ones');
+$pf = se_appt_prefill_from(['from' => '999', 'type' => 'procedure'], null);
+se_eq(['procedure', 240, false], [$pf['appointment_type'], $pf['duration'], isset($pf['from_id'])], 'a foreign/unknown source (model returns null) prefills nothing but the type');
+$pf = se_appt_prefill_from(['lead' => '55', 'journey' => '7']);
+se_eq(['lead', 55, 7, 'consultation', 30], [$pf['rel_type'], $pf['rel_id'], $pf['journey_id'], $pf['appointment_type'], $pf['duration']], 'patient-page shortcut: lead + journey, consultation 30 min');
+se_eq(false, isset(se_appt_prefill_from(['start' => 'not a date'])['start_at']), 'an invalid start is ignored');

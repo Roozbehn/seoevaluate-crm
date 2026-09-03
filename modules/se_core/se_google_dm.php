@@ -688,7 +688,8 @@ function se_gdm_settle_outbox_for_request($request_id, array $result)
 
 function se_landing_secret()
 {
-    return (string) get_option('se_landing_token_secret');
+    // File secret store only (H.L8 / SEC-006) — install with se-secret-install.sh.
+    return (string) se_secret_read('landing_token');
 }
 
 /** Create a signed token embedding click ids. TTL default 30 days (click window). */

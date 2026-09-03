@@ -570,7 +570,7 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
      * screen in a room with patients in it. */
     if (function_exists('se_push_notify_inbound')) {
         se_push_notify_inbound('wa', (int) $brand_id, $conv_id,
-                               $conv ? (int) $conv->assigned_staff : 0);
+                               $conv ? (int) ($conv->assigned_staff ?? 0) : 0);
     }
 
     // Downstream automation (se_journey) reacts to NEW inbound messages only —

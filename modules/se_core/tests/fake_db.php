@@ -49,6 +49,8 @@ class SeFakeDb
 {
     /** @var array<string,array<int,array>> table => rows */
     public $tables = [];
+    /** SELECT counter per table (perf assertions: N+1 detection). */
+    public $selects = [];
     public $autoinc = [];
     public $affected = 0;
     public $lastInsertId = 0;
@@ -159,6 +161,7 @@ class SeFakeDb
 
     private function reset()
     {
+        $this->sets = [];
         $this->sel = null; $this->wheres = []; $this->whereIn = []; $this->groups = [];
         $this->orderBy = null; $this->limitN = null; $this->groupBy = null;
     }
@@ -330,6 +333,7 @@ class SeFakeDb
 
     public function get($table)
     {
+        $this->selects[$table] = ($this->selects[$table] ?? 0) + 1;
         $rows = $this->select_rows($table);
 
         // MAX(col) AS alias … GROUP BY g (inbox: last message per conversation)
@@ -381,16 +385,34 @@ class SeFakeDb
 
     public function insert_id() { return $this->lastInsertId; }
     public function affected_rows() { return $this->affected; }
+    /* Transactions: the fake is single-threaded and never fails a statement, so these are no-ops that report success. */
+    public function trans_begin() { return true; }
+    public function trans_commit() { return true; }
+    public function trans_rollback() { return true; }
+    public function trans_status() { return true; }
 
-    public function update($table, array $data)
+    /** set(): staged column values for the next update(); $escape=false allows `col + 1`. */
+    private $sets = [];
+    public function set($k, $v = null, $escape = true) { $this->sets[$k] = [$v, $escape]; return $this; }
+
+    public function update($table, array $data = [])
     {
         $n = 0;
         foreach ($this->tables[$table] ?? [] as $i => $row) {
             if ($this->matches($row)) {
-                $this->tables[$table][$i] = array_merge($row, $data);
+                $merged = array_merge($row, $data);
+                foreach ($this->sets as $k => [$v, $escape]) {
+                    if (!$escape && is_string($v) && preg_match('/^\s*([a-z_]+)\s*([+-])\s*(\d+)\s*$/i', $v, $m)) {
+                        $merged[$k] = (int) ($row[$m[1]] ?? 0) + ($m[2] === '+' ? (int) $m[3] : -(int) $m[3]);
+                    } else {
+                        $merged[$k] = $v;
+                    }
+                }
+                $this->tables[$table][$i] = $merged;
                 $n++;
             }
         }
+        $this->sets = [];
         $this->affected = $n;
         $this->reset();
 

@@ -74,12 +74,10 @@ function se_capi_send_event($row)
 
     // The system-user token is a secret: it lives in the FILE secret store
     // (meta_capi_<brand>), the same source se_capi_ready()/health check, so a
-    // "ready" CAPI leg truthfully implies this send has a token. Legacy option
-    // storage is honoured last for back-compat. Never in the brands table that
-    // renders in the UI, and never in git.
-    $token = function_exists('se_meta_capi_token')
-        ? se_meta_capi_token($brand_id)
-        : (get_option('se_meta_capi_token_' . $brand_id) ?: get_option('se_meta_capi_token'));
+    // "ready" CAPI leg truthfully implies this send has a token. The legacy
+    // tbloptions fallback was removed (H.L8 / SEC-006): secrets never live in
+    // the options table, the brands table or git.
+    $token = function_exists('se_meta_capi_token') ? se_meta_capi_token($brand_id) : '';
 
     if (empty($token)) {
         // An external gate is not a delivery failure: hold without consuming

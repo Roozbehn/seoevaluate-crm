@@ -109,17 +109,44 @@ function se_journey_lead_fields_ensure()
     return $map;   // one indexed SELECT per sync; no static memo (a reset store must be re-seeded)
 }
 
-/** Write one custom-field value (insert or update; empty string clears). */
-function se_journey_lead_field_set($lead_id, $field_id, $value)
+/**
+ * All custom-field values of one lead in ONE query, keyed by field id
+ * (CRM-M054 / AZCRM-PERF-003): the sync below writes up to ten fields per
+ * journey change, and used to SELECT each one separately.
+ */
+function se_journey_lead_field_values($lead_id)
+{
+    $CI  = &get_instance();
+    $out = [];
+    $CI->db->where('relid', (int) $lead_id)->where('fieldto', 'leads');
+    foreach ($CI->db->get(db_prefix() . 'customfieldsvalues')->result() as $r) {
+        $out[(int) $r->fieldid] = $r;
+    }
+
+    return $out;
+}
+
+/**
+ * Write one custom-field value (insert or update; empty string clears).
+ * `$known` is the preloaded map from se_journey_lead_field_values(); it is
+ * updated in place so a second write in the same sync sees the new value.
+ * Without it the row is looked up (one query) — the pre-batch behaviour.
+ */
+function se_journey_lead_field_set($lead_id, $field_id, $value, ?array &$known = null)
 {
     $CI = &get_instance();
     $t  = db_prefix() . 'customfieldsvalues';
     $value = mb_substr(trim((string) $value), 0, 1000);
-    $CI->db->where('relid', (int) $lead_id)->where('fieldid', (int) $field_id)->where('fieldto', 'leads');
-    $row = $CI->db->get($t)->row();
+    if ($known === null) {
+        $CI->db->where('relid', (int) $lead_id)->where('fieldid', (int) $field_id)->where('fieldto', 'leads');
+        $row = $CI->db->get($t)->row();
+    } else {
+        $row = $known[(int) $field_id] ?? null;
+    }
     if ($row) {
         if ((string) $row->value !== $value) {
             $CI->db->where('id', (int) $row->id)->update($t, ['value' => $value]);
+            if ($known !== null) { $known[(int) $field_id] = (object) array_merge((array) $row, ['value' => $value]); }
         }
 
         return;
@@ -128,6 +155,9 @@ function se_journey_lead_field_set($lead_id, $field_id, $value)
         return;
     }
     $CI->db->insert($t, ['relid' => (int) $lead_id, 'fieldid' => (int) $field_id, 'fieldto' => 'leads', 'value' => $value]);
+    if ($known !== null) {
+        $known[(int) $field_id] = (object) ['id' => (int) $CI->db->insert_id(), 'relid' => (int) $lead_id, 'fieldid' => (int) $field_id, 'fieldto' => 'leads', 'value' => $value];
+    }
 }
 
 /** Pipeline stage (se_core) a journey state maps to; null = leave the lead where it is. */
@@ -247,19 +277,20 @@ function se_journey_lead_apply_identity($j, array $clean)
     $langs  = ['tr' => 'Türkçe', 'en' => 'English', 'fa' => 'فارسی', 'ar' => 'العربية'];
     $times  = ['morning' => 'Sabah', 'afternoon' => 'Öğleden sonra', 'evening' => 'Akşam', 'any' => 'Fark etmez'];
     $chans  = ['whatsapp' => 'WhatsApp', 'phone' => 'Telefon', 'video' => 'Görüntülü görüşme', 'in_person' => 'Klinikte'];
+    $known  = se_journey_lead_field_values((int) $lead->id);
     if (isset($fields['leads_journey_age']) && isset($clean['age']) && (int) $clean['age'] > 0) {
-        se_journey_lead_field_set((int) $lead->id, $fields['leads_journey_age'], (string) (int) $clean['age']);
+        se_journey_lead_field_set((int) $lead->id, $fields['leads_journey_age'], (string) (int) $clean['age'], $known);
     }
     if (isset($fields['leads_journey_language']) && !empty($clean['preferred_language'])) {
         $code = (string) $clean['preferred_language'];
-        se_journey_lead_field_set((int) $lead->id, $fields['leads_journey_language'], $langs[$code] ?? $code);
+        se_journey_lead_field_set((int) $lead->id, $fields['leads_journey_language'], $langs[$code] ?? $code, $known);
     }
     if (isset($fields['leads_journey_contact_pref'])) {
         $parts = [];
         if (!empty($clean['contact_time']))    { $parts[] = $times[(string) $clean['contact_time']] ?? (string) $clean['contact_time']; }
         if (!empty($clean['contact_channel'])) { $parts[] = $chans[(string) $clean['contact_channel']] ?? (string) $clean['contact_channel']; }
         if ($parts) {
-            se_journey_lead_field_set((int) $lead->id, $fields['leads_journey_contact_pref'], implode(' · ', $parts));
+            se_journey_lead_field_set((int) $lead->id, $fields['leads_journey_contact_pref'], implode(' · ', $parts), $known);
         }
     }
 }
@@ -339,9 +370,10 @@ function se_journey_sync_lead($j, $reason = '')
 
     /* ---- custom fields ------------------------------------------------- */
     $fields = se_journey_lead_fields_ensure();
-    $set = function ($slug, $value) use ($fields, $lead) {
+    $known  = se_journey_lead_field_values((int) $lead->id);   // one SELECT for the whole sync
+    $set = function ($slug, $value) use ($fields, $lead, &$known) {
         if (isset($fields[$slug])) {
-            se_journey_lead_field_set((int) $lead->id, $fields[$slug], $value);
+            se_journey_lead_field_set((int) $lead->id, $fields[$slug], $value, $known);
         }
     };
     $set('leads_journey_stage', se_journey_lead_label('se_journey_state_' . (string) $j->state));

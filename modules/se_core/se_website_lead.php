@@ -195,6 +195,30 @@ function se_website_lead_upsert($brand_id, array $data)
             : ['ok' => false, 'reason' => 'brand_mismatch'];
     }
 
+    /* One person per phone across channels (audit K6 / T12 / CRM-M050): a website
+     * form from a number that already wrote on WhatsApp reuses that lead instead
+     * of creating a second person. Matching is on normalised digits (same rule
+     * as the WhatsApp side), scoped to the brand; the lead keeps its identity and
+     * gains the website id, a name if it had none, and the consent record. */
+    if (function_exists('se_journey_find_lead_by_phone') && trim((string) $data['phone']) !== '') {
+        $sameId = (int) se_journey_find_lead_by_phone((int) $brand_id, (string) $data['phone']);
+        if ($sameId > 0) {
+            $CI->db->where('id', $sameId);
+            $same = $CI->db->get($table)->row();
+            if ($same && (int) $same->brand_id === (int) $brand_id) {
+                $upd = ['website_lead_id' => empty($same->website_lead_id) ? $data['external_id'] : $same->website_lead_id];
+                if (trim((string) $same->name) === '' || strpos((string) $same->name, 'WhatsApp ••••') === 0) { $upd['name'] = $data['name']; }
+                if (trim((string) $same->email) === '' && $data['email'] !== '') { $upd['email'] = $data['email']; }
+                $CI->db->where('id', $sameId)->update($table, $upd);
+                if ($data['contact_consent']) {
+                    se_consent_grant((int) $brand_id, $sameId, 'marketing', 'website', 'consultation_contact_permission', 'yes');
+                }
+                log_activity('Website lead merged into existing person by phone [ID: ' . $sameId . ']');
+                return ['ok' => true, 'lead_id' => $sameId, 'duplicate' => true, 'merged_by' => 'phone'];
+            }
+        }
+    }
+
     $status = se_website_lead_default_status($brand_id);
     $source = se_website_lead_default_source($brand_id);
     if ($status <= 0 || $source <= 0) {

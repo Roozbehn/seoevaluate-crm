@@ -187,3 +187,27 @@ foreach (glob($dir . '/*') as $d) { @rmdir($d); }
 @rmdir($dir);
 $GLOBALS['SE_MEDIA_FETCHER'] = null;
 $GLOBALS['se_net_attempts'] = [];
+
+/* ======================================================================== */
+se_group('Media fetch lease (audit J9 / K5 / CRM-M055): a dead worker cannot strand a row');
+$db = se_test_db();
+$db->tables['tblse_media'][] = ['id' => 501, 'channel' => 'wa', 'message_id' => 9001, 'brand_id' => 1, 'kind' => 'image', 'provider_ref' => 'MEDIA-123',
+    'mime' => null, 'filename' => null, 'state' => 'fetching', 'attempts' => 1, 'last_error' => null,
+    'next_attempt_at' => date('Y-m-d H:i:s', time() - 60), 'date_created' => date('Y-m-d H:i:s'), 'storage' => 'local'];   // lease expired
+$db->tables['tblse_media'][] = ['id' => 502, 'channel' => 'wa', 'message_id' => 9002, 'brand_id' => 1, 'kind' => 'image', 'provider_ref' => 'MEDIA-123',
+    'mime' => null, 'filename' => null, 'state' => 'fetching', 'attempts' => 1, 'last_error' => null,
+    'next_attempt_at' => date('Y-m-d H:i:s', time() + 600), 'date_created' => date('Y-m-d H:i:s'), 'storage' => 'local'];   // still leased
+se_media_register_fetcher(function ($row) use ($jpeg) { return ['ok' => true, 'bytes' => $jpeg, 'mime' => 'image/jpeg', 'error' => '']; });
+$n = se_media_fetch_pending();
+$rows = []; foreach ($db->rows('tblse_media') as $r) { $rows[(int) $r['id']] = $r; }
+se_eq('stored', $rows[501]['state'], 'the row whose lease expired was recovered and fetched');
+se_eq(3, (int) $rows[501]['attempts'], 'the lost attempt was counted (1 → 2 on recovery → 3 on the successful fetch; backoff/cap still apply)');
+se_eq('fetching', $rows[502]['state'], 'a row inside its lease is left alone');
+// A claimed row carries a lease so the next pass can recover it if this worker dies.
+$db->tables['tblse_media'][] = ['id' => 503, 'channel' => 'wa', 'message_id' => 9003, 'brand_id' => 1, 'kind' => 'image', 'provider_ref' => 'MEDIA-NEVER',
+    'mime' => null, 'filename' => null, 'state' => 'pending', 'attempts' => 0, 'last_error' => null, 'next_attempt_at' => date('Y-m-d H:i:s', time() - 1), 'date_created' => date('Y-m-d H:i:s'), 'storage' => 'local'];
+se_media_register_fetcher(function ($row) { if ($row['provider_ref'] === 'MEDIA-NEVER') { throw new RuntimeException('worker died'); } return ['ok' => false, 'bytes' => '', 'mime' => '', 'error' => 'x']; });
+try { se_media_fetch_pending(); } catch (Throwable $e) { /* the crash */ }
+$r503 = null; foreach ($db->rows('tblse_media') as $r) { if ((int) $r['id'] === 503) { $r503 = $r; } }
+se_eq('fetching', $r503['state'], 'crashed mid-fetch: row is left in fetching…');
+se_ok(strtotime($r503['next_attempt_at']) > time() + 600, '…with a lease in the future (' . SE_MEDIA_LEASE_SECONDS . ' s), so the next pass after expiry recovers it');

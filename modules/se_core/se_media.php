@@ -219,6 +219,8 @@ function se_media_get($id)
  * Fetch (dispatcher / cron step).
  * ------------------------------------------------------------------------- */
 
+if (!defined('SE_MEDIA_LEASE_SECONDS')) { define('SE_MEDIA_LEASE_SECONDS', 15 * 60); }   // a fetch never legitimately takes longer
+
 function se_media_backoff_seconds($attempts)
 {
     return min(6 * 3600, 120 * (2 ** max(0, $attempts - 1)));
@@ -274,12 +276,25 @@ function se_media_fetch_pending($limit = SE_MEDIA_BATCH)
         se_media_migrate_local_to_r2(10);
     }
 
+    // Lease recovery (audit J9 / CRM-M055): a worker that died mid-fetch left the
+    // row in `fetching` forever — invisible, never retried. A fetching row whose
+    // lease (next_attempt_at, set below) has passed goes back to pending with the
+    // attempt counted, so the backoff and the 5-attempt cap still apply.
+    $CI->db->where('state', 'fetching')->where('next_attempt_at <=', se_db_now())
+           ->set('state', 'pending')->set('attempts', 'attempts + 1', false)
+           ->set('last_error', 'fetch lease expired (worker died)')->update($table);
+
     $CI->db->where('state', 'pending')->where('next_attempt_at <=', se_db_now())
            ->order_by('id', 'ASC')->limit($limit);
     $rows = $CI->db->get($table)->result_array();
 
     foreach ($rows as $row) {
-        $CI->db->where('id', (int) $row['id'])->update($table, ['state' => 'fetching']);
+        // Claim with a lease: fetching + next_attempt_at = now + SE_MEDIA_LEASE_SECONDS.
+        $CI->db->where('id', (int) $row['id'])->where('state', 'pending')
+               ->update($table, ['state' => 'fetching', 'next_attempt_at' => se_db_now(SE_MEDIA_LEASE_SECONDS)]);
+        if ($CI->db->affected_rows() !== 1) {
+            continue;   // another worker took it
+        }
         $outcome = se_media_fetch_one($row);
         $CI->db->where('id', (int) $row['id'])->update($table, $outcome);
     }

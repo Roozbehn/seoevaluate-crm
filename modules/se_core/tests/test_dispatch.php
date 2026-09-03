@@ -20,14 +20,14 @@ $db->seed('tblse_ig_accounts', []);
 $GLOBALS['se_test']['options'] = [];
 
 $db->seed('tblse_media', []);
-se_eq(['wa_events', 'wa_queue', 'ig_events', 'ig_queue', 'media', 'journey_media'], array_keys(se_dispatch_steps()),
-    'the dispatcher runs exactly the messaging legs (+ attachment fetch) — no invoices, reminders or IMAP');
+se_eq(['wa_events', 'wa_queue', 'ig_events', 'ig_queue', 'leadgen', 'media', 'journey_media'], array_keys(se_dispatch_steps()),
+    'the dispatcher runs exactly the messaging legs (+ Lead Ads pull, attachment fetch) — no invoices, reminders or IMAP');
 
 $r = se_dispatch_run();
 se_eq(true, $r['ok'], 'an empty system dispatches cleanly');
 se_eq(false, $r['locked'], 'and was not blocked by a lock');
 se_eq([], $r['errors'], 'no errors');
-se_eq(6, count($r['ran']), 'all six legs ran (5 messaging + journey media seal)');
+se_eq(7, count($r['ran']), 'all seven legs ran (4 messaging + leadgen + media + journey media seal)');
 se_ok((int) get_option('se_dispatch_last_run') > time() - 5, 'the heartbeat is recorded');
 se_ok(se_dispatch_active(), 'and the dispatcher counts as active');
 

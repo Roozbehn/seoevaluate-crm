@@ -483,6 +483,12 @@ function se_journey_auto_start_website($brand_id)
     return (int) get_option('se_journey_auto_start_website_' . (int) $brand_id) === 1;
 }
 
+/** Meta Lead Ads leads start the journey on arrival (default off — owner switch, PJ-004). */
+function se_journey_auto_start_ads($brand_id)
+{
+    return (int) get_option('se_journey_auto_start_ads_' . (int) $brand_id) === 1;
+}
+
 function se_journey_config($key, $default = null)
 {
     $v = get_option('se_journey_' . $key);
@@ -1485,20 +1491,23 @@ function se_journey_on_lead_created($arg)
         return ['ok' => false, 'reason' => 'no_lead'];
     }
     $CI = &get_instance();
-    $CI->db->select('id, brand_id, website_lead_id')->where('id', $lead_id);
+    $CI->db->select('id, brand_id, website_lead_id, meta_lead_id')->where('id', $lead_id);
     $lead = $CI->db->get(db_prefix() . 'leads')->row();
-    if (!$lead || trim((string) ($lead->website_lead_id ?? '')) === '') {
+    $isWeb = $lead && trim((string) ($lead->website_lead_id ?? '')) !== '';
+    $isAd  = $lead && trim((string) ($lead->meta_lead_id ?? '')) !== '';   // Meta Lead Ads (PJ-004)
+    if (!$lead || (!$isWeb && !$isAd)) {
         return ['ok' => false, 'reason' => 'not_website_lead'];
     }
     $brand = (int) $lead->brand_id;
-    if ($brand <= 0 || !se_journey_enabled($brand) || !se_journey_auto_start_website($brand)) {
+    $switch = $isWeb ? se_journey_auto_start_website($brand) : se_journey_auto_start_ads($brand);
+    if ($brand <= 0 || !se_journey_enabled($brand) || !$switch) {
         return ['ok' => false, 'reason' => 'auto_start_off'];
     }
     if (se_journey_find_by_lead($brand, $lead_id)) {
         return ['ok' => false, 'reason' => 'already_started'];
     }
     try {
-        $r = se_journey_start_from_lead($lead_id, 0, ['detail' => 'auto_start_website']);
+        $r = se_journey_start_from_lead($lead_id, 0, ['detail' => $isWeb ? 'auto_start_website' : 'auto_start_ads']);
     } catch (Throwable $e) {
         se_journey_audit($brand, 0, 'auto_start_failed', 'lead', (string) $lead_id, mb_substr(basename($e->getFile()) . ':' . $e->getLine(), 0, 191));
 
@@ -1584,6 +1593,50 @@ function se_journey_resume($journey, $staff_id, $reason = 'staff_resume')
  * message from the patient asking to continue, recorded by its wamid, or a
  * staff-entered evidence note. Without it the call is refused.
  */
+/**
+ * Internal staff note (CRM-M028 / UX-P06). Recorded as a `note` event with the
+ * staff actor and bumps last_updated; NEVER sent to the patient (no outbound
+ * write). Returns ['ok'=>bool,'reason'=>...].
+ */
+function se_journey_add_note($journey, $note, $staff_id = 0)
+{
+    $j    = is_object($journey) ? $journey : se_journey_get_raw((int) $journey);
+    $note = trim(mb_substr((string) $note, 0, 500));
+    if (!$j) { return ['ok' => false, 'reason' => 'not_found']; }
+    if ($note === '') { return ['ok' => false, 'reason' => 'empty']; }
+
+    $CI = &get_instance();
+    se_journey_event($j, 'note', $note, [], 'staff', (string) (int) $staff_id);
+    $CI->db->where('id', (int) $j->id)->where('brand_id', (int) $j->brand_id)
+        ->update(db_prefix() . 'se_journeys', ['last_updated' => date('Y-m-d H:i:s')]);
+
+    return ['ok' => true, 'reason' => null];
+}
+
+/**
+ * Reopen a closed / not-suitable journey (CRM-M030 / UX-P08). A reason is
+ * required and recorded on the transition; the target is İnceleme
+ * (ready_for_review), or the enquiry stage when the closed journey never had a
+ * patient record. Only closed_lost / not_suitable can be reopened.
+ */
+function se_journey_reopen($journey, $reason, $staff_id = 0)
+{
+    $j      = is_object($journey) ? $journey : se_journey_get_raw((int) $journey);
+    $reason = trim(mb_substr((string) $reason, 0, 500));
+    if (!$j) { return ['ok' => false, 'reason' => 'not_found']; }
+    if ($reason === '') { return ['ok' => false, 'reason' => 'reason_required']; }
+    if (!in_array((string) $j->state, ['closed_lost', 'not_suitable'], true)) {
+        return ['ok' => false, 'reason' => 'not_reopenable'];
+    }
+    $target = (string) $j->state === 'closed_lost' && (int) $j->lead_id <= 0 ? 'new_whatsapp_enquiry' : 'ready_for_review';
+    $r = se_journey_transition($j, $target, 'staff_reopen', 'staff', (int) $staff_id, null, $reason);
+    if (empty($r['ok'])) {
+        return ['ok' => false, 'reason' => (string) ($r['reason'] ?? 'blocked')];
+    }
+
+    return ['ok' => true, 'reason' => null, 'state' => $target];
+}
+
 function se_journey_reactivate($journey, $evidence_ref, $staff_id = 0, $note = '')
 {
     $j = is_object($journey) ? $journey : se_journey_get_raw((int) $journey);

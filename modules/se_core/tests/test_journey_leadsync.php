@@ -155,3 +155,22 @@ se_eq(date('d.m.Y H:i', strtotime($avail['slots'][0]['start'])) . ' · klinikte 
 $r = se_journey_sync_lead(se_test_journey_row(), 'staff');
 se_eq(true, $r['ok'], 'manual sync ok');
 se_ok(strpos((string) se_test_lead_cf('leads_journey_synced_at'), '· staff') !== false, 'stamped with the trigger');
+
+/* ======================================================================== */
+se_group('Journey → lead: custom-field sync reads the values table once (CRM-M054 / AZCRM-PERF-003)');
+
+se_test_journey_reviewed();
+$db = se_test_db();
+$j  = se_journey_get_raw((int) se_test_journey_row()->id);
+$db->selects = [];
+se_journey_sync_lead($j, "test");
+se_eq(1, (int) ($db->selects['tblcustomfieldsvalues'] ?? 0), 'one SELECT on customfieldsvalues for a full sync (was one per field)');
+$before = count($db->rows('tblcustomfieldsvalues'));
+se_journey_sync_lead($j, "test");
+se_eq($before, count($db->rows('tblcustomfieldsvalues')), 'a repeated sync inserts nothing (values compared against the preloaded map)');
+$known = se_journey_lead_field_values((int) $j->lead_id);
+$fields = se_journey_lead_fields_ensure();
+se_journey_lead_field_set((int) $j->lead_id, $fields['leads_journey_photos'], '9', $known);
+se_eq('9', $known[$fields['leads_journey_photos']]->value, 'the map is updated in place after a write');
+se_journey_lead_field_set((int) $j->lead_id, $fields['leads_journey_photos'], '9', $known);
+se_eq('9', se_test_lead_cf('leads_journey_photos'), 'and the value persisted once');

@@ -426,7 +426,7 @@ se_test_remove_secret('google_sa_1');
 se_group('Landing tokens are brand-, purpose- and time-bound');
 
 se_test_seed_google();
-$GLOBALS['se_test']['options']['se_landing_token_secret'] = 'zz-landing-fixture-secret';
+se_test_install_secret('landing_token', 'zz-landing-fixture-secret');
 
 $tok = se_landing_token_create(['gclid' => 'GC1'], 30, null, 1);
 se_ok($tok !== '', 'a token is created');
@@ -449,7 +449,7 @@ se_eq(null, se_landing_token_verify($expired, null, 1), 'an expired token fails'
 se_group('Applying a landing token cannot overwrite first-touch or cross brands');
 
 se_test_seed_google();
-$GLOBALS['se_test']['options']['se_landing_token_secret'] = 'zz-landing-fixture-secret';
+se_test_install_secret('landing_token', 'zz-landing-fixture-secret');
 $db = se_test_db();
 
 $tokA = se_landing_token_create(['gclid' => 'FIRST'], 30, null, 1);

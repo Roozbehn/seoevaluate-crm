@@ -147,7 +147,8 @@ se_test_seed_mm();
 se_test_db()->seed('tblse_wa_conversations', [
     ['id' => 1, 'brand_id' => 22, 'ctwa_clid' => 'CTWA-AD', 'waba_id' => '1398503638806590'],
     ['id' => 2, 'brand_id' => 22, 'ctwa_clid' => '',        'waba_id' => '1398503638806590'],
-    ['id' => 3, 'brand_id' => 22, 'ctwa_clid' => 'CTWA-AD', 'waba_id' => ''],
+    ['id' => 3, 'brand_id' => 22, 'ctwa_clid' => 'CTWA-AD', 'waba_id' => '', 'phone_number_id' => 'PNID-UNKNOWN'],
+    ['id' => 4, 'brand_id' => 22, 'ctwa_clid' => 'CTWA-AD', 'phone_number_id' => 'PNID-22'],   // real rows: no waba_id column at all (T14)
 ]);
 se_test_db()->seed('tblse_ig_conversations', [
     ['id' => 1, 'brand_id' => 22, 'igsid' => 'IGSID9', 'ig_account_id' => 'IGACC1',
@@ -178,14 +179,21 @@ se_eq('whatsapp', $ctx['messaging_channel'], 'channel recorded at queue time');
 // conversion — that is a lie to the optimiser, and it is bid on.
 se_eq(false, se_capi_messaging_queue_for_wa_conversation(2, 700),
       'a thread with no click id is not an ad conversion');
+se_test_db()->seed('tblse_wa_numbers', []);
 se_eq(false, se_capi_messaging_queue_for_wa_conversation(3, 700),
-      'a click id with no WABA id is half-identified and is refused');
+      'a click id whose number maps to no WABA is half-identified and is refused');
+se_test_db()->seed('tblse_wa_numbers', [['id' => 1, 'brand_id' => 22, 'waba_id' => '1398503638806590', 'phone_number_id' => 'PNID-22', 'state' => 'live']]);
+se_test_db()->tables['tblleads'][] = ['id' => 701, 'brand_id' => 22, 'consent_ads' => 1, 'lost' => 0, 'junk' => 0, 'email' => '', 'phonenumber' => '', 'consent_text_version' => 'v1'];
+se_ok(se_capi_messaging_queue_for_wa_conversation(4, 701) !== false,
+      'T14/CRM-M052: a conversation row WITHOUT waba_id resolves the WABA from its phone_number_id and queues');
+$last = end(se_test_db()->tables['tblse_conversion_outbox']);
+se_eq('1398503638806590', json_decode($last['payload'], true)['whatsapp_business_account_id'], 'the resolved WABA id is carried on the row');
 se_eq(false, se_capi_messaging_queue_for_wa_conversation(99, 700), 'a missing conversation is refused');
 se_eq(false, se_capi_messaging_queue_for_wa_conversation(1, 0), 'a thread with no lead is refused');
 
 se_ok(se_capi_messaging_queue_for_ig_conversation(1, 700) !== false,
       'an Instagram thread opened from an ad queues a conversion');
-$ig_ctx = json_decode(se_test_db()->rows('tblse_conversion_outbox')[1]['payload'], true);
+$ig_ctx = json_decode(end(se_test_db()->tables['tblse_conversion_outbox'])['payload'], true);
 se_eq('IGSID9', $ig_ctx['ig_sid'], 'the IG thread identifier is carried');
 se_eq(false, se_capi_messaging_queue_for_ig_conversation(2, 700),
       'an Instagram thread with no referral is organic and is not reported');

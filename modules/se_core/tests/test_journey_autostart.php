@@ -131,3 +131,22 @@ foreach (['english', 'turkish'] as $lang) {
     $l = (string) file_get_contents(__DIR__ . '/../../se_journey/language/' . $lang . '/se_journey_lang.php');
     se_ok(strpos($l, "se_journey_flag_auto_website'") !== false && strpos($l, "se_journey_flag_auto_website_hint'") !== false, $lang . ' labels present');
 }
+
+/* ======================================================================== */
+se_group('Journey auto-start: Meta Lead Ads leads behind their own switch (PJ-004)');
+se_test_autostart_seed();
+$db = se_test_db();
+$db->tables['tblleads'][] = ['id' => 802, 'brand_id' => 1, 'name' => 'Ad Person', 'phonenumber' => '+905000000053', 'email' => '', 'status' => 5, 'source' => 7,
+    'consent_marketing' => 1, 'consent_ads' => 1, 'lost' => 0, 'junk' => 0, 'lastcontact' => null, 'default_language' => '', 'country' => 0, 'city' => '', 'website_lead_id' => null, 'meta_lead_id' => 'm-802'];
+se_consent_grant(1, 802, 'marketing', 'meta_lead_ads', 'contact_permission', 'yes', 0);   // the ad form's contact-permission field
+se_test_act_as(0, [], false); se_authz_reset_cache();
+se_eq('auto_start_off', se_journey_on_lead_created(802)['reason'], 'switch off by default: an ad lead waits for staff');
+update_option('se_journey_auto_start_ads_1', 1);
+$sentBefore = count($GLOBALS['se_wa_sent']);
+$r = se_journey_on_lead_created(802);
+se_wa_out_drain();
+se_eq(true, $r['ok'], 'switch on: the ad lead starts its journey without a staff session');
+se_eq($sentBefore + 1, count($GLOBALS['se_wa_sent']), 'one start template sent');
+se_eq('already_started', se_journey_on_lead_created(802)['reason'], 'idempotent');
+update_option('se_journey_auto_start_ads_1', 0);
+

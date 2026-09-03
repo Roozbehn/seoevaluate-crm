@@ -401,3 +401,42 @@ se_eq(true, se_journey_public_base_url_allowed(''), 'empty base URL is allowed (
 se_eq(false, se_journey_public_base_url_allowed('https://attacker.example/x', 'crm.example.com'), 'a foreign host is refused');
 se_eq(true, se_journey_public_base_url_allowed('https://links.crm.example.com/', 'crm.example.com'), 'a subdomain of the own host is allowed');
 se_eq(false, se_journey_public_base_url_allowed('http://crm.example/x'), 'plain http is refused');
+
+/* ======================================================================== */
+se_group('Journey staff: internal note and reopen helpers (CRM-M028 / CRM-M030)');
+
+se_test_seed_journey();
+$db = se_test_db();
+se_test_act_as(10, [], true);
+$db->tables['tblse_journeys'][] = ['id' => 900, 'brand_id' => 1, 'lead_id' => 500, 'client_id' => 0, 'conversation_id' => 0, 'state' => 'not_suitable',
+    'automation' => 'active', 'assigned_staff' => 10, 'last_updated' => '2026-01-01 00:00:00', 'date_created' => '2026-01-01 00:00:00'];
+$db->tables['tblse_journeys'][] = ['id' => 901, 'brand_id' => 1, 'lead_id' => 0, 'client_id' => 0, 'conversation_id' => 0, 'state' => 'closed_lost',
+    'automation' => 'active', 'assigned_staff' => 10, 'last_updated' => '2026-01-01 00:00:00', 'date_created' => '2026-01-01 00:00:00'];
+
+// Note: empty refused, otherwise a staff `note` event, nothing outbound.
+$sentBefore = count($GLOBALS['se_wa_sent']); $queueBefore = count($db->rows('tblse_wa_outbound'));
+se_eq(['ok' => false, 'reason' => 'empty'], se_journey_add_note(900, '   ', 10), 'an empty note is refused');
+se_eq(['ok' => false, 'reason' => 'not_found'], se_journey_add_note(9999, 'x', 10), 'an unknown journey is refused');
+$r = se_journey_add_note(900, "Hasta aradı, cuma günü yeniden görüşülecek.\n", 10);
+se_eq(true, $r['ok'], 'a note is recorded');
+$ev = array_values(array_filter($db->rows('tblse_journey_events'), function ($e) { return (int) $e['journey_id'] === 900 && $e['kind'] === 'note'; }));
+se_eq(1, count($ev), 'exactly one note event');
+se_eq(['staff', '10', 'Hasta aradı, cuma günü yeniden görüşülecek.'], [$ev[0]['actor_type'], (string) $ev[0]['actor_id'], $ev[0]['summary']], 'staff actor, trimmed text');
+se_ok(se_journey_get_raw(900)->last_updated > '2026-01-01 00:00:00', 'last_updated bumped');
+se_eq([$sentBefore, $queueBefore], [count($GLOBALS['se_wa_sent']), count($db->rows('tblse_wa_outbound'))], 'nothing was sent or queued to the patient');
+$long = se_journey_add_note(900, str_repeat('a', 600), 10);
+$ev = array_values(array_filter($db->rows('tblse_journey_events'), function ($e) { return (int) $e['journey_id'] === 900 && $e['kind'] === 'note'; }));
+se_eq(500, mb_strlen(end($ev)['summary']), 'notes are capped at 500 characters');
+
+// Reopen: reason required; not_suitable → İnceleme; closed without patient record → enquiry; others refused.
+se_eq(['ok' => false, 'reason' => 'reason_required'], se_journey_reopen(900, '', 10), 'reopen without a reason is refused');
+se_eq('not_suitable', se_journey_get_raw(900)->state, 'and the state is untouched');
+$r = se_journey_reopen(900, 'Yeni fotoğraflar geldi', 10);
+se_eq(['ok' => true, 'state' => 'ready_for_review'], ['ok' => $r['ok'], 'state' => $r['state']], 'not_suitable reopens to İnceleme');
+se_eq('ready_for_review', se_journey_get_raw(900)->state, 'state persisted');
+$t = array_values(array_filter($db->rows('tblse_journey_transitions'), function ($t) { return (int) $t['journey_id'] === 900; }));
+se_eq(['not_suitable', 'ready_for_review', 'staff_reopen', 'staff', 'Yeni fotoğraflar geldi'], [end($t)['from_state'], end($t)['to_state'], end($t)['trigger_key'], end($t)['actor_type'], end($t)['note']], 'the transition carries the reason and the staff actor');
+se_eq(['ok' => false, 'reason' => 'not_reopenable'], se_journey_reopen(900, 'again', 10), 'an open journey cannot be "reopened"');
+$r = se_journey_reopen(901, 'Hasta tekrar yazdı', 10);
+se_eq('new_whatsapp_enquiry', $r['state'] ?? null, 'a closed journey without a patient record returns to the enquiry stage');
+se_eq('new_whatsapp_enquiry', se_journey_get_raw(901)->state, 'persisted');

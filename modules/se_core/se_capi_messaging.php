@@ -456,12 +456,21 @@ function se_capi_messaging_queue_for_wa_conversation($conversation_id, $lead_id)
         return false;
     }
 
+    /* Meta requires the WABA id alongside the click id. The conversation table
+     * carries no waba_id column (audit T14 / CRM-M052): resolve it from the
+     * number the thread runs on (se_wa_numbers.phone_number_id → waba_id),
+     * then the brand's first number. Only a thread whose number is unknown is
+     * refused — a half-identified event matches nobody and burns a retry. */
     $waba = !empty($conv->waba_id) ? (string) $conv->waba_id : '';
+    if ($waba === '' && !empty($conv->phone_number_id)) {
+        $CI->db->select('waba_id')->where('phone_number_id', (string) $conv->phone_number_id);
+        $n = $CI->db->get(db_prefix() . 'se_wa_numbers')->row_array();
+        $waba = (string) ($n['waba_id'] ?? '');
+    }
+    if ($waba === '' && function_exists('se_wa_waba_for_brand')) {
+        $waba = (string) se_wa_waba_for_brand((int) $conv->brand_id);
+    }
     if ($waba === '') {
-        /* Meta requires the WABA id alongside the click id. An older
-         * conversation row predates the column being filled; refusing is
-         * correct — a half-identified event matches nobody and still burns a
-         * retry budget. */
         return false;
     }
 

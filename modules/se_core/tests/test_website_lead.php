@@ -79,3 +79,32 @@ se_eq(true, se_website_lead_validate($phoneOnly)['ok'], 'a phone-only lead remai
 
 $none = $valid; $none['email'] = ''; $none['phone'] = '';
 se_eq('invalid_payload', se_website_lead_validate($none)['reason'], 'at least one reply channel is required');
+
+/* ======================================================================== */
+se_group('One person per phone across channels (audit K6 / T12 / CRM-M050): the web form reuses the WhatsApp lead');
+$db = se_test_db();
+$db->tables = []; $db->autoinc = [];
+$db->seed('tblse_brands', [['id' => 1, 'name' => 'A', 'active' => 1]]);
+$db->seed('tblleads_status', [['id' => 5, 'statusorder' => 1]]);
+$db->seed('tblleads_sources', [['id' => 7]]);
+$db->seed('tblse_consent_ledger', []);
+$db->seed('tblleads', [['id' => 900, 'brand_id' => 1, 'name' => 'WhatsApp ••••2233', 'phonenumber' => '+905551112233', 'email' => '', 'website_lead_id' => null, 'consent_marketing' => 0]]);
+$GLOBALS['se_test']['options'] = [];
+$payload = se_website_lead_validate($valid)['data'];          // phone +905551112233, name "Fixture Person"
+$payload['phone'] = '0555 111 22 33';                          // national format, spaces: same person
+$r = se_website_lead_upsert(1, $payload);
+se_eq(true, $r['ok'], 'accepted');
+se_eq(900, (int) $r['lead_id'], 'the existing WhatsApp lead is reused');
+se_eq('phone', $r['merged_by'] ?? '', 'merged by phone');
+se_eq(1, count($db->rows('tblleads')), 'no second person was created');
+$row = $db->rows('tblleads')[0];
+se_eq('Fixture Person', $row['name'], 'the masked WhatsApp placeholder name is replaced by the real name');
+se_eq($valid['external_id'], $row['website_lead_id'], 'the website id is stamped on the existing lead');
+se_eq('fixture@example.com', $row['email'], 'email filled in');
+se_eq(1, count(array_filter($db->rows('tblse_consent_ledger'), function ($c) { return (int) $c['rel_id'] === 900 && $c['purpose'] === 'marketing'; })), 'marketing consent recorded on that lead');
+$r2 = se_website_lead_upsert(1, $payload);
+se_eq(900, (int) $r2['lead_id'], 'a repeat submission (same external id) still returns the same lead');
+$other = $payload; $other['external_id'] = '223e4567-e89b-12d3-a456-426614174999'; $other['phone'] = '+905559998877';
+$r3 = se_website_lead_upsert(1, $other);
+se_eq(true, $r3['ok'] && (int) $r3['lead_id'] !== 900, 'a different phone creates a new person');
+se_eq(2, count($db->rows('tblleads')), 'now two people');
