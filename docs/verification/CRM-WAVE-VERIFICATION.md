@@ -16,3 +16,11 @@
 - Tickets: M002 M003 (+M040 agenda) M004 M005 M006 (behaviour; composer UI in Wave 2) M007 M008 M009 M010 (engineering; BLOCKED-DECISION for the flip) M011 M012 M013 M014
 - Not verifiable from the container (host-only): `curl -I /docs/` 404, APP_CSRF_PROTECTION / APP_COOKIE_SECURE constants, proxy_ips → listed under CRM-M062 for the deploy step.
 - Blockers: none new. Decision needed: CRM-M010 option flip (Settings → Süreç ayarları → "Formdaki pazarlama rızası … reklam ölçümü").
+
+## Wave 2 — Shared UX foundation
+- Start SHA: 5d78e2c → End SHA: e72814f
+- Files: modules/se_core/assets/{se-ds.css (new), se-clinic.js (new), pwa.css}, modules/se_core/se_core.php, helpers/{se_ui_helper.php,se_core_helper.php}, se_chat_ui.php, se_outbound_tracker.php, modules/se_journey/{next_action.php (new), se_journey.php, helpers.php (origin column)}, modules/se_whatsapp/{outbound.php,views/conversation.php}, language files (tr/en) of se_core/se_journey/se_whatsapp/se_appointments, scripts/check-copy.sh (new), tests/{test_next_action.php (new), bootstrap.php}
+- Tests: **4 050 pass / 0 fail** (+162 vs Wave 1: next-action table 156, tracker unchanged). Copy gate OK. PHP lint clean.
+- Tickets: M015 M016 M017 M018 M019 M020 (Perfex core already emits lang/dir from the staff locale/direction — NOT-APPLICABLE-WITH-EVIDENCE for the head part; patient-block lang deferred) M032 (CSS + composer markup) M037 (auto tag + tracker TR) M063 (names/skip link)
+- Visual verification: pending deploy (live check in the verification wave).
+- Note: modules/se_journey/views/public/{quote,intake}.php contain patient-facing "klinisyen" wording — approved patient copy, excluded from the staff gate, listed as an owner decision.
