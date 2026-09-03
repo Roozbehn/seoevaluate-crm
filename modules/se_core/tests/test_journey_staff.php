@@ -77,6 +77,8 @@ se_wa_out_drain();
 se_eq(true, $r['ok'], 'a retake request is sent');
 $last = end($GLOBALS['se_wa_sent'])['body'];
 se_ok(strpos($last, 'sol kaş yakın plan') !== false && strpos($last, 'net değildi') !== false, 'the patient gets a concise, tailored instruction');
+se_ok(strpos($last, '/se_journey/intake/') !== false && strpos($last, '/photos') !== false, 'and the secure upload link (the first live retake had none — the patient did not know where to send)');
+se_ok(strpos($last, '{{link}}') === false, 'placeholder filled');
 se_eq('photo_retake_requested', se_test_journey_row()->state, 'state: photo_retake_requested');
 se_eq('retake_requested', $db->rows('tblse_journey_media')[1]['state'], 'the left photo is marked for retake');
 se_eq(['ok' => false, 'reason' => 'invalid'], se_journey_media_request_retake(se_test_journey_row(), 'left', 'ugly', 10), 'reasons are a fixed list');
@@ -86,6 +88,9 @@ se_eq('ready_for_review', se_test_journey_row()->state, 'a new photo after a ret
 se_journey_media_classify((int) se_test_last_row('tblse_journey_media')['id'], 'left', 10);
 
 $r = se_journey_media_request_donor(se_test_journey_row(), 10);
+se_wa_out_drain();
+$last = end($GLOBALS['se_wa_sent'])['body'];
+se_ok(strpos($last, 'donör') !== false && strpos($last, '/se_journey/intake/') !== false && strpos($last, '/photos') !== false, 'the donor request names the area AND carries the secure upload link');
 se_eq(['frontal', 'left', 'right', 'donor'], se_journey_required_photo_kinds(se_test_journey_row()), 'donor becomes required only when staff ask');
 se_eq('photo_retake_requested', se_test_journey_row()->state, 'waiting for the donor photo');
 se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, '', se_test_wamid(), ['image' => ['id' => 'P5', 'mime_type' => 'image/jpeg']]));

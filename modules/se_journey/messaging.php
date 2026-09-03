@@ -24,7 +24,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * (scripts/tests) is the second line of defence.
  */
 
-define('SE_JOURNEY_COPY_VERSION', 1);
+define('SE_JOURNEY_COPY_VERSION', 2);   // v2: retake + donor requests carry the secure upload link (2026-09-03)
 define('SE_JOURNEY_DEFAULT_QUIET', '21:00-09:00');
 define('SE_JOURNEY_DEFAULT_DAILY_CAP', 3);
 define('SE_JOURNEY_REMINDER_HOURS', '24,72');
@@ -57,9 +57,9 @@ function se_journey_copy_defaults()
             'photos_no_consent' =>
                 "Fotoğrafınız için teşekkürler. Fotoğrafları değerlendirme amacıyla işleyebilmemiz için önce güvenli formdaki tercihlerinizi tamamlamanız gerekiyor: {{link}}",
             'photo_retake' =>
-                "Teşekkürler. Değerlendirmeyi tamamlayabilmemiz için {{which}} fotoğrafını yeniden göndermenizi rica ediyoruz. {{reason}}",
+                "Teşekkürler. Değerlendirmeyi tamamlayabilmemiz için {{which}} fotoğrafını yeniden göndermenizi rica ediyoruz. {{reason}}\n\nFotoğrafı bu sohbet üzerinden gönderebilir veya güvenli yükleme bağlantısını kullanabilirsiniz: {{link}}",
             'donor_request' =>
-                "Ekibimiz değerlendirme için donör alanın (başın arka kısmı) bir fotoğrafını da rica ediyor. Lütfen saçları hafifçe ayırarak, aydınlık bir ortamda çekip gönderin.",
+                "Ekibimiz değerlendirme için donör alanın (başın arka kısmı) bir fotoğrafını da rica ediyor. Lütfen saçları hafifçe ayırarak, aydınlık bir ortamda çekin.\n\nFotoğrafı bu sohbet üzerinden gönderebilir veya güvenli yükleme bağlantısını kullanabilirsiniz: {{link}}",
             'more_info_request' =>
                 "Merhaba {{name}}, değerlendirmeyi tamamlayabilmemiz için ekibimizin birkaç ek bilgiye ihtiyacı var. Danışmanınız sizinle bu mesaj üzerinden iletişime geçecektir.",
             'evaluation_ready' =>
