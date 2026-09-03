@@ -189,7 +189,7 @@ function se_dashboard_stats()
     $CI = &get_instance();
     $p  = db_prefix();
 
-    $count = function ($table, callable $extra = null) use ($CI) {
+    $count = function ($table, ?callable $extra = null) use ($CI) {
         se_apply_scope_in('brand_id');
         if ($extra) { $extra($CI); }
 

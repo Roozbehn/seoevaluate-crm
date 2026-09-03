@@ -344,7 +344,7 @@ function se_capi_messaging_send_event($row)
  * leaving the machine. A sender that can only be tested against production is
  * a sender nobody tests.
  */
-function se_capi_messaging_register_http(callable $fn = null)
+function se_capi_messaging_register_http(?callable $fn = null)
 {
     static $impl = null;
     if ($fn !== null) { $impl = $fn; }

@@ -305,7 +305,7 @@ function se_push_peer_pem($point)
 }
 
 /** HTTP seam, so every branch below is testable without a push service. */
-function se_push_register_http(callable $fn = null)
+function se_push_register_http(?callable $fn = null)
 {
     static $impl = null;
     if ($fn !== null) { $impl = $fn; }

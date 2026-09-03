@@ -22,6 +22,7 @@ define('BASEPATH', __DIR__);                       // satisfies the module guard
 define('SE_TESTING', true);
 
 require_once __DIR__ . '/fake_db.php';
+require_once __DIR__ . '/schema_oracle.php';
 
 /* ---------------------------------------------------------------------------
  * Test state. Mutated by tests via se_test_* helpers.
@@ -118,6 +119,7 @@ class SeTestLoader
     public function view($x, $y = null) {}
 }
 
+#[\AllowDynamicProperties]
 class SeTestCI
 {
     public $db;

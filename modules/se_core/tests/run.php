@@ -40,6 +40,14 @@ echo "suites : " . implode(', ', $ran) . "\n";
 echo "PASS   : {$a['pass']}\n";
 echo "FAIL   : {$a['fail']}\n";
 
+/* Schema oracle (K1 / QA-001): production writes to columns the real schema does not have. */
+if (!empty(SeFakeDb::$schemaViolations)) {
+    echo "\nSCHEMA ORACLE: " . count(SeFakeDb::$schemaViolations) . " distinct violation(s)\n";
+    foreach (SeFakeDb::$schemaViolations as $v => $n) { echo "  - {$v} (x{$n})\n"; }
+    // Strict by default (K1 / QA-001): a phantom column fails the run. SE_SCHEMA_STRICT=0 to report only.
+    if (getenv('SE_SCHEMA_STRICT') !== '0') { $a['fail'] += count(SeFakeDb::$schemaViolations); foreach (array_keys(SeFakeDb::$schemaViolations) as $v) { $a['failures'][] = 'schema oracle :: ' . $v; } }
+}
+
 if ($a['fail'] > 0) {
     echo "\nFailures:\n";
     foreach ($a['failures'] as $f) {

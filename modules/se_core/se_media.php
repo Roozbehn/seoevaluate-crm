@@ -465,7 +465,7 @@ function se_media_disposition(array $row)
  * ------------------------------------------------------------------------- */
 
 /** HTML for one message's attachment (or a status when not yet stored). */
-function se_ui_media(array $media = null, $redacted = false)
+function se_ui_media(?array $media = null, $redacted = false)
 {
     if ($media === null) {
         return '<span class="label label-default"><i class="fa fa-paperclip"></i> ' . html_escape(_l('se_media_placeholder')) . '</span>';

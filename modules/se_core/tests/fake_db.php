@@ -371,8 +371,27 @@ class SeFakeDb
         return $n;
     }
 
+    /** Schema oracle (K1 / QA-001): every production write is checked against the real column list. */
+    public static $schemaViolations = [];
+    public static $schemaStrict = false;
+    private function checkSchema($op, $table, array $data)
+    {
+        if (!function_exists('se_schema_oracle_unknown_columns')) { return; }
+        $bad = se_schema_oracle_unknown_columns($table, $data);
+        if ($bad) {
+            $where = '';
+            foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 6) as $fr) {
+                if (!empty($fr['file']) && strpos($fr['file'], '/tests/') === false) { $where = basename($fr['file']) . ':' . ($fr['line'] ?? '?'); break; }
+            }
+            $msg = "{$op} {$table}: unknown column(s) " . implode(',', $bad) . ($where ? " @ {$where}" : '');
+            self::$schemaViolations[$msg] = ($msg ? (self::$schemaViolations[$msg] ?? 0) + 1 : 1);
+            if (self::$schemaStrict) { throw new \RuntimeException('schema oracle: ' . $msg); }
+        }
+    }
+
     public function insert($table, array $data)
     {
+        $this->checkSchema('INSERT', $table, $data);
         $this->autoinc[$table] = ($this->autoinc[$table] ?? 0) + 1;
         if (!isset($data['id'])) { $data['id'] = $this->autoinc[$table]; }
         $this->tables[$table][] = $data;
@@ -397,6 +416,7 @@ class SeFakeDb
 
     public function update($table, array $data = [])
     {
+        $this->checkSchema('UPDATE', $table, $data + array_map(function ($v) { return $v[0]; }, $this->sets));
         $n = 0;
         foreach ($this->tables[$table] ?? [] as $i => $row) {
             if ($this->matches($row)) {

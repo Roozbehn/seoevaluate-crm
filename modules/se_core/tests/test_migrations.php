@@ -96,3 +96,28 @@ se_eq(false, isset($role2['se_reports']), 'an unrelated role is untouched');
 $before = count($db->rows('tblstaff_permissions'));
 se_core_migrate_capabilities();
 se_eq($before, count($db->rows('tblstaff_permissions')), 'the capability migration is idempotent');
+
+/* ======================================================================== */
+se_group('Schema oracle (audit K1 / AZCRM-QA-001 / CRM-M069): the fake DB knows the real columns');
+$schema = se_schema_oracle_build();
+se_ok(count($schema) >= 40, 'the oracle covers the SE tables (' . count($schema) . ')');
+foreach (['tblse_journeys', 'tblse_wa_conversations', 'tblse_wa_outbound', 'tblse_reminders', 'tblse_conversion_outbox', 'tblse_appointments', 'tblse_ig_conversations'] as $t) {
+    se_ok(isset($schema[$t]['id']) && isset($schema[$t]['brand_id']), "{$t}: id + brand_id known");
+}
+se_eq(true, isset($schema['tblse_reminders']['outbound_id']), 'v22 column is known (ALTER … ADD COLUMN parsed)');
+se_eq(true, isset($schema['tblse_reminders']['attempts']), 'columns after an inline SQL comment are parsed');
+se_eq(false, isset($schema['tblse_wa_conversations']['waba_id']), 'the J12 phantom: se_wa_conversations has NO waba_id column — the oracle knows');
+se_eq(false, isset($schema['tblleads']), 'Perfex core tables (known only through ALTERs) are not checked');
+se_eq(['nope'], se_schema_oracle_unknown_columns('tblse_journeys', ['id' => 1, 'state' => 'x', 'nope' => 1]), 'an unknown column is named');
+se_eq([], se_schema_oracle_unknown_columns('tblunknown_table', ['whatever' => 1]), 'unknown tables are not checked');
+// The fake DB records a violation on a production-style write and, in strict mode, throws.
+$before = SeFakeDb::$schemaViolations;
+$db = se_test_db(); $db->seed('tblse_journey_tasks', []);
+$db->insert('tblse_journey_tasks', ['journey_id' => 1, 'ghost_column' => 1]);
+$hit = array_filter(array_keys(SeFakeDb::$schemaViolations), function ($k) { return strpos($k, 'ghost_column') !== false; });
+se_eq(1, count($hit), 'a write with a phantom column is recorded');
+SeFakeDb::$schemaViolations = $before;   // this one was deliberate
+SeFakeDb::$schemaStrict = true;
+$threw = false; try { $db->update('tblse_journey_tasks', ['ghost2' => 1]); } catch (\RuntimeException $e) { $threw = strpos($e->getMessage(), 'ghost2') !== false; }
+SeFakeDb::$schemaStrict = false; SeFakeDb::$schemaViolations = $before;
+se_eq(true, $threw, 'strict mode throws on the write');
