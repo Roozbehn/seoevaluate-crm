@@ -361,7 +361,8 @@ body.se-clinic a:focus-visible,body.se-clinic button:focus-visible,body.se-clini
   body.se-clinic .se-btn{height:var(--se-ctrl-m)} body.se-clinic .se-iconbtn{width:var(--se-ctrl-m);height:var(--se-ctrl-m)}
   body.se-clinic .se-input:not(textarea){height:var(--se-ctrl-m)}
   body.se-clinic .se-chip{height:var(--se-ctrl-m);padding:0 16px}
-  body.se-clinic .se-pipe span{min-height:40px;display:inline-flex;align-items:center;padding:0 14px}
+  body.se-clinic .se-pipe span{min-height:44px;display:inline-flex;align-items:center;padding:0 14px}
+  body.se-clinic .se-table .se-name{display:flex;align-items:center;min-height:44px}
   body.se-clinic .se-help a,body.se-clinic .se-page-head .se-sub a{display:inline-flex;align-items:center;min-height:44px}
   body.se-clinic .se-mini a.n{display:inline-flex;align-items:center;min-height:44px}
   body.se-clinic .se-hastalar-chips .se-help{width:100%;margin-inline-start:0;display:flex;gap:12px;flex-wrap:wrap}
