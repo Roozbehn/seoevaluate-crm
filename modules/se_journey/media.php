@@ -756,7 +756,9 @@ function se_journey_media_request_retake($j, $kind, $reason, $staff_id)
     $why    = se_journey_copy((int) $j->brand_id, 'retake_' . $reason, [], (string) $j->language);
     $token  = se_journey_issue_token($j, 'upload', (int) $staff_id);
     $link   = $token['ok'] ? se_journey_public_url('se_journey/intake/' . $token['token'] . '/photos') : '';
-    $r = se_journey_send_copy($j, 'photo_retake', ['which' => $which, 'reason' => $why], ['purpose' => 'photo_retake', 'bypass_pause' => true,
+    // The in-window text names the same secure upload link the template does:
+    // a request without a "where" confused the first live patient (2026-09-03).
+    $r = se_journey_send_copy($j, 'photo_retake', ['which' => $which, 'reason' => $why, 'link' => $link], ['purpose' => 'photo_retake', 'bypass_pause' => true,
         'template' => 'eyebrow_photos_retake_tr', 'template_vars' => [se_journey_template_name($j), trim($which . ' — ' . rtrim($why, '.'), ' —'), $link], 'dedup_salt' => $kind . ':' . $reason . ':' . date('YmdH')]);
 
     if (in_array((string) $j->state, ['photos_requested', 'photos_incomplete', 'ready_for_review', 'under_review', 'more_information_required', 'photo_retake_requested'], true)) {
@@ -776,7 +778,7 @@ function se_journey_media_request_donor($j, $staff_id)
     // Meta refuses an empty parameter, so a real token link is issued.
     $token = se_journey_issue_token($j, 'upload', (int) $staff_id);
     $link  = $token['ok'] ? se_journey_public_url('se_journey/intake/' . $token['token'] . '/photos') : se_journey_public_url('');
-    $r = se_journey_send_copy($j, 'donor_request', [], ['purpose' => 'donor_request', 'bypass_pause' => true,
+    $r = se_journey_send_copy($j, 'donor_request', ['link' => $link], ['purpose' => 'donor_request', 'bypass_pause' => true,
         'template' => 'eyebrow_photos_request_tr', 'template_vars' => [se_journey_template_name($j), $link]]);
     if (in_array((string) $j->state, ['ready_for_review', 'under_review', 'photos_requested'], true)) {
         se_journey_transition($j, 'photo_retake_requested', 'donor_requested', 'staff', $staff_id);
