@@ -30,6 +30,7 @@ $contact_label = $c ? ($evidence_redacted ? se_wa_redacted_contact($c->wa_user_i
   <section class="se-convlist" aria-label="<?php echo _l('se_wa_conversations'); ?>">
     <form class="se-toolbar" method="get" action="<?php echo $self; ?>" role="search">
       <?php if ($f['f'] !== 'all') { ?><input type="hidden" name="f" value="<?php echo html_escape($f['f']); ?>"><?php } ?>
+      <?php if (function_exists('se_messages_channel_switch')) { echo se_messages_channel_switch('whatsapp'); } ?>
       <label class="se-sr" for="se-wa-q"><?php echo _l('se_hastalar_search'); ?></label>
       <input class="se-input" id="se-wa-q" type="search" name="q" value="<?php echo html_escape($f['q']); ?>" placeholder="<?php echo _l('se_wa_search_ph'); ?>" style="flex:1 1 100%;height:36px" autocomplete="off" inputmode="search">
       <div class="se-chipgroup" role="group" aria-label="<?php echo _l('se_hastalar_filter'); ?>" style="flex-basis:100%">

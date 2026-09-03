@@ -446,3 +446,4 @@ $lang['se_hastalar_range']        = '%d–%d of %d';
 $lang['se_hastalar_capped']       = 'latest %d records scanned; search to narrow';
 $lang['se_hastalar_prev']         = 'Previous';
 $lang['se_hastalar_next']         = 'Next';
+$lang['se_messages_channel'] = 'Channel';

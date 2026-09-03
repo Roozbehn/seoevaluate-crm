@@ -127,6 +127,30 @@ se_eq([90, 4], array_map(function ($u) { return (int) $u['id']; }, $unread), 'un
 se_eq('Deniz Ak', $unread[1]['patient'], 'with the lead name');
 se_eq(1, count(se_dashboard_unread_threads(1)), 'limit honoured');
 
+se_group('Bugün / Mesajlar: Instagram threads are counted and listed next to WhatsApp (UX-W09 / CRM-M038)');
+$db->seed('tblse_ig_conversations', [
+    ['id' => 501, 'brand_id' => 1, 'ig_account_id' => 'IGA1', 'igsid' => '17841400000000001', 'lead_id' => 0, 'assigned_staff' => 0, 'unread_count' => 2, 'last_inbound_at' => date('Y-m-d H:i:s'), 'window_expires_at' => null, 'state' => 'open'],
+    ['id' => 502, 'brand_id' => 2, 'ig_account_id' => 'IGA2', 'igsid' => '17841400000000002', 'lead_id' => 0, 'assigned_staff' => 0, 'unread_count' => 1, 'last_inbound_at' => date('Y-m-d H:i:s'), 'window_expires_at' => null, 'state' => 'open'],
+    ['id' => 503, 'brand_id' => 1, 'ig_account_id' => 'IGA1', 'igsid' => '17841400000000003', 'lead_id' => 0, 'assigned_staff' => 0, 'unread_count' => 0, 'last_inbound_at' => date('Y-m-d H:i:s'), 'window_expires_at' => null, 'state' => 'open'],
+]);
+se_test_act_as(10, ['se_whatsapp.view', 'se_instagram.view']);
+$unread = se_dashboard_unread_threads(5);
+$ig = array_values(array_filter($unread, function ($u) { return $u['channel'] === 'instagram'; }));
+se_eq(1, count($ig), 'the own-brand unread Instagram thread is in the Bugün list (read ones and other brands are not)');
+se_eq(['/admin/se_instagram/se_instagram/conversation/501', 2], [$ig[0]['url'], (int) $ig[0]['unread_count']], 'it links to the Instagram thread');
+se_ok(strpos($ig[0]['contact'], '17841400000000001') === false, 'the Instagram id is redacted in the card');
+se_eq(3, count($unread), 'WhatsApp rows keep their place (2 + 1)');
+se_eq(3, se_clinic_tabbar_count('unread'), 'the tab-bar badge counts both channels');
+$ch = se_messages_channels('whatsapp');
+se_eq([['whatsapp', true, 2], ['instagram', false, 1]], array_map(function ($c) { return [$c['key'], $c['on'], $c['unread']]; }, $ch), 'channel switch: WhatsApp on, Instagram with its unread count');
+se_ok(strpos(se_messages_channel_switch('instagram'), 'aria-current="true">Instagram') !== false, 'the Instagram inbox marks its own chip');
+se_test_act_as(10, ['se_whatsapp.view']);
+se_eq([], se_messages_channels('whatsapp'), 'no switch for a staff member who cannot see Instagram');
+se_eq(2, se_clinic_tabbar_count('unread'), 'and the badge counts WhatsApp only');
+se_eq(0, count(array_filter(se_dashboard_unread_threads(5), function ($u) { return $u['channel'] === 'instagram'; })), 'no Instagram rows either');
+se_test_act_as(10, []);
+$db->seed('tblse_ig_conversations', []);
+
 se_group('Bugün: Sistem card lists only what needs a hand');
 $GLOBALS['se_test']['options'] = ['last_cron_run' => (string) (time() - 120)];
 $db->seed('tblse_outbox', []);

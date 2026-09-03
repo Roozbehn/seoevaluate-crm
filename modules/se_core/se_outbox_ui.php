@@ -336,9 +336,93 @@ function se_dashboard_unread_threads($limit = 5)
     }
     foreach ($rows as &$r) {
         $r['patient'] = $names[(int) $r['lead_id']] ?? '';
+        $r['channel'] = 'whatsapp';
+        $r['url']     = admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $r['id']);
     }
+    unset($r);
+
+    // Instagram threads (UX-W09 / CRM-M038): same card, same bound, newest first.
+    foreach (se_ig_unread_threads($limit) as $ig) {
+        $rows[] = $ig;
+    }
+    usort($rows, function ($a, $b) { return strcmp((string) ($b['last_inbound_at'] ?? ''), (string) ($a['last_inbound_at'] ?? '')); });
+
+    return array_slice($rows, 0, max(1, (int) $limit));
+}
+
+/**
+ * Unread Instagram threads for the current staff member's brands, shaped like
+ * the WhatsApp rows (id, unread_count, last_inbound_at, patient, channel, url).
+ * Empty when the module is absent or the staff member cannot see Instagram.
+ */
+function se_ig_unread_threads($limit = 5)
+{
+    $CI = &get_instance();
+    $p  = db_prefix();
+    if (!function_exists('se_ig_redacted_contact') || !$CI->db->table_exists($p . 'se_ig_conversations')
+        || (function_exists('staff_cant') && staff_cant('view', 'se_instagram'))) {
+        return [];
+    }
+    se_apply_scope_in('brand_id');
+    $CI->db->where('unread_count >', 0)->order_by('last_inbound_at', 'DESC')->limit(max(1, (int) $limit));
+    $rows = $CI->db->get($p . 'se_ig_conversations')->result_array();
+    $leadIds = array_values(array_unique(array_filter(array_map(function ($r) { return (int) $r['lead_id']; }, $rows))));
+    $names = [];
+    if ($leadIds) {
+        $CI->db->select('id, name')->where_in('id', $leadIds);
+        foreach ($CI->db->get($p . 'leads')->result_array() as $l) { $names[(int) $l['id']] = (string) $l['name']; }
+    }
+    foreach ($rows as &$r) {
+        $r['patient']    = $names[(int) $r['lead_id']] ?? '';
+        $r['wa_user_id'] = '';
+        $r['contact']    = se_ig_redacted_contact((string) $r['igsid']);
+        $r['channel']    = 'instagram';
+        $r['url']        = admin_url('se_instagram/se_instagram/conversation/' . (int) $r['id']);
+    }
+    unset($r);
 
     return $rows;
+}
+
+/**
+ * Channel switch for Mesajlar (UX-W09 / CRM-M038): WhatsApp | Instagram with
+ * the unread-thread count per channel, brand-scoped, only the channels the
+ * staff member may open. Returns [] when there is a single channel (no switch).
+ */
+function se_messages_channels($current)
+{
+    $CI  = &get_instance();
+    $p   = db_prefix();
+    $out = [];
+    $count = function ($table) use ($CI, $p) {
+        if (!$CI->db->table_exists($p . $table)) { return 0; }
+        se_apply_scope_in('brand_id');
+        $CI->db->where('unread_count >', 0);
+
+        return (int) $CI->db->count_all_results($p . $table);
+    };
+    if (!function_exists('staff_cant') || !staff_cant('view', 'se_whatsapp')) {
+        $out[] = ['key' => 'whatsapp', 'label' => 'WhatsApp', 'href' => admin_url('se_whatsapp/se_whatsapp/inbox'), 'unread' => $count('se_wa_conversations'), 'on' => $current === 'whatsapp'];
+    }
+    if (function_exists('se_ig_redacted_contact') && (!function_exists('staff_cant') || !staff_cant('view', 'se_instagram')) && $CI->db->table_exists($p . 'se_ig_conversations')) {
+        $out[] = ['key' => 'instagram', 'label' => 'Instagram', 'href' => admin_url('se_instagram/se_instagram/inbox'), 'unread' => $count('se_ig_conversations'), 'on' => $current === 'instagram'];
+    }
+
+    return count($out) > 1 ? $out : [];
+}
+
+/** Render the channel switch as a chip group (empty string when only one channel). */
+function se_messages_channel_switch($current)
+{
+    $ch = se_messages_channels($current);
+    if (!$ch) { return ''; }
+    $h = '<div class="se-chipgroup se-channels" role="group" aria-label="' . html_escape(_l('se_messages_channel')) . '" style="flex-basis:100%">';
+    foreach ($ch as $c) {
+        $h .= '<a class="se-chip' . ($c['on'] ? ' on' : '') . '" href="' . html_escape($c['href']) . '"' . ($c['on'] ? ' aria-current="true"' : '') . '>'
+            . html_escape($c['label']) . ($c['unread'] > 0 ? ' <b>' . (int) $c['unread'] . '</b>' : '') . '</a>';
+    }
+
+    return $h . '</div>';
 }
 
 /**

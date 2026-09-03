@@ -703,11 +703,16 @@ function se_clinic_tabbar_count($which)
 {
     $CI = &get_instance();
     try {
-        if ($which === 'unread' && $CI->db->table_exists(db_prefix() . 'se_wa_conversations')) {
-            se_apply_scope_in('brand_id');
-            $CI->db->where('unread_count >', 0);
+        if ($which === 'unread') {
+            $n = 0;
+            foreach (['se_wa_conversations' => 'se_whatsapp', 'se_ig_conversations' => 'se_instagram'] as $table => $feature) {
+                if (!$CI->db->table_exists(db_prefix() . $table) || staff_cant('view', $feature)) { continue; }
+                se_apply_scope_in('brand_id');
+                $CI->db->where('unread_count >', 0);
+                $n += (int) $CI->db->count_all_results(db_prefix() . $table);
+            }
 
-            return (int) $CI->db->count_all_results(db_prefix() . 'se_wa_conversations');
+            return $n;
         }
         if ($which === 'today' && $CI->db->table_exists(db_prefix() . 'se_journey_tasks')) {
             se_apply_scope_in('brand_id');

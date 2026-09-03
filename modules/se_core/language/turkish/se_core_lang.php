@@ -500,3 +500,4 @@ $lang['se_hastalar_range']        = '%d–%d / %d';
 $lang['se_hastalar_capped']       = 'en son %d kayıt tarandı; daraltmak için arayın';
 $lang['se_hastalar_prev']         = 'Önceki';
 $lang['se_hastalar_next']         = 'Sonraki';
+$lang['se_messages_channel'] = 'Kanal';

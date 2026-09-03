@@ -82,9 +82,10 @@ $active = array_sum((array) $stages);
         <?php } else { ?>
           <ul class="se-mini">
             <?php foreach ($unread as $u) {
-                $who = $u['patient'] !== '' ? se_ui_short_name($u['patient']) : se_ui_phone($u['wa_user_id'] ?? '', true, false); ?>
+                $who = $u['patient'] !== '' ? se_ui_short_name($u['patient']) : (($u['channel'] ?? 'whatsapp') === 'instagram' ? (string) ($u['contact'] ?? 'Instagram') : se_ui_phone($u['wa_user_id'] ?? '', true, false));
+                $href = $u['url'] ?? admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $u['id']); ?>
               <li>
-                <a class="n" href="<?php echo admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $u['id']); ?>"><?php echo html_escape($who); ?></a>
+                <a class="n" href="<?php echo html_escape($href); ?>"><?php echo html_escape($who); ?></a><?php if (($u['channel'] ?? 'whatsapp') === 'instagram') { ?> <span class="sb">Instagram</span><?php } ?>
                 <?php echo se_ui_ds_badge('action', (int) $u['unread_count'], true); ?>
                 <span class="m"><?php echo html_escape(se_ui_age($u['last_inbound_at'] ?? null)); ?></span>
               </li>

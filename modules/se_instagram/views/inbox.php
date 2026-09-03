@@ -1,8 +1,9 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
 <?php init_head(); ?>
-<div id="wrapper"><div class="content">
+<div id="wrapper"><div class="content se-page se-messages">
 
-<?php se_ui_header(_l('se_instagram'), [], _l('se_ig_inbox_subtitle')); ?>
+<?php se_ui_header(_l('se_nav_messages') . ' · Instagram', [], _l('se_ig_inbox_subtitle')); ?>
+<?php if (function_exists('se_messages_channel_switch')) { $sw = se_messages_channel_switch('instagram'); if ($sw !== '') { echo '<div class="row"><div class="col-md-12"><div class="se-toolbar" style="margin-bottom:12px">' . $sw . '</div></div></div>'; } } ?>
 
 <?php if (empty($has_brand)) { se_ui_no_brand_screen(); } else { ?>
 
