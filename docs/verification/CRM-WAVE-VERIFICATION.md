@@ -49,3 +49,11 @@
 - Tests: **4 228 pass / 0 fail** (+50). Copy gate OK. PHP lint clean.
 - Tickets: M032 (markup/CSS complete; Playwright 390 assertions in the verification wave) M033 M034 M035 M036 M037 (done in Wave 2) — M038 Instagram tab stays PLANNED.
 - Proven: brand scope fail-closed; newest-inbound order; exact last-message preview (image after text); chips incl. legacy links; search by name / formatted phone / wa id; 50-row page + non-overlapping cursor page; thread newest-100 + older cursor; foreign-brand thread yields nothing; state → ≤4 buttons, next action first and primary, POST actions carry the return tab, view-only roles get no mutating buttons, paused automation offers Resume, closed offers only Reopen.
+
+## Wave 6 — Randevular
+- Start SHA: f45e2e3 → End SHA: 51eae96
+- Files: modules/se_appointments/{availability.php (first conflict, next free slot), types.php (se_tr), models/Se_appointments_model.php (last_reason/last_message), controllers/Se_appointments.php (prefill, normalise_post, form_error, after_save, names), views/{form.php (rewrite), manage.php, view.php}, language tr/en}, modules/se_journey/consultation.php (se_journey_link_appointment, start-aware salt, reschedule confirmation), modules/se_core/assets/se-ds.css, tests/{test_appointments.php, test_journey_staff.php}
+- Tests: **4 247 pass / 0 fail** (+19). Copy gate OK. PHP lint clean.
+- Tickets: M039 M041 M042 M043 M044 (M040 agenda done in Wave 1; M003 calendar done in Wave 1).
+- Proven: conflict row + patient name; other staff free; ignore-self on edit; next free slot skips busy and cancelled-not-blocking; quarter-hour rounding; day-full → ''; message contains who/when/what/next; model names the refusal and the message on a real overlap; reschedule sends exactly one new confirmation, same-slot save none, location edit none.
+- Not in harness: the form's JS (duration/end hint) and the re-render path — checked by lint + live in the verification wave.
