@@ -24,6 +24,12 @@ class Se_dashboard extends AdminController
 
     public function index()
     {
+        // Bugün (CRM-M023): the attention queue replaces the counter grid.
+        // se_clinic_dashboard_v2=0 restores the v1 dashboard.
+        if ((string) get_option('se_clinic_dashboard_v2') !== '0' && function_exists('se_journey_attention_queue')) {
+            return $this->today();
+        }
+
         $data['title'] = _l('se_group');
 
         // An ordinary staff member with no brand gets an explanation, not an
@@ -53,5 +59,28 @@ class Se_dashboard extends AdminController
         }
 
         $this->load->view('se_core/se_dashboard', $data);
+    }
+
+    /** Bugün — what needs a staff member now (UIUX §D). */
+    public function today()
+    {
+        $data['title']     = _l('se_nav_today');
+        $data['has_brand'] = se_staff_has_any_brand();
+        if (!$data['has_brand']) {
+            $this->load->view('se_core/se_dashboard', $data);
+            return;
+        }
+        $t0 = microtime(true);
+        $data['queue']    = se_journey_attention_queue(25);
+        $data['stages']   = se_journey_stage_counts();
+        $data['appts']    = se_dashboard_today_appointments();
+        $data['unread']   = se_dashboard_unread_threads(5);
+        $data['show_health'] = se_staff_can_configure_brands();
+        $data['system']   = $data['show_health'] ? se_dashboard_system_card() : null;
+        $data['show_health_button'] = $data['show_health'] && se_staff_can_report();
+        $data['can_create_appt'] = staff_can('create', 'se_appointments');
+        $data['can_create_lead'] = staff_can('create', 'leads') || is_admin();
+        $data['build_ms'] = (int) round((microtime(true) - $t0) * 1000);
+        $this->load->view('se_core/se_today', $data);
     }
 }

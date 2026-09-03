@@ -282,3 +282,105 @@ function se_consent_text_configured_anywhere($purpose = 'ads')
     return false;
 }
 
+
+/* ===========================================================================
+ * Bugün right column (CRM-M023)
+ * ======================================================================== */
+
+/** Today's appointments with patient names and types, brand-scoped. */
+function se_dashboard_today_appointments()
+{
+    $CI = &get_instance();
+    $p  = db_prefix();
+    if (!$CI->db->table_exists($p . 'se_appointments')) {
+        return [];
+    }
+    $today = date('Y-m-d');
+    se_apply_scope_in('brand_id');
+    $CI->db->where('start_at >=', $today . ' 00:00:00')->where('start_at <=', $today . ' 23:59:59')
+           ->where_not_in('status', ['cancelled'])->order_by('start_at', 'ASC')->limit(12);
+    $rows = $CI->db->get($p . 'se_appointments')->result_array();
+    if (!$rows) {
+        return [];
+    }
+    $leadIds = array_values(array_unique(array_filter(array_map(function ($r) { return $r['rel_type'] === 'lead' ? (int) $r['rel_id'] : 0; }, $rows))));
+    $names = [];
+    if ($leadIds) {
+        $CI->db->select('id, name')->where_in('id', $leadIds);
+        foreach ($CI->db->get($p . 'leads')->result_array() as $l) { $names[(int) $l['id']] = (string) $l['name']; }
+    }
+    foreach ($rows as &$r) {
+        $r['patient'] = $r['rel_type'] === 'lead' ? ($names[(int) $r['rel_id']] ?? '') : '';
+        $r['type']    = function_exists('se_appt_type_key') ? se_appt_type_key($r['appointment_type'] ?? '') : 'consultation';
+    }
+
+    return $rows;
+}
+
+/** Unread threads, newest first, with lead names. */
+function se_dashboard_unread_threads($limit = 5)
+{
+    $CI = &get_instance();
+    $p  = db_prefix();
+    if (!$CI->db->table_exists($p . 'se_wa_conversations')) {
+        return [];
+    }
+    se_apply_scope_in('brand_id');
+    $CI->db->where('unread_count >', 0)->order_by('last_inbound_at', 'DESC')->limit(max(1, (int) $limit));
+    $rows = $CI->db->get($p . 'se_wa_conversations')->result_array();
+    $leadIds = array_values(array_unique(array_filter(array_map(function ($r) { return (int) $r['lead_id']; }, $rows))));
+    $names = [];
+    if ($leadIds) {
+        $CI->db->select('id, name')->where_in('id', $leadIds);
+        foreach ($CI->db->get($p . 'leads')->result_array() as $l) { $names[(int) $l['id']] = (string) $l['name']; }
+    }
+    foreach ($rows as &$r) {
+        $r['patient'] = $names[(int) $r['lead_id']] ?? '';
+    }
+
+    return $rows;
+}
+
+/**
+ * The Sistem card: only what needs attention (skipped conversions, stalled
+ * dispatcher/cron, failed sends/reminders) plus a one-line green summary.
+ */
+function se_dashboard_system_card()
+{
+    $out = ['alerts' => [], 'summary' => ''];
+    $cronAge = (int) get_option('last_cron_run') ? time() - (int) get_option('last_cron_run') : null;
+    $dispAge = function_exists('se_dispatch_age') ? se_dispatch_age() : null;
+    $outbox  = function_exists('se_outbox_health') ? se_outbox_health(null) : [];
+    $skipped = (int) ($outbox['skipped'] ?? 0);
+    $failed  = (int) ($outbox['failed'] ?? 0);
+    $wa      = function_exists('se_report_wa_queue_counts') ? se_report_wa_queue_counts(null) : [];
+    $rem     = function_exists('se_report_reminder_counts') ? se_report_reminder_counts(null) : [];
+
+    if ($cronAge === null || $cronAge > 3600) {
+        $out['alerts'][] = ['tone' => 'danger', 'text' => $cronAge === null ? _l('se_sys_cron_never') : sprintf(_l('se_sys_cron_stale'), (int) round($cronAge / 60)), 'href' => admin_url('se_core/se_reports/health')];
+    }
+    if ($dispAge !== null && $dispAge > 900) {
+        $out['alerts'][] = ['tone' => 'danger', 'text' => sprintf(_l('se_sys_dispatch_stale'), (int) round($dispAge / 60)), 'href' => admin_url('se_core/se_reports/health')];
+    }
+    if ($skipped > 0) {
+        $reasons = [];
+        foreach ((array) ($outbox['skipped_by_reason'] ?? []) as $code => $n) { $reasons[] = $n . ' × ' . _l('se_skip_' . $code) ; }
+        $out['alerts'][] = ['tone' => 'warning', 'text' => sprintf(_l('se_sys_outbox_skipped'), $skipped, implode(', ', $reasons)), 'href' => admin_url('se_core/se_outbox?status=skipped')];
+    }
+    if ($failed > 0) {
+        $out['alerts'][] = ['tone' => 'warning', 'text' => sprintf(_l('se_sys_outbox_failed'), $failed), 'href' => admin_url('se_core/se_outbox?status=failed')];
+    }
+    if ((int) ($wa['failed'] ?? 0) > 0) {
+        $out['alerts'][] = ['tone' => 'danger', 'text' => sprintf(_l('se_sys_wa_failed'), (int) $wa['failed']), 'href' => admin_url('se_whatsapp/se_whatsapp/inbox')];
+    }
+    if ((int) ($rem['failed'] ?? 0) > 0) {
+        $out['alerts'][] = ['tone' => 'warning', 'text' => sprintf(_l('se_sys_reminders_failed'), (int) $rem['failed']), 'href' => admin_url('se_appointments/se_appointments/manage')];
+    }
+    if (function_exists('se_consent_text_configured_anywhere') && !se_consent_text_configured_anywhere()) {
+        $out['alerts'][] = ['tone' => 'warning', 'text' => _l('se_warn_consent_unconfigured'), 'href' => admin_url('se_core/se_consent')];
+    }
+    $out['summary'] = 'WhatsApp ✓ · Instagram ✓ · ' . _l('se_sys_dispatcher') . ' ' . ($dispAge === null ? '—' : ($dispAge <= 180 ? '✓ ' . $dispAge . ' sn' : '⚠ ' . (int) round($dispAge / 60) . ' dk'))
+        . ' · Cron ' . ($cronAge === null ? '—' : ($cronAge <= 1800 ? '✓ ' . (int) round($cronAge / 60) . ' dk' : '⚠ ' . (int) round($cronAge / 60) . ' dk'));
+
+    return $out;
+}

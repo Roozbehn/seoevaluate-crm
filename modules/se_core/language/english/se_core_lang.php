@@ -402,3 +402,14 @@ $lang['se_chat_pause_hint'] = 'After this reply, automatic reminders stop for th
 $lang['se_chat_auto_tag'] = 'automatic';
 $lang['se_ui_a11y_menu'] = 'Toggle menu'; $lang['se_ui_a11y_timers'] = 'Timers'; $lang['se_ui_a11y_notifications'] = 'Notifications';
 $lang['se_ui_a11y_todo'] = 'To-do'; $lang['se_ui_a11y_theme'] = 'Switch theme'; $lang['se_ui_a11y_quick'] = 'Quick add'; $lang['se_ui_a11y_search'] = 'Search';
+$lang['se_nav_today'] = 'Today'; $lang['se_nav_hastalar'] = 'Patients'; $lang['se_nav_messages'] = 'Messages'; $lang['se_nav_appointments'] = 'Appointments';
+$lang['se_nav_reports'] = 'Reports'; $lang['se_nav_settings'] = 'Settings'; $lang['se_nav_templates'] = 'Templates'; $lang['se_nav_flows'] = 'WhatsApp Flows';
+$lang['se_nav_perfex_leads'] = 'Perfex records: Leads'; $lang['se_nav_perfex_customers'] = 'Perfex records: Customers'; $lang['se_nav_perfex_setup'] = 'Perfex setup';
+$lang['se_nav_appointments_short'] = 'Calendar'; $lang['se_nav_more'] = 'More'; $lang['se_nav_tabbar_aria'] = 'Bottom navigation';
+$lang['se_today_subtitle'] = '%d appointments · %d open items'; $lang['se_today_queue'] = 'Needs your attention'; $lang['se_today_queue_empty'] = 'Nothing waiting today.'; $lang['se_today_queue_empty_hint'] = 'New enquiries will appear here.';
+$lang['se_today_see_all'] = 'See all'; $lang['se_today_flow'] = 'Patient flow'; $lang['se_today_flow_hint'] = 'active'; $lang['se_today_appts'] = "Today's appointments"; $lang['se_today_appts_empty'] = 'No appointments today.';
+$lang['se_today_open_calendar'] = 'Open calendar →'; $lang['se_today_unread'] = 'Unread messages'; $lang['se_today_unread_empty'] = 'No unread messages.'; $lang['se_today_system'] = 'System'; $lang['se_today_new_appt'] = 'Appointment'; $lang['se_today_new_patient'] = 'Patient';
+$lang['se_today_place_clinic'] = 'Clinic'; $lang['se_today_place_online'] = 'Online'; $lang['se_today_review'] = 'Review';
+$lang['se_sys_cron_never'] = 'Cron has never run — automatic jobs are stopped'; $lang['se_sys_cron_stale'] = 'Cron has not run for %d minutes — reminders and queues are waiting'; $lang['se_sys_dispatch_stale'] = 'Dispatcher has not run for %d minutes — WhatsApp replies are delayed';
+$lang['se_sys_outbox_skipped'] = 'Meta conversions: %d event(s) skipped (%s)'; $lang['se_sys_outbox_failed'] = 'Meta conversions: %d event(s) failed'; $lang['se_sys_wa_failed'] = '%d WhatsApp message(s) not delivered'; $lang['se_sys_reminders_failed'] = '%d appointment reminder(s) failed'; $lang['se_sys_dispatcher'] = 'Dispatcher';
+$lang['se_skip_consent_blocked'] = 'consent'; $lang['se_skip_no_snapshot'] = 'no event snapshot'; $lang['se_skip_unknown'] = 'unknown reason';

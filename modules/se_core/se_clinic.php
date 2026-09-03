@@ -166,10 +166,18 @@ function se_clinic_can_see_integration_cards()
 /** Core Perfex sidebar slugs a clinic never uses. */
 function se_clinic_hidden_sidebar_slugs()
 {
-    return [
+    $core = [
         'sales', 'subscriptions', 'expenses', 'contracts', 'projects', 'tasks',
         'support', 'estimate_request', 'knowledge-base', 'utilities', 'reports',
     ];
+    // Navigation v2: Perfex Leads/Customers leave the top level for everyone
+    // (admins reach them under Ayarlar → Perfex kayıtları); the v1 clinic
+    // items that Hastalar/Mesajlar replaced are hidden too.
+    if (function_exists('se_nav_v2_enabled') && se_nav_v2_enabled()) {
+        $core = array_merge($core, ['leads', 'customers', 'se-journeys', 'se-patients', 'se-instagram', 'se-whatsapp']);
+    }
+
+    return $core;
 }
 
 /**
@@ -190,6 +198,9 @@ function se_clinic_sidebar_positions()
         'se-reports'      => 9,
         'se-integrations' => 10,
         'se-consent'      => 11, // only when it stands alone (owner)
+        'se-hastalar'     => 2,
+        'se-messages'     => 3,
+        'se-settings'     => 12,
     ];
 }
 
@@ -218,6 +229,9 @@ function se_clinic_filter_sidebar($items)
     // The top "Dashboard" item IS the clinic dashboard for anyone who may open it.
     if (isset($items['dashboard']) && se_clinic_can_open_dashboard()) {
         $items['dashboard']['href'] = admin_url('se_core/se_dashboard');
+        if (function_exists('se_nav_v2_enabled') && se_nav_v2_enabled()) {
+            $items['dashboard']['name'] = _l('se_nav_today');   // "Bugün"
+        }
     }
 
     return $items;
@@ -641,3 +655,82 @@ function se_clinic_provision()
         $CI->db->query('SELECT RELEASE_LOCK(' . $CI->db->escape($lockName) . ')');
     }
 }
+
+/* ---------------------------------------------------------------------------
+ * Mobile bottom tab bar (CRM-M022 / UX-NAV02 / DS §2.16)
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Five items on phones (≤767 px, CSS shows it): Bugün · Hastalar · Mesajlar ·
+ * Randevu · Diğer. Emitted on every admin page through app_admin_footer;
+ * hidden by CSS inside a conversation (body.se-in-thread) so the composer is
+ * the bottom of the screen.
+ */
+function se_clinic_tabbar()
+{
+    if (!is_staff_logged_in() || (string) get_option('se_clinic_ds') === '0' || !function_exists('se_nav_v2_enabled') || !se_nav_v2_enabled()) {
+        return;
+    }
+    $items = [];
+    if (se_clinic_can_open_dashboard()) {
+        $items[] = ['href' => admin_url('se_core/se_dashboard'), 'icon' => 'fa fa-sun-o', 'label' => _l('se_nav_today'), 'match' => 'se_core/se_dashboard', 'count' => se_clinic_tabbar_count('today')];
+    }
+    if (staff_can('view', 'se_journey') || staff_can('view', 'leads')) {
+        $items[] = ['href' => admin_url('se_core/se_hastalar'), 'icon' => 'fa fa-user', 'label' => _l('se_nav_hastalar'), 'match' => 'se_core/se_hastalar,se_journey/se_journey/view', 'count' => 0];
+    }
+    if (staff_can('view', 'se_whatsapp')) {
+        $items[] = ['href' => admin_url('se_whatsapp/se_whatsapp/inbox'), 'icon' => 'fa fa-comments', 'label' => _l('se_nav_messages'), 'match' => 'se_whatsapp,se_instagram', 'count' => se_clinic_tabbar_count('unread')];
+    }
+    if (staff_can('view', 'se_appointments')) {
+        $items[] = ['href' => admin_url('se_appointments/se_appointments/index'), 'icon' => 'fa fa-calendar', 'label' => _l('se_nav_appointments_short'), 'match' => 'se_appointments', 'count' => 0];
+    }
+    $items[] = ['href' => '#', 'icon' => 'fa fa-bars', 'label' => _l('se_nav_more'), 'match' => '', 'count' => 0, 'menu' => true];
+
+    echo '<nav class="se-tabbar" aria-label="' . html_escape(_l('se_nav_tabbar_aria')) . '">';
+    foreach ($items as $it) {
+        $attrs = !empty($it['menu']) ? ' onclick="document.body.classList.toggle(\'hide-sidebar\');document.body.classList.toggle(\'show-sidebar\');return false;"' : '';
+        echo '<a href="' . html_escape($it['href']) . '" data-match="' . html_escape($it['match']) . '"' . $attrs . '>'
+           . '<span class="i"><i class="' . html_escape($it['icon']) . '" aria-hidden="true"></i></span>' . html_escape($it['label'])
+           . ((int) $it['count'] > 0 ? '<span class="se-count" aria-label="' . (int) $it['count'] . '">' . (int) $it['count'] . '</span>' : '')
+           . '</a>';
+    }
+    echo '</nav>';
+}
+hooks()->add_action('app_admin_footer', 'se_clinic_tabbar');
+
+/** Cheap counters for the tab bar (one query each, brand-scoped, fail-closed). */
+function se_clinic_tabbar_count($which)
+{
+    $CI = &get_instance();
+    try {
+        if ($which === 'unread' && $CI->db->table_exists(db_prefix() . 'se_wa_conversations')) {
+            se_apply_scope_in('brand_id');
+            $CI->db->where('unread_count >', 0);
+
+            return (int) $CI->db->count_all_results(db_prefix() . 'se_wa_conversations');
+        }
+        if ($which === 'today' && $CI->db->table_exists(db_prefix() . 'se_journey_tasks')) {
+            se_apply_scope_in('brand_id');
+            $CI->db->where('state', 'open');
+
+            return (int) $CI->db->count_all_results(db_prefix() . 'se_journey_tasks');
+        }
+    } catch (\Throwable $e) {
+        return 0;
+    }
+
+    return 0;
+}
+
+/** body class se-in-thread on conversation pages (tab bar hidden there). */
+function se_clinic_thread_body_class($classes)
+{
+    $CI = &get_instance();
+    $uri = isset($CI->uri) ? (string) $CI->uri->uri_string() : '';
+    if (preg_match('#/(se_whatsapp|se_instagram)/[^/]+/conversation/#', '/' . $uri)) {
+        $classes[] = 'se-in-thread';
+    }
+
+    return $classes;
+}
+hooks()->add_filter('admin_body_class', 'se_clinic_thread_body_class');

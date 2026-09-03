@@ -489,3 +489,4 @@ $lang['se_ev_aftercare_msg'] = 'Aftercare message sent'; $lang['se_ev_followup_p
 $lang['se_ev_completed'] = 'Process completed'; $lang['se_ev_optout'] = 'Patient opted out'; $lang['se_ev_closed'] = 'Record closed'; $lang['se_ev_handoff'] = 'Patient asked for a person';
 $lang['se_ev_urgent'] = 'Urgent symptom report — automatic messages paused'; $lang['se_ev_options_repeat'] = 'Options re-sent'; $lang['se_ev_wa_failed'] = 'Message not delivered'; $lang['se_ev_staff_reply'] = 'Staff replied';
 $lang['se_ev_paused'] = 'Automatic messages paused'; $lang['se_ev_resumed'] = 'Automatic messages resumed'; $lang['se_ev_note'] = 'Note'; $lang['se_ev_new_enquiry'] = 'New enquiry'; $lang['se_ev_auto_started'] = 'Process started automatically'; $lang['se_ev_staff_started'] = 'Process started by staff';
+$lang['se_na_unread'] = 'Reply to the unread message'; $lang['se_na_unread_reason'] = '%d unread · last message %s ago'; $lang['se_na_new_thread'] = 'New conversation';

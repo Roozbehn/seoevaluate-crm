@@ -89,6 +89,7 @@ body.se-theme-light,html[data-theme=light] body,body.light-mode{
 /* pipeline bar */
 .se-pipe{display:flex;gap:6px;flex-wrap:wrap}
 .se-pipe span{background:var(--se-surface-2);border-radius:var(--se-r-pill);padding:4px 10px;font-size:13px;color:var(--se-text-2)}
+.se-pipe a.se-pipe-link{text-decoration:none}.se-pipe a.se-pipe-link:hover span,.se-pipe a.se-pipe-link:focus-visible span{background:var(--se-surface-3,var(--se-surface-2));color:var(--se-text)}.se-build{margin-top:var(--se-sp-4);font-size:var(--se-fs-meta)}
 .se-pipe b{color:var(--se-text);margin-inline-end:4px}
 /* table */
 .se-table{width:100%;border-collapse:collapse;font-size:var(--se-fs-sm)}

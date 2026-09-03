@@ -625,3 +625,6 @@ $lang['se_journey_resend_link']   = 'Form bağlantısını yeniden gönder';
 $lang['se_journey_reactivate']    = 'Yeniden aç (hasta yazdı)';
 $lang['se_journey_procedure_notes'] = 'Uzman / personel notları';
 $lang['se_journey_preop_approved'] = 'İşlem öncesi bilgilendirme metni/bağlantısı hukuk ve Kaş Ekimi Uzmanı onaylı (hastaya gönderilebilir)';
+$lang['se_na_unread']        = 'Okunmamış mesajı yanıtlayın';
+$lang['se_na_unread_reason'] = '%d okunmamış · son mesaj %s önce';
+$lang['se_na_new_thread']    = 'Yeni sohbet';

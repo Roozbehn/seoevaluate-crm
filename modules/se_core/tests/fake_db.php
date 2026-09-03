@@ -136,6 +136,13 @@ class SeFakeDb
         return $this;
     }
 
+    /** CI_DB::where_not_in(): the complement of where_in, same column handling. */
+    public function where_not_in($k, array $vals)
+    {
+        $this->whereIn[] = [$k, array_map('strval', $vals), true];
+        return $this;
+    }
+
     public function escape($v)
     {
         if ($v === null) { return 'NULL'; }
@@ -163,9 +170,12 @@ class SeFakeDb
             if (!$this->condMatches($row, $w)) { return false; }
         }
 
-        foreach ($this->whereIn as [$k, $vals]) {
+        foreach ($this->whereIn as $wi) {
+            [$k, $vals] = $wi;
+            $not = !empty($wi[2]);
             $col = trim($k, '` ');
-            if (!in_array((string) ($row[$col] ?? ''), $vals, true)) { return false; }
+            $in  = in_array((string) ($row[$col] ?? ''), $vals, true);
+            if ($not ? $in : !$in) { return false; }
         }
 
         return true;

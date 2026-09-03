@@ -119,10 +119,11 @@ se_eq(0, se_clinic_sole_brand_id(), 'se_authz_reset_cache() also drops the clini
 /* ---------------------------------------------------------------------------
  * 2. Lean sidebar
  * ------------------------------------------------------------------------- */
-se_group('Clinic: lean sidebar filter');
+se_group('Clinic: lean sidebar filter (v1 layout, se_clinic_nav_v2=0)');
 
 se_test_seed_clinic(1);
 se_test_act_as(40, se_test_clinic_caps('Sales'));
+update_option('se_clinic_nav_v2', '0');
 
 $out = se_clinic_filter_sidebar(se_test_clinic_sidebar_fixture());
 
@@ -140,6 +141,7 @@ se_test_act_as(99, []);
 $out = se_clinic_filter_sidebar(se_test_clinic_sidebar_fixture());
 se_eq('/admin/', $out['dashboard']['href'], 'Dashboard is left alone for a staff member who may not open the clinic dashboard');
 se_eq('nope', se_clinic_filter_sidebar('nope'), 'a non-array passes through untouched');
+update_option('se_clinic_nav_v2', '1');
 
 se_group('Clinic: quick-create and Setup menu');
 
@@ -263,7 +265,27 @@ se_ok(se_clinic_can_manage_consent(), 'brand configuration still implies consent
 /* ---------------------------------------------------------------------------
  * 7. Navigation per role
  * ------------------------------------------------------------------------- */
-se_group('Clinic: navigation visibility per role');
+se_group('Clinic: navigation v2 (CRM-M021) — four operational items, Yönetim for owner/admin');
+
+update_option('se_clinic_nav_v2', '1');
+se_test_act_as(1, [], true);
+se_eq(['se-hastalar', 'se-messages', 'se-appointments', 'se-reports'], se_test_clinic_slugs(se_nav_visible_items()), 'admin v2: Hastalar, Mesajlar, Randevular, Raporlar (+ Bugün from the core dashboard item)');
+se_eq(['se-meta-leadgen', 'se-outbox', 'se-google', 'se-health', 'se-credentials'], se_test_clinic_slugs(se_nav_visible_integration_items()), 'admin v2: Entegrasyonlar without Consent (moved to Ayarlar)');
+se_eq(['se-consent', 'se-journey-settings', 'se-templates', 'se-flows', 'se-perfex-leads', 'se-perfex-customers', 'se-perfex-setup'], se_test_clinic_slugs(se_nav_visible_settings_items()), 'admin v2: Ayarlar children incl. Perfex records/setup');
+se_test_act_as(30, se_test_clinic_caps('Clinic Owner'));
+se_eq(['se-hastalar', 'se-messages', 'se-appointments', 'se-reports'], se_test_clinic_slugs(se_nav_visible_items()), 'owner v2: the four items + Raporlar');
+se_eq([], se_test_clinic_slugs(se_nav_visible_integration_items()), 'owner v2: no Entegrasyonlar');
+se_eq(['se-consent'], se_test_clinic_slugs(se_nav_visible_settings_items()), 'owner v2: Ayarlar holds only Rıza metinleri');
+se_test_act_as(40, se_test_clinic_caps('Sales'));
+se_eq(['se-hastalar', 'se-messages', 'se-appointments'], se_test_clinic_slugs(se_nav_visible_items()), 'sales v2: Hastalar, Mesajlar, Randevular — nothing else');
+se_eq([], se_test_clinic_slugs(se_nav_visible_settings_items()), 'sales v2: no Ayarlar');
+se_ok(in_array('leads', se_clinic_hidden_sidebar_slugs(), true) && in_array('customers', se_clinic_hidden_sidebar_slugs(), true) && in_array('se-journeys', se_clinic_hidden_sidebar_slugs(), true), 'v2 hides Perfex Leads/Customers and the v1 journey/patient/instagram items from the top level');
+$items = se_clinic_filter_sidebar(['dashboard' => ['name' => 'Dashboard', 'href' => 'x', 'position' => 1], 'leads' => ['name' => 'Leads', 'position' => 2]]);
+se_eq('se_nav_today', $items['dashboard']['name'], 'the core dashboard item is relabelled Bugün');
+se_ok(!isset($items['leads']), 'Leads is gone from the top level');
+
+se_group('Clinic: navigation v1 (rollback, se_clinic_nav_v2=0) per role');
+update_option('se_clinic_nav_v2', '0');
 
 se_test_act_as(1, [], true);
 se_eq(['se-patients', 'se-journeys', 'se-appointments', 'se-whatsapp', 'se-instagram', 'se-reports'], se_test_clinic_slugs(se_nav_visible_items()), 'admin: all six clinic items');
@@ -290,6 +312,7 @@ se_eq(['se-patients' => 4, 'se-journeys' => 3, 'se-appointments' => 5, 'se-whats
 foreach (se_nav_items() as $item) {
     se_eq($item['position'], se_clinic_sidebar_positions()[$item['slug']], "position of {$item['slug']} agrees with the sidebar filter");
 }
+update_option('se_clinic_nav_v2', '1');
 
 /* ---------------------------------------------------------------------------
  * 8. Role definitions
