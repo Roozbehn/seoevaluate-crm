@@ -23,7 +23,7 @@ set -euo pipefail
 umask 077
 
 SECRET_DIR="${SE_SECRET_DIR:-/home/hyundaic/_secrets}"
-ALLOWED="meta_app meta_page_22 meta_capi_22 google_sa_22 wa_token website_lead_22"
+ALLOWED="meta_app meta_page_22 meta_capi_22 meta_mm_capi_22 google_sa_22 wa_token website_lead_22 journey_key r2_media_key flow_key webpush_vapid"
 
 usage() {
     echo "Usage: $0 <provider>            (one of: $ALLOWED)" >&2
