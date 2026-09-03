@@ -520,10 +520,11 @@ function se_journey_allowed_transitions()
         'intake_link_sent'          => ['consent_pending', 'intake_started', 'intake_incomplete'],
         'intake_started'            => ['intake_incomplete', 'intake_submitted', 'intake_link_sent', 'consent_declined'],
         'intake_incomplete'         => ['intake_started', 'intake_submitted', 'intake_link_sent'],
-        'intake_submitted'          => ['photos_requested', 'ready_for_review'],
-        'photos_requested'          => ['photos_incomplete', 'ready_for_review', 'photo_retake_requested'],
-        'photos_incomplete'         => ['photos_requested', 'ready_for_review'],
-        'photo_retake_requested'    => ['ready_for_review', 'photos_incomplete', 'photo_retake_requested'],
+        // under_review from every photo state: staff may review (and quote) before the last photo arrives.
+        'intake_submitted'          => ['photos_requested', 'ready_for_review', 'under_review'],
+        'photos_requested'          => ['photos_incomplete', 'ready_for_review', 'photo_retake_requested', 'under_review'],
+        'photos_incomplete'         => ['photos_requested', 'ready_for_review', 'under_review'],
+        'photo_retake_requested'    => ['ready_for_review', 'photos_incomplete', 'photo_retake_requested', 'under_review'],
         'ready_for_review'          => ['under_review', 'photo_retake_requested', 'more_information_required'],
         'under_review'              => ['more_information_required', 'consultation_recommended', 'quote_pending_staff_approval',
                                         'not_suitable', 'photo_retake_requested', 'ready_for_review'],
@@ -1772,6 +1773,21 @@ function se_journey_route_step($j, array $ctx, $created)
      * or types it. Accept → booking link; revision → staff; anything else →
      * staff, and the options are repeated once. */
     $quotePhase = in_array($state, ['quote_sent', 'quote_accepted', 'quote_revision_requested'], true);
+    if (!$quotePhase && function_exists('se_journey_quote_sent_row')) {
+        // A sent quote awaiting its answer is the quote phase whatever the state
+        // says (a quote sent from ready_for_review before 2026-09-03 left the
+        // state behind): repair the state, then read the answer.
+        $open = se_journey_quote_sent_row($j);
+        if ($open && (string) ($open->patient_response ?? '') === ''
+            && ($button === 'jr_quote_accept' || $button === 'jr_quote_revise'
+                || ($body !== '' && (se_journey_matches_keyword($body, se_journey_quote_accept_keywords()) || se_journey_matches_keyword($body, se_journey_quote_revise_keywords()))))) {
+            $rep = se_journey_transition($j, 'quote_sent', 'quote_phase_repair', 'system', null, $corr, 'quote v' . (int) $open->version . ' was sent while the journey was at ' . $state, true);
+            if (!empty($rep['ok'])) {
+                $state = 'quote_sent';
+                $quotePhase = true;
+            }
+        }
+    }
     if ($quotePhase && function_exists('se_journey_quote_respond')) {
         if ($button === 'jr_quote_accept' || ($body !== '' && se_journey_matches_keyword($body, se_journey_quote_accept_keywords()))) {
             se_journey_quote_respond($j, 'accept', 'whatsapp', $corr);   // idempotent: repeats the booking link

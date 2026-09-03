@@ -352,6 +352,14 @@ function se_journey_quote_send($quote_id, $staff_id)
     ]);
     se_journey_audit((int) $j->brand_id, (int) $j->id, 'quote_send', 'quote', (string) $q->id, 'hash=' . substr(hash('sha256', $json), 0, 16));
     se_journey_event($j, 'quote_sent', 'v' . (int) $q->version . ' (' . $r['mode'] . ')', ['hash' => hash('sha256', $json)], 'staff', $staff_id, 'quote', (string) $q->id);
+    // Staff may draft, approve and send from the review tab without ever
+    // pressing "open review": an approved, sent quote IS the review decision.
+    // Live 2026-09-03 the journey stayed at ready_for_review after the send,
+    // so the patient's button tap was not read as a quote answer.
+    if (in_array((string) $j->state, ['intake_submitted', 'photos_requested', 'photos_incomplete', 'photo_retake_requested',
+                                       'ready_for_review', 'more_information_required'], true)) {
+        se_journey_transition($j, 'under_review', 'quote_prepared', 'staff', $staff_id);
+    }
     if (in_array((string) $j->state, ['quote_pending_staff_approval', 'consultation_recommended', 'consultation_completed', 'under_review',
                                        'quote_revision_requested', 'quote_accepted'], true)) {
         if ((string) $j->state !== 'quote_pending_staff_approval') {
