@@ -277,6 +277,15 @@ se_eq('out', $db->rows('tblse_wa_messages')[0]['direction'], 'as an OUTBOUND mes
 se_wa_record_outbound($row, (object) $db->rows('tblse_wa_conversations')[0], 'wamid.OK');
 se_eq(1, count($db->rows('tblse_wa_messages')), 'a repeat mirror is a no-op');
 
+/* ---- CRM-M058 / AZCRM-ARCH-005: the wamid lands on the outbound row before finalize; a re-claimed row is never resent ---- */
+se_eq('wamid.OK', $db->rows('tblse_wa_outbound')[0]['wamid'], 'the wamid is written on the outbound row by process() itself (before the fenced finalize)');
+$crashed = $db->rows('tblse_wa_outbound')[0];
+$crashed['status'] = 'processing'; $crashed['locked_by'] = 'w2'; $crashed['fence'] = 2;   // lease expired, worker died before finalize, row re-claimed
+$out2 = se_wa_out_process($crashed);
+se_eq('sent', $out2['status'], 'a re-claimed row that already has a wamid is finalized as sent');
+se_eq(1, count($GLOBALS['se_wa_sent']), 'and the transport is NOT called again (was: double send)');
+se_eq(1, count($db->rows('tblse_wa_messages')), 'still one mirrored message');
+
 /* ======================================================================== */
 se_group('Transport failures are classified and sanitized');
 

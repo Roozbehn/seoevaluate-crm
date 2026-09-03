@@ -667,6 +667,17 @@ function se_wa_out_process($row)
                 'failure_class' => 'permanent', 'last_error' => 'conversation gone'];
     }
 
+    /* Double-send guard (AZCRM-ARCH-005 / CRM-M058): the wamid is written the
+     * moment the transport accepts, BEFORE the fenced finalize. A row that was
+     * re-claimed after a crash in that window already carries its wamid, so it
+     * is finalized — never sent twice. */
+    if (trim((string) ($row['wamid'] ?? '')) !== '') {
+        se_wa_record_outbound($row, $conv, (string) $row['wamid']);   // idempotent on wamid
+        return ['status' => 'sent', 'attempts' => (int) $row['attempts'],
+                'wamid' => (string) $row['wamid'], 'sent_at' => $row['sent_at'] ?: date('Y-m-d H:i:s'),
+                'failure_class' => null, 'last_error' => null];
+    }
+
     /* GATE FIRST, then the window.
      *
      * Order matters. Asking the composite policy whether we may send conflates
@@ -753,13 +764,20 @@ function se_wa_out_process($row)
     if (!empty($media_tmp)) { @unlink($media_tmp); }
 
     if (!empty($result['ok'])) {
+        // Record the wamid FIRST (unfenced, by id, only while still unset): if
+        // anything below fails, the retry sees the wamid and finalizes.
+        $wamid = (string) ($result['wamid'] ?? '');
+        if ($wamid !== '') {
+            $CI->db->where('id', (int) $row['id'])->group_start()->where('wamid IS NULL', null, false)->or_where('wamid', '')->group_end()
+                   ->update(db_prefix() . 'se_wa_outbound', ['wamid' => $wamid, 'sent_at' => date('Y-m-d H:i:s')]);
+        }
         // Provider AUTHENTICATION evidence: the Cloud API token really sent.
         if (function_exists('se_secret_note_auth')) {
             se_secret_note_auth('wa_token', 0, true);
         }
 
         // Record the sent message in the conversation thread.
-        se_wa_record_outbound($row, $conv, (string) ($result['wamid'] ?? ''));
+        se_wa_record_outbound($row, $conv, $wamid);
 
         return ['status' => 'sent', 'attempts' => (int) $row['attempts'] + 1,
                 'wamid' => (string) ($result['wamid'] ?? ''), 'sent_at' => date('Y-m-d H:i:s'),
