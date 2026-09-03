@@ -184,27 +184,22 @@ function se_journey_terminal_states()
 }
 
 /**
- * Everything that needs a staff member right now, one row per patient,
- * ordered by priority (1 danger · 2 action · 3 info) then by age (oldest
- * first). Batch-loaded: journeys, latest quotes, the relevant appointments,
- * failed sends, lead names and unread threads are each ONE query, then
- * se_journey_next_action() runs in PHP. Capped at $limit rows.
+ * Batch context for a set of journeys: latest quote, relevant appointment,
+ * failed-send flag, lead row, unread thread and the computed next action —
+ * each table read ONCE, se_journey_next_action() run in PHP. Shared by the
+ * Bugün queue and the Hastalar list so they cannot disagree.
  *
- * @return array{rows: array, total: int, counts: array}
+ * @return array{items: array<int, array>, unread: array<int, array>, leads: array<int, array>}
+ *   items: journey_id => ['j' => object, 'na' => array, 'ctx' => array, 'lead' => array|null,
+ *          'unread' => array|null, 'name' => string, 'appointment' => object|null, 'next_appointment' => array|null]
+ *   unread: conversation_id => unread thread rows (all, incl. threads without a journey)
  */
-function se_journey_attention_queue($limit = 25, $now = null)
+function se_journey_batch_context(array $journeys, $now = null, array $opts = [])
 {
     $now = $now ?? time();
     $CI  = &get_instance();
     $p   = db_prefix();
-
-    // 1) active journeys (brand-scoped, fail-closed)
-    if (function_exists('se_apply_scope_in')) { se_apply_scope_in('brand_id'); }
-    $CI->db->where_not_in('state', se_journey_terminal_states());
-    $journeys = $CI->db->get($p . 'se_journeys')->result_array();
-    if (!$journeys) {
-        return ['rows' => [], 'total' => 0, 'counts' => ['p1' => 0, 'p2' => 0, 'p3' => 0]];
-    }
+    $out = ['items' => [], 'unread' => [], 'leads' => []];
     $ids = array_map(function ($j) { return (int) $j['id']; }, $journeys);
     $leadIds = array_values(array_unique(array_filter(array_map(function ($j) { return (int) $j['lead_id']; }, $journeys))));
     $convIds = array_values(array_unique(array_filter(array_map(function ($j) { return (int) $j['wa_conversation_id']; }, $journeys))));
@@ -215,42 +210,45 @@ function se_journey_attention_queue($limit = 25, $now = null)
         }
     }
 
-    // 2) latest quote per journey
+    // latest quote per journey (ascending id → last write wins)
     $quotes = [];
-    if ($CI->db->table_exists($p . 'se_journey_quotes')) {
+    if ($ids && $CI->db->table_exists($p . 'se_journey_quotes')) {
         $CI->db->where_in('journey_id', $ids)->order_by('id', 'ASC');
-        foreach ($CI->db->get($p . 'se_journey_quotes')->result_array() as $q) {
-            $quotes[(int) $q['journey_id']] = (object) $q;   // ascending → the last write wins = latest
-        }
+        foreach ($CI->db->get($p . 'se_journey_quotes')->result_array() as $q) { $quotes[(int) $q['journey_id']] = (object) $q; }
     }
-    // 3) appointments
+    // linked appointments
     $appts = [];
     if ($apptIds && $CI->db->table_exists($p . 'se_appointments')) {
         $CI->db->where_in('id', array_values(array_unique($apptIds)));
         foreach ($CI->db->get($p . 'se_appointments')->result_array() as $a) { $appts[(int) $a['id']] = (object) $a; }
     }
-    // 4) failed sends per conversation
+    // next upcoming appointment per lead (Hastalar column) — opt-in
+    $nextAppt = [];
+    if (!empty($opts['next_appointment']) && $leadIds && $CI->db->table_exists($p . 'se_appointments')) {
+        $CI->db->where('rel_type', 'lead')->where_in('rel_id', $leadIds)->where('start_at >=', date('Y-m-d H:i:s', $now))
+               ->where_not_in('status', ['cancelled', 'completed', 'no_show'])->order_by('start_at', 'ASC');
+        foreach ($CI->db->get($p . 'se_appointments')->result_array() as $a) {
+            if (!isset($nextAppt[(int) $a['rel_id']])) { $nextAppt[(int) $a['rel_id']] = $a; }
+        }
+    }
+    // failed sends per conversation
     $failed = [];
     if ($convIds && $CI->db->table_exists($p . 'se_wa_outbound')) {
         $CI->db->select('conversation_id')->where_in('conversation_id', $convIds)->where('status', 'failed')->group_by('conversation_id');
         foreach ($CI->db->get($p . 'se_wa_outbound')->result_array() as $r) { $failed[(int) $r['conversation_id']] = true; }
     }
-    // 5) lead names + phones
-    $leads = [];
+    // lead names + phones
     if ($leadIds) {
-        $CI->db->select('id, name, phonenumber')->where_in('id', $leadIds);
-        foreach ($CI->db->get($p . 'leads')->result_array() as $l) { $leads[(int) $l['id']] = $l; }
+        $CI->db->select('id, name, phonenumber, email')->where_in('id', $leadIds);
+        foreach ($CI->db->get($p . 'leads')->result_array() as $l) { $out['leads'][(int) $l['id']] = $l; }
     }
-    // 6) unread threads (for the reason line and for threads without a journey)
-    $unread = [];
+    // unread threads (brand-scoped; includes threads with no journey)
     if ($CI->db->table_exists($p . 'se_wa_conversations')) {
         if (function_exists('se_apply_scope_in')) { se_apply_scope_in('brand_id'); }
         $CI->db->select('id, wa_user_id, lead_id, unread_count, last_inbound_at')->where('unread_count >', 0);
-        foreach ($CI->db->get($p . 'se_wa_conversations')->result_array() as $c) { $unread[(int) $c['id']] = $c; }
+        foreach ($CI->db->get($p . 'se_wa_conversations')->result_array() as $c) { $out['unread'][(int) $c['id']] = $c; }
     }
 
-    $rows = [];
-    $seenConv = [];
     foreach ($journeys as $jr) {
         $j = (object) $jr;
         $apptId = in_array((string) $j->state, ['procedure_booked', 'preop_pending', 'procedure_completed'], true)
@@ -260,35 +258,78 @@ function se_journey_attention_queue($limit = 25, $now = null)
             'appointment' => $apptId ? ($appts[$apptId] ?? null) : null,
             'wa_failed'   => !empty($failed[(int) $j->wa_conversation_id]),
         ];
-        $na = se_journey_next_action($j, $ctx, $now);
-        $seenConv[(int) $j->wa_conversation_id] = true;
-        $u = $unread[(int) $j->wa_conversation_id] ?? null;
-        if ($na['owner'] !== 'staff' && !$u) {
-            continue;
-        }
-        // An unanswered inbound on a patient-owned step: the reply is the action.
-        if ($na['owner'] !== 'staff' && $u) {
-            $inAt = strtotime((string) $u['last_inbound_at']) ?: $now;
-            if ($now - $inAt < SE_NA_UNANSWERED_THREAD) { continue; }
-            $na = ['key' => 'unread', 'owner' => 'staff', 'priority' => 3, 'tone' => 'info', 'sentence' => _l('se_na_unread'),
-                   'reason' => sprintf(_l('se_na_unread_reason'), (int) $u['unread_count'], se_ui_age($inAt, $now)), 'age' => $now - $inAt,
-                   'action_label' => _l('se_na_btn_reply'), 'url' => admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $u['id']), 'ghost' => false];
-        }
-        $lead = $leads[(int) $j->lead_id] ?? null;
-        $name = $lead && trim((string) $lead['name']) !== '' ? se_ui_short_name($lead['name']) : (trim((string) ($j->display_name ?? '')) !== '' ? se_ui_short_name($j->display_name) : se_ui_phone($j->wa_user_id, true, false));
-        $rows[] = [
-            'journey_id' => (int) $j->id, 'lead_id' => (int) $j->lead_id, 'conversation_id' => (int) $j->wa_conversation_id,
-            'who' => $name, 'state' => (string) $j->state, 'why' => se_ui_state_label($j->state), 'tone' => $na['tone'],
-            'reason' => $na['reason'], 'age' => (int) $na['age'], 'hot' => $na['priority'] <= 2, 'priority' => (int) $na['priority'],
-            'action_label' => $na['action_label'], 'url' => $na['url'], 'key' => $na['key'], 'unread' => $u ? (int) $u['unread_count'] : 0,
-            'aria' => $name . ' — ' . $na['action_label'],
+        $lead = $out['leads'][(int) $j->lead_id] ?? null;
+        $name = $lead && trim((string) $lead['name']) !== '' ? se_ui_short_name($lead['name'])
+              : (trim((string) ($j->display_name ?? '')) !== '' ? se_ui_short_name($j->display_name) : se_ui_phone($j->wa_user_id, true, false));
+        $out['items'][(int) $j->id] = [
+            'j' => $j, 'na' => se_journey_next_action($j, $ctx, $now), 'ctx' => $ctx, 'lead' => $lead, 'name' => $name,
+            'unread' => $out['unread'][(int) $j->wa_conversation_id] ?? null,
+            'appointment' => $ctx['appointment'], 'next_appointment' => $lead ? ($nextAppt[(int) $j->lead_id] ?? null) : null,
         ];
     }
+
+    return $out;
+}
+
+/** Turn a batch item into an attention row (one button, accessible name). Null when nothing is owed by staff. */
+function se_journey_attention_row_from(array $it, $now)
+{
+    $j = $it['j']; $na = $it['na']; $u = $it['unread'];
+    if ($na['owner'] !== 'staff' && !$u) {
+        return null;
+    }
+    // An unanswered inbound on a patient-owned step: the reply is the action.
+    if ($na['owner'] !== 'staff' && $u) {
+        $inAt = strtotime((string) $u['last_inbound_at']) ?: $now;
+        if ($now - $inAt < SE_NA_UNANSWERED_THREAD) { return null; }
+        $na = ['key' => 'unread', 'owner' => 'staff', 'priority' => 3, 'tone' => 'info', 'sentence' => _l('se_na_unread'),
+               'reason' => sprintf(_l('se_na_unread_reason'), (int) $u['unread_count'], se_ui_age($inAt, $now)), 'age' => $now - $inAt,
+               'action_label' => _l('se_na_btn_reply'), 'url' => admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $u['id']), 'ghost' => false];
+    }
+    $name = $it['name'];
+
+    return [
+        'journey_id' => (int) $j->id, 'lead_id' => (int) $j->lead_id, 'conversation_id' => (int) $j->wa_conversation_id,
+        'who' => $name, 'state' => (string) $j->state, 'why' => se_ui_state_label($j->state), 'tone' => $na['tone'],
+        'reason' => $na['reason'], 'age' => (int) $na['age'], 'hot' => $na['priority'] <= 2, 'priority' => (int) $na['priority'],
+        'action_label' => $na['action_label'], 'url' => $na['url'], 'key' => $na['key'], 'unread' => $u ? (int) $u['unread_count'] : 0,
+        'aria' => $name . ' — ' . $na['action_label'],
+    ];
+}
+
+/**
+ * Everything that needs a staff member right now, one row per patient,
+ * ordered by priority (1 danger · 2 action · 3 info) then by age (oldest
+ * first). Batch-loaded through se_journey_batch_context(). Capped at $limit.
+ *
+ * @return array{rows: array, total: int, counts: array}
+ */
+function se_journey_attention_queue($limit = 25, $now = null)
+{
+    $now = $now ?? time();
+    $CI  = &get_instance();
+    $p   = db_prefix();
+
+    if (function_exists('se_apply_scope_in')) { se_apply_scope_in('brand_id'); }
+    $CI->db->where_not_in('state', se_journey_terminal_states());
+    $journeys = $CI->db->get($p . 'se_journeys')->result_array();
+    if (!$journeys) {
+        return ['rows' => [], 'total' => 0, 'counts' => ['p1' => 0, 'p2' => 0, 'p3' => 0]];
+    }
+    $batch = se_journey_batch_context($journeys, $now);
+
+    $rows = [];
+    $seenConv = [];
+    foreach ($batch['items'] as $it) {
+        $seenConv[(int) $it['j']->wa_conversation_id] = true;
+        $row = se_journey_attention_row_from($it, $now);
+        if ($row) { $rows[] = $row; }
+    }
     // Unread threads with no journey at all (new number, journey not started)
-    foreach ($unread as $cid => $u) {
+    foreach ($batch['unread'] as $cid => $u) {
         if (!empty($seenConv[$cid])) { continue; }
         $inAt = strtotime((string) $u['last_inbound_at']) ?: $now;
-        $lead = $leads[(int) $u['lead_id']] ?? null;
+        $lead = $batch['leads'][(int) $u['lead_id']] ?? null;
         $name = $lead && trim((string) $lead['name']) !== '' ? se_ui_short_name($lead['name']) : se_ui_phone($u['wa_user_id'], true, false);
         $rows[] = [
             'journey_id' => 0, 'lead_id' => (int) $u['lead_id'], 'conversation_id' => $cid, 'who' => $name, 'state' => '',

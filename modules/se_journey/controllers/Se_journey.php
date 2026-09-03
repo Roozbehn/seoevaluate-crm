@@ -33,32 +33,72 @@ class Se_journey extends AdminController
         $this->load->view('se_journey/index', $data);
     }
 
-    /** The journey workspace: header, timeline and role-gated tabs. */
+    /** The patient workspace (CRM-M025..M027): header, stage bar, next action, alerts, tabs. */
     public function view($id)
     {
         $j = $this->journey($id);
+        $tabs = ['timeline', 'chat', 'intake', 'photos', 'review', 'care', 'consent'];
         $tab = (string) ($this->input->get('tab') ?: 'timeline');
-        $data = ['title' => _l('se_journeys') . ' #' . (int) $j->id, 'j' => $j, 'tab' => $tab];
+        if (!in_array($tab, $tabs, true)) { $tab = 'timeline'; }
+        $data = ['title' => _l('se_journey_patient'), 'j' => $j, 'tab' => $tab];
         $data['tasks'] = se_journey_open_tasks(20, (int) $j->id);
         $data['staff'] = function_exists('se_appt_selectable_staff') ? se_appt_selectable_staff((int) $j->brand_id) : [];
         $data['consent'] = se_journey_consent_state($j);
-        $data['timeline'] = $this->timeline($j);
         $data['can'] = [];
         foreach (array_keys(se_journey_capabilities()) as $cap) {
             $data['can'][$cap] = se_journey_can($cap);
         }
+        // Identity: lead name/phone (masked without the health capability), next action, unread.
+        $data['lead'] = null;
+        if ((int) $j->lead_id > 0) {
+            $this->db->select('id, name, phonenumber, email, country')->where('id', (int) $j->lead_id);
+            $data['lead'] = $this->db->get(db_prefix() . 'leads')->row_array() ?: null;
+        }
+        $data['name']  = $data['lead'] && trim((string) $data['lead']['name']) !== '' ? (string) $data['lead']['name'] : (trim((string) $j->display_name) !== '' ? (string) $j->display_name : '');
+        $data['phone'] = se_ui_phone($data['lead'] && trim((string) $data['lead']['phonenumber']) !== '' ? $data['lead']['phonenumber'] : (string) $j->wa_user_id, !$data['can']['view_health'], false);
+        $batch = function_exists('se_journey_batch_context') ? se_journey_batch_context([(array) $j], null, ['next_appointment' => true]) : ['items' => []];
+        $item  = $batch['items'][(int) $j->id] ?? null;
+        $data['na'] = $item ? $item['na'] : (function_exists('se_journey_next_action_for') ? se_journey_next_action_for($j) : []);
+        $data['next_appointment'] = $item ? $item['next_appointment'] : null;
+        $data['wa_failed'] = $item ? !empty($item['ctx']['wa_failed']) : false;
+        $data['unread'] = 0;
+        if ((int) $j->wa_conversation_id > 0) {
+            $this->db->select('unread_count')->where('id', (int) $j->wa_conversation_id);
+            $c = $this->db->get(db_prefix() . 'se_wa_conversations')->row_array();
+            $data['unread'] = (int) ($c['unread_count'] ?? 0);
+        }
+        $data['quote_latest'] = function_exists('se_journey_quote_latest') ? se_journey_quote_latest($j) : null;
         $data['checklist'] = se_journey_media_checklist($j);
         $data['intake'] = se_journey_intake_get($j);
         $data['answers'] = [];
         $data['fields'] = [];
+        if ($tab === 'timeline') {
+            $data['timeline'] = se_journey_timeline_human($j, 150);
+        }
+        if ($tab === 'chat' && (int) $j->wa_conversation_id > 0 && staff_can('view', 'se_whatsapp')) {
+            $this->load->model('se_whatsapp/se_whatsapp_model');
+            $conv = $this->se_whatsapp_model->get_conversation((int) $j->wa_conversation_id);
+            if ($conv) {
+                if ((int) $conv->unread_count > 0) {
+                    $this->db->where('id', (int) $conv->id)->where('brand_id', (int) $conv->brand_id)->update(db_prefix() . 'se_wa_conversations', ['unread_count' => 0]);
+                    $conv->unread_count = 0; $data['unread'] = 0;
+                }
+                $data['conversation'] = $conv;
+                $data['messages']  = $this->se_whatsapp_model->messages((int) $conv->id);
+                $data['media']     = function_exists('se_media_for_messages') ? se_media_for_messages('wa', array_column($data['messages'], 'id')) : [];
+                $data['policy']    = se_wa_compose_policy($conv);
+                $data['templates'] = se_wa_approved_templates((int) $conv->brand_id);
+            }
+        }
         if ($tab === 'intake' && $data['can']['view_health'] && $data['intake']) {
             se_journey_audit((int) $j->brand_id, (int) $j->id, 'view_intake', 'intake', (string) $data['intake']->id);
             $data['answers'] = se_journey_intake_answers($data['intake']);
             $data['fields']  = se_journey_fields((int) $j->brand_id);
             $data['sections'] = se_journey_questionnaire()['sections'];
         }
-        $data['media'] = [];
+        $data['media'] = $data['media'] ?? [];
         if ($tab === 'photos' && $data['can']['view_photos']) {
+            $data['media'] = [];
             foreach (se_journey_media_list($j) as $m) {
                 $m['view_url'] = in_array($m['state'], ['pending_fetch', 'fetch_failed'], true) || empty($m['storage_ref'])
                     ? '' : se_journey_media_view_url((int) $m['id'], (int) get_staff_user_id());
@@ -68,7 +108,7 @@ class Se_journey extends AdminController
         }
         if ($tab === 'review') {
             $data['review'] = se_journey_review_get($j);
-            $data['quote']  = se_journey_quote_latest($j);
+            $data['quote']  = $data['quote_latest'];
             $data['quotes'] = $this->quotes($j);
             $data['decisions'] = se_journey_review_decisions();
             $data['flags'] = $data['intake'] ? (json_decode((string) $data['intake']->flags_json, true) ?: []) : [];
@@ -190,6 +230,30 @@ class Se_journey extends AdminController
                 break;
             case 'task_done':
                 se_journey_task_done((int) $this->input->post('task_id'), $staff);
+                break;
+            case 'note':             // internal note (CRM-M028 / UX-P06): never sent to the patient
+                $note = trim(mb_substr((string) $this->input->post('note'), 0, 500));
+                if ($note === '') {
+                    $msg = ['warning', _l('se_journey_note_empty')];
+                    break;
+                }
+                se_journey_event($j, 'note', $note, [], 'staff', (string) $staff);
+                $this->db->where('id', (int) $j->id)->where('brand_id', (int) $j->brand_id)->update(db_prefix() . 'se_journeys', ['last_updated' => date('Y-m-d H:i:s')]);
+                break;
+            case 'reopen':           // closed / not suitable → back to review (CRM-M030 / UX-P08), reason recorded
+                $this->need('edit_review');
+                $reason = trim(mb_substr((string) $this->input->post('reason'), 0, 500));
+                if ($reason === '') {
+                    $msg = ['warning', _l('se_journey_reopen_reason_required')];
+                    break;
+                }
+                $target = (string) $j->state === 'closed_lost' && (int) $j->lead_id <= 0 ? 'new_whatsapp_enquiry' : 'ready_for_review';
+                if (!in_array((string) $j->state, ['closed_lost', 'not_suitable'], true)) {
+                    $msg = ['warning', _l('se_journey_unknown_action')];
+                    break;
+                }
+                $ok = se_journey_transition($j, $target, 'staff_reopen', 'staff', $staff, null, $reason);
+                $msg = !empty($ok['ok']) ? ['success', _l('se_journey_reopened')] : ['warning', _l('se_journey_blocked') . ': ' . (string) ($ok['reason'] ?? '')];
                 break;
             case 'photo_classify':
                 $this->need('view_photos');
@@ -650,37 +714,6 @@ class Se_journey extends AdminController
         if (strtolower((string) $this->input->method()) !== 'post') {
             access_denied('se_journey');
         }
-    }
-
-    /** Merge messages, transitions, events, appointment history into one ordered timeline (non-sensitive). */
-    private function timeline($j)
-    {
-        $items = [];
-        $this->db->where('conversation_id', (int) $j->wa_conversation_id)->where('brand_id', (int) $j->brand_id)->order_by('id', 'DESC')->limit(100);
-        foreach ($this->db->get(db_prefix() . 'se_wa_messages')->result_array() as $m) {
-            $items[] = ['at' => $m['received_at'] ?: ($m['sent_at'] ?: $m['date_created']), 'kind' => 'wa_' . $m['direction'],
-                        'label' => ($m['direction'] === 'in' ? _l('se_wa_direction_in') : _l('se_wa_direction_out')) . ' · ' . $m['type'] . ($m['delivery_state'] ? ' · ' . $m['delivery_state'] : ''),
-                        'text' => $m['type'] === 'image' ? '[photo]' : mb_substr((string) $m['body'], 0, 300), 'actor' => $m['source'] ?: ''];
-        }
-        $this->db->where('journey_id', (int) $j->id)->order_by('id', 'DESC')->limit(200);
-        foreach ($this->db->get(db_prefix() . 'se_journey_transitions')->result_array() as $t) {
-            $items[] = ['at' => $t['created_at'], 'kind' => 'transition', 'label' => ($t['from_state'] ?: '—') . ' → ' . $t['to_state'],
-                        'text' => $t['trigger_key'] . ($t['note'] ? ' — ' . $t['note'] : ''), 'actor' => $t['actor_type'] . ($t['actor_id'] ? ' #' . $t['actor_id'] : '')];
-        }
-        $this->db->where('journey_id', (int) $j->id)->order_by('id', 'DESC')->limit(200);
-        foreach ($this->db->get(db_prefix() . 'se_journey_events')->result_array() as $e) {
-            $items[] = ['at' => $e['created_at'], 'kind' => 'event', 'label' => $e['kind'], 'text' => (string) $e['summary'], 'actor' => $e['actor_type']];
-        }
-        foreach ([$j->consultation_appointment_id, $j->procedure_appointment_id] as $aid) {
-            if ((int) $aid <= 0) { continue; }
-            $this->db->where('appointment_id', (int) $aid)->where('brand_id', (int) $j->brand_id)->order_by('id', 'ASC');
-            foreach ($this->db->get(db_prefix() . 'se_appointment_status_history')->result_array() as $h) {
-                $items[] = ['at' => $h['changed_at'], 'kind' => 'appointment', 'label' => 'appointment #' . $aid . ': ' . ($h['old_status'] ?: '—') . ' → ' . $h['new_status'], 'text' => '', 'actor' => 'staff #' . $h['changed_by']];
-            }
-        }
-        usort($items, function ($a, $b) { return strcmp((string) $b['at'], (string) $a['at']); });
-
-        return array_slice($items, 0, 250);
     }
 
     private function quotes($j)

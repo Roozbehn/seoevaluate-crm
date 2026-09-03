@@ -100,3 +100,80 @@ function se_journey_conversation_panel($conv)
     echo '</div></div>';
 }
 
+
+/* ===========================================================================
+ * Human timeline (CRM-M026 / UX-P04 / UX-COPY §6)
+ * ======================================================================== */
+
+/**
+ * One ordered list (newest first) of what happened to a patient, in plain
+ * Turkish: messages, state changes, events, appointment status changes.
+ * Raw kinds never reach the view; events the label map marks as noise
+ * (token issued, flow steps, lead sync) are dropped. Non-sensitive: message
+ * bodies are truncated previews, photos are "[fotoğraf]", nothing from the
+ * intake answers.
+ *
+ * @return array<int, array{at:string, label:string, text:string, actor:string, tone:string, kind:string}>
+ */
+function se_journey_timeline_human($j, $limit = 150)
+{
+    $CI = &get_instance();
+    $p  = db_prefix();
+    $items = [];
+    $actorOf = function ($type, $id = 0) {
+        $type = (string) $type;
+        if ($type === 'staff' || $type === 'agent') {
+            return $id > 0 && function_exists('get_staff_full_name') ? se_ui_short_name((string) get_staff_full_name($id)) : _l('se_tl_actor_staff');
+        }
+        if (in_array($type, ['patient', 'customer', 'contact', 'user'], true)) { return _l('se_tl_actor_patient'); }
+        return _l('se_tl_actor_auto');
+    };
+
+    if ((int) $j->wa_conversation_id > 0 && $CI->db->table_exists($p . 'se_wa_messages')) {
+        $CI->db->where('conversation_id', (int) $j->wa_conversation_id)->where('brand_id', (int) $j->brand_id)->order_by('id', 'DESC')->limit(100);
+        foreach ($CI->db->get($p . 'se_wa_messages')->result_array() as $m) {
+            $in = ($m['direction'] ?? 'in') === 'in';
+            $origin = (string) ($m['origin'] ?? '');
+            $detail = $in ? (string) $m['type'] : (strpos($origin, 'journey:') === 0 ? substr($origin, 8) : (string) $m['type']);
+            $label = se_journey_event_label($in ? 'wa_inbound' : 'wa_outbound', ['detail' => $detail]);
+            if ($label === '') { continue; }
+            $text = $m['type'] === 'image' ? '' : mb_substr(trim((string) ($m['body'] ?? '')), 0, 160);
+            $failed = in_array((string) ($m['delivery_state'] ?? ''), ['failed', 'undeliverable'], true);
+            $items[] = ['at' => $m['received_at'] ?: ($m['sent_at'] ?: $m['date_created']), 'label' => $label, 'text' => $text,
+                        'actor' => $in ? _l('se_tl_actor_patient') : ($origin === 'staff' || $origin === '' && !empty($m['staff_id']) ? $actorOf('staff', (int) ($m['staff_id'] ?? 0)) : _l('se_tl_actor_auto')),
+                        'tone' => $failed ? 'danger' : ($in ? 'info' : 'inactive'), 'kind' => $in ? 'in' : 'out'];
+        }
+    }
+    if ($CI->db->table_exists($p . 'se_journey_transitions')) {
+        $CI->db->where('journey_id', (int) $j->id)->order_by('id', 'DESC')->limit(150);
+        foreach ($CI->db->get($p . 'se_journey_transitions')->result_array() as $t) {
+            $label = se_journey_event_label('transition', ['to' => (string) $t['to_state'], 'from' => (string) $t['from_state']]);
+            if ($label === '') { continue; }
+            $items[] = ['at' => $t['created_at'], 'label' => $label, 'text' => (string) ($t['note'] ?? ''),
+                        'actor' => $actorOf($t['actor_type'] ?? '', (int) ($t['actor_id'] ?? 0)), 'tone' => se_ui_state_tone($t['to_state']), 'kind' => 'state'];
+        }
+    }
+    if ($CI->db->table_exists($p . 'se_journey_events')) {
+        $CI->db->where('journey_id', (int) $j->id)->order_by('id', 'DESC')->limit(150);
+        foreach ($CI->db->get($p . 'se_journey_events')->result_array() as $e) {
+            $label = se_journey_event_label((string) $e['kind'], ['detail' => (string) ($e['detail'] ?? $e['summary'] ?? '')]);
+            if ($label === '') { continue; }
+            $items[] = ['at' => $e['created_at'], 'label' => $label, 'text' => (string) ($e['summary'] ?? ''),
+                        'actor' => $actorOf($e['actor_type'] ?? '', (int) ($e['actor_id'] ?? 0)), 'tone' => in_array((string) $e['kind'], ['urgent', 'wa_delivery_failed'], true) ? 'danger' : 'info', 'kind' => (string) $e['kind']];
+        }
+    }
+    if ($CI->db->table_exists($p . 'se_appointment_status_history')) {
+        foreach ([$j->consultation_appointment_id ?? 0, $j->procedure_appointment_id ?? 0] as $aid) {
+            if ((int) $aid <= 0) { continue; }
+            $CI->db->where('appointment_id', (int) $aid)->where('brand_id', (int) $j->brand_id)->order_by('id', 'ASC');
+            foreach ($CI->db->get($p . 'se_appointment_status_history')->result_array() as $h) {
+                $known = in_array((string) $h['new_status'], ['scheduled', 'confirmed', 'held', 'completed', 'no_show', 'cancelled'], true);
+                $items[] = ['at' => $h['changed_at'], 'label' => _l($known ? 'se_tl_appt_' . $h['new_status'] : 'se_tl_appt_changed'), 'text' => '',
+                            'actor' => $actorOf('staff', (int) ($h['changed_by'] ?? 0)), 'tone' => 'info', 'kind' => 'appointment'];
+            }
+        }
+    }
+    usort($items, function ($a, $b) { return strcmp((string) $b['at'], (string) $a['at']); });
+
+    return array_slice($items, 0, max(1, (int) $limit));
+}

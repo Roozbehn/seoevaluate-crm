@@ -146,6 +146,10 @@ function se_test_db() { return $GLOBALS['se_test_ci']->db; }
 function db_prefix() { return 'tbl'; }
 
 function get_staff_user_id() { return $GLOBALS['se_test']['staff_id']; }
+function get_staff_full_name($id = '') {
+    foreach (se_test_db()->rows('tblstaff') as $s) { if ((int) $s['staffid'] === (int) $id) { return trim($s['firstname'] . ' ' . $s['lastname']); } }
+    return '';
+}
 function is_staff_logged_in() { return $GLOBALS['se_test']['staff_id'] > 0; }
 
 /**
@@ -390,6 +394,7 @@ require_once $SE_MODULES . '/se_core/se_integration_ui.php';
 require_once $SE_MODULES . '/se_core/se_reporting.php';
 require_once $SE_MODULES . '/se_core/se_outbound_tracker.php';
 require_once $SE_MODULES . '/se_core/se_outbox_ui.php';
+require_once $SE_MODULES . '/se_core/se_hastalar.php';
 require_once $SE_MODULES . '/se_core/se_dispatch.php';
 require_once $SE_MODULES . '/se_core/se_media.php';
 require_once $SE_MODULES . '/se_core/se_media_storage.php';

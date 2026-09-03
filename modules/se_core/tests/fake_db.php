@@ -130,6 +130,13 @@ class SeFakeDb
         }
     }
 
+    /** like()/or_like(): case-insensitive substring ('both'), prefix ('after') or suffix ('before'). */
+    public function like($k, $v, $side = 'both')    { $this->addWhere(['__like__', [$k, (string) $v, $side]], false); return $this; }
+    public function or_like($k, $v, $side = 'both') { $this->addWhere(['__like__', [$k, (string) $v, $side]], true); return $this; }
+
+    /** or_where_in(): OR-ed membership test, meaningful inside a group. */
+    public function or_where_in($k, array $vals) { $this->addWhere(['__in__', [$k, array_map('strval', $vals)]], true); return $this; }
+
     public function where_in($k, array $vals)
     {
         $this->whereIn[] = [$k, array_map('strval', $vals)];
@@ -185,6 +192,23 @@ class SeFakeDb
     private function condMatches(array $row, array $w)
     {
         [$k, $v] = $w;
+        if ($k === '__in__') {
+            return in_array((string) ($row[trim($v[0], '` ')] ?? ''), $v[1], true);
+        }
+        if ($k === '__like__') {
+            [$col, $needle, $side] = $v;
+            $col = trim($col, '` ');
+            // REPLACE(REPLACE(col,' ',''),'-','') … : strip the listed characters before matching (phone digits search).
+            if (stripos($col, 'REPLACE(') === 0 && preg_match('/^(?:REPLACE\()+`?([A-Za-z0-9_]+)`?/i', $col, $m)) {
+                $actual = str_replace([' ', '-', '+', '(', ')', '.'], '', (string) ($row[$m[1]] ?? ''));
+            } else {
+                $actual = (string) ($row[$col] ?? '');
+            }
+            $a = mb_strtolower($actual); $n = mb_strtolower($needle);
+            if ($side === 'after')  { return strpos($a, $n) === 0; }
+            if ($side === 'before') { return $n === '' || substr($a, -strlen($n)) === $n; }
+            return $n === '' || strpos($a, $n) !== false;
+        }
         if ($k === '__group__') {
             $result = null;
             foreach ((array) $v as [$cond, $isOr]) {

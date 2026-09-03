@@ -99,6 +99,18 @@ class Se_whatsapp extends AdminController
      * while sending is gated. The window rule is enforced by the model, not
      * trusted to the form.
      */
+    /** Where a reply returns: the thread page, or the same-site admin page that embedded the composer (patient Sohbet tab). */
+    private function reply_back($id)
+    {
+        $back = (string) $this->input->post('back');
+        $base = admin_url();
+        if ($back !== '' && strpos($back, $base) === 0 && strpos($back, "\n") === false && strpos($back, "\r") === false) {
+            return $back;
+        }
+
+        return admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $id);
+    }
+
     public function reply($id)
     {
         if ($this->input->method() !== 'post') {
@@ -135,7 +147,7 @@ class Se_whatsapp extends AdminController
             $up = se_media_store_upload('wa', (int) $conversation->brand_id, $_FILES['attachment'], (int) get_staff_user_id());
             if (!$up['ok']) {
                 set_alert('warning', _l('se_media_upload_' . $up['error']) ?: _l('se_media_upload_failed'));
-                redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $id));
+                redirect($this->reply_back((int) $id));
                 return;
             }
             $kind = 'media';
@@ -148,7 +160,7 @@ class Se_whatsapp extends AdminController
                 $first = se_wa_queue_message((int) $id, ['kind' => 'media', 'media_id' => $media_id], (int) get_staff_user_id());
                 if (!$first['ok']) {
                     set_alert('warning', _l('se_wa_reply_blocked_' . $first['reason']) ?: _l('se_wa_reply_blocked'));
-                    redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $id));
+                    redirect($this->reply_back((int) $id));
                     return;
                 }
                 $kind = 'text';
@@ -171,7 +183,7 @@ class Se_whatsapp extends AdminController
                     $txt = _l($key);
                     set_alert('warning', $txt !== $key ? $txt : _l('se_wa_reply_blocked') . ': ' . $via['reason']);
                 }
-                redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $id));
+                redirect($this->reply_back((int) $id));
                 return;
             }
         }
@@ -191,7 +203,7 @@ class Se_whatsapp extends AdminController
             set_alert('warning', _l('se_wa_reply_blocked_' . $result['reason']) ?: _l('se_wa_reply_blocked'));
         }
 
-        redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $id));
+        redirect($this->reply_back((int) $id));
     }
 
     /**

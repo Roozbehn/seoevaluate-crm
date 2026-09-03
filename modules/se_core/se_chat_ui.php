@@ -134,6 +134,9 @@ function se_ui_chat_composer(array $cfg)
         $maxMb  = (int) ($cfg['max_upload_mb'] ?? 25);
         echo form_open_multipart($cfg['action'], ['id' => 'se-compose', 'autocomplete' => 'off']);
         echo '<input type="hidden" name="kind" value="text" />';
+        if (!empty($cfg['back'])) {   // return to the page that embedded the composer (patient Sohbet tab)
+            echo '<input type="hidden" name="back" value="' . html_escape($cfg['back']) . '" />';
+        }
         echo '<div class="se-policy">' . se_ui_badge('open', $cfg['window_label'] ?? _l('se_wa_window_open'))
            . '<span class="text-muted">' . html_escape($cfg['window_text'] ?? '') . '</span></div>';
         echo '<div class="se-attach" id="se-attach" style="display:none"><i class="fa fa-paperclip"></i> <span id="se-attach-name"></span>'
@@ -216,6 +219,9 @@ function se_ui_chat_template_form(array $cfg, array $templates)
 {
     echo form_open($cfg['action'], ['id' => 'se-compose-tpl', 'autocomplete' => 'off']);
     echo '<input type="hidden" name="kind" value="template" />';
+    if (!empty($cfg['back'])) {
+        echo '<input type="hidden" name="back" value="' . html_escape($cfg['back']) . '" />';
+    }
     echo '<div class="form-group"><select class="form-control" id="se-template" name="template" required onchange="seTplPick(this.value)">';
     foreach ($templates as $t) {
         echo '<option value="' . html_escape($t['name']) . '">' . html_escape($t['name'] . ' (' . $t['language'] . ')'

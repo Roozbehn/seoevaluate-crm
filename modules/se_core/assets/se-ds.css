@@ -100,6 +100,9 @@ body.se-theme-light,html[data-theme=light] body,body.light-mode{
 .se-table .se-meta{color:var(--se-text-3);font-size:var(--se-fs-meta);display:block}
 .se-table td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .se-tablewrap{overflow-x:auto}
+.se-pager{padding:12px 16px;display:flex;align-items:center;gap:12px;color:var(--se-text-2);font-size:13px;flex-wrap:wrap}
+.se-hastalar-chips{margin-bottom:var(--se-sp-4);align-items:center}
+.se-hastalar-chips .se-chip b{font-weight:600;margin-inline-start:4px}
 /* toolbar / filters */
 .se-toolbar{display:flex;gap:var(--se-sp-2);flex-wrap:wrap;align-items:center;margin-bottom:var(--se-sp-4)}
 .se-chip{height:36px;padding:0 14px;border-radius:var(--se-r-pill);border:1px solid var(--se-border-strong);background:transparent;color:var(--se-text-2);font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
@@ -140,6 +143,9 @@ body.se-theme-light,html[data-theme=light] body,body.light-mode{
 .se-tabs a .n{margin-inline-start:6px;background:var(--se-surface-2);border-radius:var(--se-r-pill);padding:1px 7px;font-size:12px;color:var(--se-text-2)}
 /* timeline */
 .se-tl{list-style:none;margin:0;padding:0;position:relative}
+.se-tl li.se-tl-day{padding:14px 0 2px}.se-tl li.se-tl-day .m{font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.se-more{position:relative}.se-more summary{list-style:none;cursor:pointer}.se-more summary::-webkit-details-marker{display:none}.se-more .se-more-panel{position:absolute;inset-inline-end:0;top:calc(100% + 6px);z-index:30;min-width:260px;display:flex;flex-direction:column;gap:8px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
+@media (max-width:767px){.se-ph{grid-template-columns:auto minmax(0,1fr)}.se-ph .se-ph-actions{grid-column:1/-1;justify-content:flex-start!important}.se-more .se-more-panel{position:fixed;inset-inline:12px;top:auto;bottom:80px;min-width:0}}
 .se-tl li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:12px;padding:10px 0}
 .se-tl .dot{width:12px;height:12px;border-radius:50%;background:var(--se-surface-3);margin:5px 4px;position:relative}
 .se-tl .dot.sys{background:var(--se-info)} .se-tl .dot.pt{background:var(--se-positive-solid)} .se-tl .dot.st{background:var(--se-primary)} .se-tl .dot.warn{background:var(--se-warning)}

@@ -413,3 +413,36 @@ $lang['se_today_place_clinic'] = 'Clinic'; $lang['se_today_place_online'] = 'Onl
 $lang['se_sys_cron_never'] = 'Cron has never run — automatic jobs are stopped'; $lang['se_sys_cron_stale'] = 'Cron has not run for %d minutes — reminders and queues are waiting'; $lang['se_sys_dispatch_stale'] = 'Dispatcher has not run for %d minutes — WhatsApp replies are delayed';
 $lang['se_sys_outbox_skipped'] = 'Meta conversions: %d event(s) skipped (%s)'; $lang['se_sys_outbox_failed'] = 'Meta conversions: %d event(s) failed'; $lang['se_sys_wa_failed'] = '%d WhatsApp message(s) not delivered'; $lang['se_sys_reminders_failed'] = '%d appointment reminder(s) failed'; $lang['se_sys_dispatcher'] = 'Dispatcher';
 $lang['se_skip_consent_blocked'] = 'consent'; $lang['se_skip_no_snapshot'] = 'no event snapshot'; $lang['se_skip_unknown'] = 'unknown reason';
+
+/* Patients list (CRM-M024) */
+$lang['se_hastalar_subtitle']     = '%d active patients';
+$lang['se_hastalar_search']       = 'Search';
+$lang['se_hastalar_search_ph']    = 'Name or phone…';
+$lang['se_hastalar_clear']        = 'Clear';
+$lang['se_hastalar_filter']       = 'Filter';
+$lang['se_hastalar_sort']         = 'Sort';
+$lang['se_hastalar_sort_attention'] = 'Needs action';
+$lang['se_hastalar_sort_recent']  = 'Last contact';
+$lang['se_hastalar_sort_name']    = 'Name';
+$lang['se_hastalar_chip_active']  = 'Active';
+$lang['se_hastalar_chip_attention'] = 'Needs action';
+$lang['se_hastalar_chip_mine']    = 'Assigned to me';
+$lang['se_hastalar_chip_closed']  = 'Closed';
+$lang['se_hastalar_chip_all']     = 'All';
+$lang['se_hastalar_empty']        = 'No patients found.';
+$lang['se_hastalar_empty_search'] = 'Change or clear the search. Digits alone are enough for a phone search.';
+$lang['se_hastalar_empty_hint']   = 'New enquiries appear here as they arrive via WhatsApp or the web form.';
+$lang['se_hastalar_col_patient']  = 'Patient';
+$lang['se_hastalar_col_stage']    = 'Stage';
+$lang['se_hastalar_col_next']     = 'Next step';
+$lang['se_hastalar_col_touch']    = 'Last contact';
+$lang['se_hastalar_col_appt']     = 'Appointment';
+$lang['se_hastalar_col_owner']    = 'Owner';
+$lang['se_hastalar_col_source']   = 'Source';
+$lang['se_hastalar_col_action']   = 'Action';
+$lang['se_hastalar_no_name']      = 'name unknown';
+$lang['se_hastalar_open']         = 'Open';
+$lang['se_hastalar_range']        = '%d–%d of %d';
+$lang['se_hastalar_capped']       = 'latest %d records scanned; search to narrow';
+$lang['se_hastalar_prev']         = 'Previous';
+$lang['se_hastalar_next']         = 'Next';
