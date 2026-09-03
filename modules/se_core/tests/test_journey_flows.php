@@ -314,7 +314,8 @@ $r = se_journey_flow_handle(['version' => '3.0', 'action' => 'INIT', 'flow_token
 se_eq('DAY', $r['screen'], 'INIT → DAY');
 se_ok(count($r['data']['days']) >= 1 && count($r['data']['days']) <= 20, 'days listed (' . count($r['data']['days']) . ')');
 foreach ($r['data']['days'] as $d) { se_ok(preg_match('/^\d{4}-\d{2}-\d{2}$/', $d['id']) === 1 && mb_strlen($d['title']) <= 30, 'day option ' . $d['title']); }
-$day = $r['data']['days'][0]['id'];
+// The SECOND listed day: the first can be cut by the 24 h notice depending on the wall clock (the suite ran red after 10:00 UTC).
+$day = $r['data']['days'][1]['id'] ?? $r['data']['days'][0]['id'];
 $r = se_journey_flow_handle(['version' => '3.0', 'action' => 'data_exchange', 'screen' => 'DAY', 'flow_token' => $bookToken, 'data' => ['day' => $day]]);
 se_eq('TIME', $r['screen'], 'DAY → TIME');
 se_eq(['10:00', '10:30', '11:00', '11:30'], array_column($r['data']['slots'], 'title'), 'four half-hour slots between 10:00 and 12:00');
