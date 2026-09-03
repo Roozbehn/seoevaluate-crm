@@ -24,3 +24,12 @@
 - Tickets: M015 M016 M017 M018 M019 M020 (Perfex core already emits lang/dir from the staff locale/direction — NOT-APPLICABLE-WITH-EVIDENCE for the head part; patient-block lang deferred) M032 (CSS + composer markup) M037 (auto tag + tracker TR) M063 (names/skip link)
 - Visual verification: pending deploy (live check in the verification wave).
 - Note: modules/se_journey/views/public/{quote,intake}.php contain patient-facing "klinisyen" wording — approved patient copy, excluded from the staff gate, listed as an owner decision.
+
+## Wave 3 — Navigation v2 + Bugün
+- Start SHA: e72814f → End SHA: dbd0950
+- Files: modules/se_core/{se_navigation.php, se_clinic.php (tab bar, thread body class, hidden slugs), controllers/Se_dashboard.php (today()), views/se_today.php (new), se_outbox_ui.php (today appointments / unread / Sistem card), assets/se-ds.css (pipe links), language tr/en}, modules/se_journey/{health.php (attention queue, stage counts, terminal states), language tr/en}, tests/{test_today.php (new), test_clinic.php, fake_db.php (where_not_in), bootstrap.php}
+- Tests: **4 105 pass / 0 fail** (+55 vs Wave 2: today 41, clinic v2 nav 14). Copy gate OK. PHP lint clean.
+- Tickets: M021 (nav v2, flag `se_clinic_nav_v2`) M022 (tab bar; hidden in thread) M023 (Bugün, flag `se_clinic_dashboard_v2`) — plus AZCRM-UX-001 (query with cap), UX-005 (Sistem card shows only actionable items), OBS-002 (stuck rows: overdue review = p1 after 3 days, `held_unrecorded`, `welcome_stale`).
+- Queue behaviour proven: brand scope fail-closed (unmapped staff → 0 rows), terminal states excluded, patient-owned steps only surface with an inbound unanswered >30 min, priority→age order, cap keeps `total`, every row has one button + accessible name, phone masked when no name.
+- Perf: the queue is 6 batched queries (journeys, quotes, appointments, failed sends, leads, unread) — no per-row query; `build_ms` is printed for admins on the page so the <600 ms target is measured live in the verification wave.
+- Deferred inside this wave: "+ Hasta" links to Perfex Leads until Hastalar (Wave 4) provides its own create path; the "Tümünü gör" link targets `se_core/se_hastalar?sort=attention` (Wave 4).
