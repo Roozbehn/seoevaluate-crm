@@ -24,6 +24,7 @@ require_once __DIR__ . '/flows.php';
 require_once __DIR__ . '/aftercare.php';
 require_once __DIR__ . '/health.php';
 require_once __DIR__ . '/next_action.php';
+require_once __DIR__ . '/timers.php';
 require_once __DIR__ . '/ui.php';
 
 register_activation_hook(SE_JOURNEY_MODULE, 'se_journey_activation');
@@ -132,7 +133,7 @@ function se_journey_cron()
     $out = [];
     foreach (['reminders' => 'se_journey_run_reminders', 'aftercare' => 'se_journey_run_aftercare',
               'parked_media' => 'se_journey_retry_parked_media', 'appointments' => 'se_journey_sync_appointments',
-              'media_to_r2' => 'se_journey_media_migrate_to_r2'] as $k => $fn) {
+              'media_to_r2' => 'se_journey_media_migrate_to_r2', 'timers' => 'se_journey_run_timers'] as $k => $fn) {
         try {
             $out[$k] = call_user_func($fn);
         } catch (Throwable $e) {

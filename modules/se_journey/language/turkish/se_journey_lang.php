@@ -715,3 +715,15 @@ $lang['se_ctx_started']     = '%s önce başladı';
 $lang['se_ctx_step']        = '%d. adım / %d — %s';
 $lang['se_ctx_all_actions'] = 'Tüm işlemler ⋯';
 $lang['se_ctx_facts']       = 'Bilgiler';
+
+/* Timers (CRM-M045/M046/M048) */
+$lang['se_task_timer_review']         = 'İnceleme gecikti — fotoğrafları inceleyin';
+$lang['se_task_timer_quote_followup'] = 'Teklife yanıt yok — hatırlatın';
+$lang['se_task_timer_quote_expired']  = 'Teklif süresi doldu — yeni sürüm hazırlayın';
+$lang['se_task_timer_paused']         = 'Otomatik mesajlar uzun süredir duraklatılmış — devam ettirin';
+$lang['se_task_timer_held']           = 'Ön görüşme yapıldı mı? Sonucu kaydedin';
+$lang['se_task_timer_aftercare']      = 'Kaş ekimi tamamlandı — bakım planını başlatın';
+$lang['se_task_timer_welcome']        = 'Karşılamaya yanıt yok — hastaya yazın';
+$lang['se_ev_timer']                  = 'Hatırlatma görevi oluşturuldu';
+$lang['se_journey_settings_timers']   = 'Personel hatırlatmaları (Bugün kuyruğuyla aynı eşikler)';
+$lang['se_journey_settings_timers_hint'] = 'Kapatıldığında görev ve bildirim üretilmez; Bugün kuyruğu etkilenmez.';

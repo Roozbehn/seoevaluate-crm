@@ -571,6 +571,7 @@ class Se_journey extends AdminController
             'auto_organic' => se_journey_auto_start_organic($brand) ? 1 : 0,
             'auto_website' => se_journey_auto_start_website($brand) ? 1 : 0,
             'ads_from_intake' => function_exists('se_journey_ads_consent_from_intake') && se_journey_ads_consent_from_intake($brand) ? 1 : 0,
+            'timers'       => function_exists('se_journey_timers_enabled') && se_journey_timers_enabled() ? 1 : 0,
             'test_recipients' => implode(', ', se_journey_test_recipients($brand)),
             'intake_ttl_hours' => se_journey_intake_ttl_hours(),
             'reminder_hours' => implode(',', se_journey_reminder_hours()),
@@ -616,6 +617,7 @@ class Se_journey extends AdminController
             update_option('se_journey_auto_start_website_' . $brand, (int) $this->input->post('auto_website') === 1 ? 1 : 0);
             // Owner/legal decision (CRM-M010): recorded as an explicit option, default off.
             update_option('se_consent_ads_from_intake_' . $brand, (int) $this->input->post('ads_from_intake') === 1 ? 1 : 0);
+            update_option('se_journey_timers', (int) $this->input->post('timers') === 1 ? '1' : '0');   // CRM-M045 kill switch
             update_option('se_journey_test_recipients_' . $brand, mb_substr(preg_replace('/[^\d,\s;]/', '', (string) $this->input->post('test_recipients')), 0, 500));
             update_option('se_journey_intake_ttl_hours', max(1, min(336, (int) $this->input->post('intake_ttl_hours'))));
             update_option('se_journey_reminder_hours', preg_replace('/[^\d,]/', '', (string) $this->input->post('reminder_hours')));

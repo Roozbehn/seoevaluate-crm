@@ -388,6 +388,7 @@ require_once $SE_MODULES . '/se_journey/flows.php';
 require_once $SE_MODULES . '/se_journey/aftercare.php';
 require_once $SE_MODULES . '/se_journey/health.php';
 require_once $SE_MODULES . '/se_journey/next_action.php';
+require_once $SE_MODULES . '/se_journey/timers.php';
 require_once $SE_MODULES . '/se_journey/ui.php';
 require_once $SE_MODULES . '/se_instagram/helpers.php';
 require_once $SE_MODULES . '/se_instagram/outbound.php';

@@ -576,3 +576,16 @@ $lang['se_ctx_started']     = 'started %s ago';
 $lang['se_ctx_step']        = 'step %d of %d — %s';
 $lang['se_ctx_all_actions'] = 'All actions ⋯';
 $lang['se_ctx_facts']       = 'Details';
+
+/* Timers (CRM-M045/M046/M048) */
+$lang['se_task_timer_review']         = 'Review overdue — review the photos';
+$lang['se_task_timer_quote_followup'] = 'No answer to the quote — send a reminder';
+$lang['se_task_timer_quote_expired']  = 'Quote expired — prepare a new version';
+$lang['se_task_timer_paused']         = 'Automatic messages paused for a long time — resume';
+$lang['se_task_timer_held']           = 'Was the consultation held? Record the outcome';
+$lang['se_task_timer_aftercare']      = 'Procedure done — start the aftercare plan';
+$lang['se_task_timer_welcome']        = 'No reply to the welcome — write to the patient';
+$lang['se_ev_timer']                  = 'Reminder task created';
+$lang['se_ev_quote_expired']          = 'The quote expired';
+$lang['se_journey_settings_timers']   = 'Staff reminders (same thresholds as the Today queue)';
+$lang['se_journey_settings_timers_hint'] = 'When off, no tasks or pushes are produced; the Today queue is unaffected.';

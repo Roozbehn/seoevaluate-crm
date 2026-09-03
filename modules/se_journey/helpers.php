@@ -502,7 +502,7 @@ function se_journey_states()
         'intake_submitted', 'photos_requested', 'photos_incomplete', 'photo_retake_requested',
         'ready_for_review', 'under_review', 'more_information_required',
         'consultation_recommended', 'quote_pending_staff_approval', 'quote_sent',
-        'quote_accepted', 'quote_revision_requested',
+        'quote_accepted', 'quote_revision_requested', 'quote_expired',
         'consultation_booked', 'consultation_completed', 'procedure_booked', 'preop_pending',
         'procedure_completed', 'aftercare_active', 'followup_due', 'completed',
         'not_suitable', 'closed_lost', 'opted_out',
@@ -539,7 +539,9 @@ function se_journey_allowed_transitions()
         'consultation_recommended'  => ['consultation_booked', 'quote_pending_staff_approval'],
         'quote_pending_staff_approval' => ['quote_sent', 'under_review', 'consultation_recommended'],
         'quote_sent'                => ['consultation_booked', 'consultation_recommended', 'procedure_booked', 'quote_pending_staff_approval',
-                                        'quote_accepted', 'quote_revision_requested'],
+                                        'quote_accepted', 'quote_revision_requested', 'quote_expired'],
+        // Past valid_until with no answer (CRM-M048): staff issue a new version, recommend a consultation or close.
+        'quote_expired'             => ['quote_pending_staff_approval', 'under_review', 'consultation_recommended', 'quote_accepted', 'consultation_booked'],
         // The patient answered the quote (WhatsApp button/keyword or the quote page).
         'quote_accepted'            => ['consultation_booked', 'procedure_booked', 'consultation_recommended', 'quote_pending_staff_approval',
                                         'quote_revision_requested'],

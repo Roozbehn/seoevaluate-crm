@@ -169,8 +169,15 @@ function se_journey_open_tasks($limit = 50, $journey_id = 0)
         $CI->db->where('journey_id', (int) $journey_id);
     }
     $CI->db->order_by('id', 'DESC')->limit(max(1, (int) $limit));
+    $rows = $CI->db->get(db_prefix() . 'se_journey_tasks')->result_array();
+    // Turkish titles by kind (UX-COPY §8); the stored English title is the fallback.
+    foreach ($rows as &$r) {
+        $r['title_raw'] = (string) $r['title'];
+        $r['title'] = function_exists('se_tr') ? se_tr('se_task_' . (string) $r['kind'], (string) $r['title']) : (string) $r['title'];
+    }
+    unset($r);
 
-    return $CI->db->get(db_prefix() . 'se_journey_tasks')->result_array();
+    return $rows;
 }
 
 /* ===========================================================================

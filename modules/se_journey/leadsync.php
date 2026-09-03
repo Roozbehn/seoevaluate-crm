@@ -140,7 +140,7 @@ function se_journey_lead_stage_for_state($state)
         'intake_submitted' => 'Qualified', 'photos_requested' => 'Qualified', 'photos_incomplete' => 'Qualified', 'photo_retake_requested' => 'Qualified',
         'ready_for_review' => 'Photos Received', 'under_review' => 'Photos Received', 'more_information_required' => 'Photos Received',
         'consultation_recommended' => 'Photos Received', 'quote_pending_staff_approval' => 'Photos Received',
-        'quote_sent' => 'Quote Sent', 'quote_accepted' => 'Quote Sent', 'quote_revision_requested' => 'Quote Sent',
+        'quote_sent' => 'Quote Sent', 'quote_accepted' => 'Quote Sent', 'quote_revision_requested' => 'Quote Sent', 'quote_expired' => 'Quote Sent',
         'consultation_booked' => 'Consultation Booked',
         'consultation_completed' => 'Consultation Held', 'procedure_booked' => 'Consultation Held', 'preop_pending' => 'Consultation Held',
         'procedure_completed' => 'Treated', 'aftercare_active' => 'Treated', 'completed' => 'Treated',

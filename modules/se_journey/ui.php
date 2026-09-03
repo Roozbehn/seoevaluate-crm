@@ -16,7 +16,7 @@ function se_journey_ui_state_tone($state)
         'photos_requested' => 'processing', 'photos_incomplete' => 'skipped', 'photo_retake_requested' => 'skipped',
         'ready_for_review' => 'ok', 'under_review' => 'processing', 'more_information_required' => 'skipped',
         'consultation_recommended' => 'submitted', 'quote_pending_staff_approval' => 'warning', 'quote_sent' => 'sent',
-        'quote_accepted' => 'ok', 'quote_revision_requested' => 'warning',
+        'quote_accepted' => 'ok', 'quote_revision_requested' => 'warning', 'quote_expired' => 'warning',
         'consultation_booked' => 'scheduled', 'consultation_completed' => 'held', 'procedure_booked' => 'scheduled',
         'preop_pending' => 'processing', 'procedure_completed' => 'completed', 'aftercare_active' => 'active',
         'followup_due' => 'warning', 'completed' => 'completed', 'not_suitable' => 'closed', 'closed_lost' => 'closed',
@@ -42,7 +42,7 @@ function se_journey_ui_phase($state)
         'consent'      => ['privacy_notice_sent', 'consent_pending', 'consent_declined', 'intake_link_sent'],
         'intake'       => ['intake_started', 'intake_incomplete', 'intake_submitted'],
         'photos'       => ['photos_requested', 'photos_incomplete', 'photo_retake_requested'],
-        'review'       => ['ready_for_review', 'under_review', 'more_information_required', 'quote_pending_staff_approval', 'quote_sent', 'consultation_recommended'],
+        'review'       => ['ready_for_review', 'under_review', 'more_information_required', 'quote_pending_staff_approval', 'quote_sent', 'quote_expired', 'consultation_recommended'],
         'consultation' => ['consultation_booked', 'consultation_completed'],
         'procedure'    => ['procedure_booked', 'preop_pending', 'procedure_completed'],
         'aftercare'    => ['aftercare_active', 'followup_due', 'completed'],
@@ -228,7 +228,7 @@ function se_journey_contextual_actions($j, array $can, array $na = [], $tab = 'c
             if (!empty($can['approve_quote'])) { $add(_l('se_journey_approve_quote'), 'link', $view('review'), 'primary'); }
             elseif ($edit) { $add(_l('se_journey_quote'), 'link', $view('review')); }
             break;
-        case 'quote_sent': case 'quote_accepted': case 'quote_revision_requested': case 'consultation_recommended':
+        case 'quote_sent': case 'quote_accepted': case 'quote_revision_requested': case 'quote_expired': case 'consultation_recommended':
             if ($cons) { $add(_l('se_journey_send_book_link'), 'post', $act('book_link'), $state === 'quote_accepted' ? 'primary' : 'secondary'); }
             if ($cons && (int) $j->lead_id > 0 && function_exists('staff_can') && staff_can('create', 'se_appointments')) { $add(_l('se_na_btn_book'), 'link', admin_url('se_appointments/create?lead=' . (int) $j->lead_id . '&journey=' . $jid)); }
             if ($edit) { $add(_l('se_journey_send_consultation_info'), 'post', $act('consultation_info_send'), 'ghost'); }

@@ -483,7 +483,7 @@ function se_journey_quote_respond($j, $action, $via = 'whatsapp', $correlation =
             ]);
             se_journey_audit((int) $j->brand_id, (int) $j->id, 'quote_accepted', 'quote', (string) $q->id, 'via=' . $via);
             se_journey_event($j, 'quote_accepted', 'v' . (int) $q->version . ' (' . $via . ')', [], 'patient', null, 'quote', (string) $q->id, $correlation);
-            if (in_array((string) $j->state, ['quote_sent', 'quote_revision_requested'], true)) {
+            if (in_array((string) $j->state, ['quote_sent', 'quote_revision_requested', 'quote_expired'], true)) {
                 se_journey_transition($j, 'quote_accepted', 'patient_accepted_quote', 'patient', null, $correlation);
             }
             se_journey_task($j, 'quote_accepted', 'Patient ACCEPTED the quote (v' . (int) $q->version . ') — a consultation slot is being chosen from the calendar', 'normal', null, 'q' . (int) $q->id);
@@ -508,7 +508,7 @@ function se_journey_quote_respond($j, $action, $via = 'whatsapp', $correlation =
             ]);
             se_journey_audit((int) $j->brand_id, (int) $j->id, 'quote_revision_requested', 'quote', (string) $q->id, 'via=' . $via);
             se_journey_event($j, 'quote_revision_requested', 'v' . (int) $q->version . ' (' . $via . ')', [], 'patient', null, 'quote', (string) $q->id, $correlation);
-            if (in_array((string) $j->state, ['quote_sent', 'quote_accepted'], true)) {
+            if (in_array((string) $j->state, ['quote_sent', 'quote_accepted', 'quote_expired'], true)) {
                 se_journey_transition($j, 'quote_revision_requested', 'patient_requested_revision', 'patient', null, $correlation);
             }
         }
