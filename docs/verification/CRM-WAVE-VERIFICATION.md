@@ -79,3 +79,9 @@
 - Tests: **4 376 pass / 0 fail** (CSS + view changes; verified by lint and the live/Playwright pass in the verification wave).
 - Tickets: M063 (evidence across Waves 2–5) M064 M020 (patient blocks) M015 (motion/focus completion).
 - Live checks queued for the verification wave: focus ring visible on every control at 1440; 390 no horizontal scroll; RTL smoke by switching one staff member to a Persian locale is NOT done on production (would alter a real staff record) — verified with a  injected on the html element instead.
+
+## Wave 10 — Architecture / debt
+- Start SHA: d8d9690 → End SHA: 25932bc
+- Files: modules/se_whatsapp/outbound.php, tests/test_wa_outbound.php
+- Tests: **4 380 pass / 0 fail**.
+- Tickets: M058 — deferred with justification: M065 M066 M067 (pure refactors, no user gain in this program; tests-first later), M059 BLOCKED-DECISION, M060 (host verification of secret locations first).
