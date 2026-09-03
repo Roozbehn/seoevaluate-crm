@@ -332,6 +332,18 @@ class SeFakeDb
     {
         $rows = $this->select_rows($table);
 
+        // MAX(col) AS alias … GROUP BY g (inbox: last message per conversation)
+        if ($this->sel && $this->groupBy && preg_match('/MAX\((\w+)\)\s+AS\s+(\w+)/i', $this->sel, $mm)) {
+            $g = trim($this->groupBy, '` ');
+            $agg = [];
+            foreach ($rows as $r) {
+                $k = $r[$g] ?? '';
+                if (!isset($agg[$k]) || (int) $r[$mm[1]] > (int) $agg[$k][$mm[2]]) { $agg[$k] = [$g => $k, $mm[2] => (int) $r[$mm[1]]]; }
+            }
+            $rows = array_values($agg);
+            $this->reset();
+            return new SeFakeResult($rows);
+        }
         // COUNT(*) aggregation used by se_outbox_health()
         if ($this->sel && stripos($this->sel, 'COUNT(*)') !== false && $this->groupBy) {
             $g = trim($this->groupBy, '` ');

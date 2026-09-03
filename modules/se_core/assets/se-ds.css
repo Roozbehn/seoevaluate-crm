@@ -215,6 +215,15 @@ body.se-theme-light,html[data-theme=light] body,body.light-mode{
 .se-ctx .kv{display:grid;grid-template-columns:110px 1fr;gap:6px 10px;font-size:13px;margin:0}
 .se-ctx .kv dt{color:var(--se-text-3);font-weight:400} .se-ctx .kv dd{margin:0}
 .se-ctx-actions{display:grid;gap:8px}
+.se-ctx-actions form.se-inline-form{display:block}.se-ctx-actions form.se-inline-form .se-btn{width:100%}
+.se-ctx .se-sheet-close,.se-ctx-toggle{display:none}
+.se-wa .se-threadcol .se-empty h2{font-size:18px;margin:0 0 6px}
+@media (max-width:1023px){
+  .se-ctx-toggle{display:inline-flex}
+  .se-ctx.se-sheet{display:none}
+  .se-wa .se-ctx.se-sheet.open{display:flex;position:fixed;inset-inline:0;bottom:0;max-height:85vh;z-index:60;background:var(--se-surface);border:1px solid var(--se-border);border-radius:var(--se-r-lg) var(--se-r-lg) 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.45);padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  .se-ctx.se-sheet .se-sheet-close{display:inline-flex}
+}
 .se-checks{list-style:none;margin:0;padding:0;font-size:13px}
 .se-checks li{display:flex;gap:8px;align-items:center;padding:4px 0}
 .se-checks .ok{color:var(--se-positive)} .se-checks .todo{color:var(--se-action)}

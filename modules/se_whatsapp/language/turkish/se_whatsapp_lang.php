@@ -109,3 +109,21 @@ $lang['se_wa_templates_never_synced'] = 'hiç';
 $lang['se_wa_templates_synced']    = 'Şablonlar eşitlendi: %d onaylı (%d yeni, %d güncellendi, %d Meta’da kaldırıldı).';
 $lang['se_wa_templates_sync_failed'] = 'Şablon eşitleme başarısız';
 $lang['se_wa_reply_blocked_media_invalid'] = 'Bu ek gönderilemiyor (eksik, kaydedilmemiş veya WhatsApp’ın kabul etmediği bir tür).';
+
+/* Mesajlar (CRM-M034/M035) */
+$lang['se_wa_conversations']  = 'Sohbetler';
+$lang['se_wa_search_ph']      = 'Ad veya telefon…';
+$lang['se_wa_chip_all']       = 'Tümü';
+$lang['se_wa_chip_unread']    = 'Okunmamış';
+$lang['se_wa_chip_me']        = 'Bana atanan';
+$lang['se_wa_chip_attention'] = 'Bekleyen iş';
+$lang['se_wa_chip_unassigned'] = 'Atanmamış';
+$lang['se_wa_more_threads']   = 'Daha eski sohbetler';
+$lang['se_wa_load_older']     = 'Daha eski mesajları yükle';
+$lang['se_wa_pick_thread']    = 'Bir sohbet seçin';
+$lang['se_wa_pick_thread_hint'] = 'Soldaki listeden bir hasta seçince mesajlar burada açılır.';
+$lang['se_wa_ctx_info']       = 'Hasta bilgisi';
+$lang['se_wa_preview_photo']  = 'Fotoğraf';
+$lang['se_wa_preview_audio']  = 'Sesli mesaj';
+$lang['se_wa_preview_document'] = 'Dosya';
+$lang['se_wa_preview_you']    = 'Siz';

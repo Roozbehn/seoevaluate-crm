@@ -570,3 +570,9 @@ $lang['se_pw_ac_answered']       = 'answered';
 $lang['se_pw_ac_unanswered']     = 'no reply';
 $lang['se_pw_ac_blocked']        = 'not delivered';
 $lang['se_pw_ac_skipped']        = 'skipped';
+
+/* Conversation context column (CRM-M033/M036) */
+$lang['se_ctx_started']     = 'started %s ago';
+$lang['se_ctx_step']        = 'step %d of %d — %s';
+$lang['se_ctx_all_actions'] = 'All actions ⋯';
+$lang['se_ctx_facts']       = 'Details';

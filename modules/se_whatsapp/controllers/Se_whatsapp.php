@@ -10,57 +10,75 @@ class Se_whatsapp extends AdminController
         $this->load->model('se_whatsapp/se_whatsapp_model');
     }
 
+    /** Mesajlar (CRM-M035): list + thread + context on one page; ?c=<id> selects a thread. */
     public function inbox()
     {
         if (staff_cant('view', 'se_whatsapp')) {
             access_denied('se_whatsapp');
         }
-        $data['title']     = _l('se_whatsapp');
-        $data['has_brand'] = se_staff_has_any_brand();
-        $data['out_health'] = se_wa_out_health();
-        $data['conversations'] = $this->se_whatsapp_model->conversations([
-            'assigned' => $this->input->get('assigned'),
-        ]);
-        $data['blocked']   = se_wa_inbox_blocked_reason($data['conversations']);
-        // Only staff the current user could legitimately assign.
-        $data['staff'] = function_exists('se_appt_selectable_staff') ? se_appt_selectable_staff() : [];
-        $this->load->view('se_whatsapp/inbox', $data);
+        $this->render_inbox((int) $this->input->get('c'));
     }
 
+    /** Deep link to one thread (Bugün, Hastalar, notifications). Same page, thread selected. */
     public function conversation($id)
     {
         if (staff_cant('view', 'se_whatsapp')) {
             access_denied('se_whatsapp');
         }
-        // Brand guard: a scoped lookup returns null for a foreign-brand conversation.
-        $conversation = $this->se_whatsapp_model->get_conversation($id);
-        if (!$conversation) {
-            access_denied('se_whatsapp');
-        }
-        $data['title']        = _l('se_whatsapp');
-        $data['conversation'] = $conversation;
+        $this->render_inbox((int) $id, true);
+    }
 
-        // Viewing the thread marks it read INSIDE the CRM. Local unread state
-        // only — sending a WhatsApp read receipt to the customer is a separate,
-        // policy-controlled action and is NOT triggered by opening the page.
-        if ((int) $conversation->unread_count > 0) {
-            $this->db->where('id', (int) $conversation->id)
-                     ->where('brand_id', (int) $conversation->brand_id)
-                     ->update(db_prefix() . 'se_wa_conversations', ['unread_count' => 0]);
-            $conversation->unread_count = 0;
-        }
+    private function render_inbox($selected, $deep_link = false)
+    {
+        $t0 = microtime(true);
+        $data['title']     = _l('se_nav_messages');
+        $data['has_brand'] = se_staff_has_any_brand();
+        $data['f']         = se_wa_inbox_filters((array) $this->input->get());
+        $data['list']      = $data['has_brand'] ? se_wa_inbox_rows($data['f']) : ['rows' => [], 'has_more' => false, 'next_before' => '', 'counts' => ['unread' => 0]];
+        $data['out_health'] = se_wa_out_health();
+        $data['blocked']   = $data['has_brand'] ? se_wa_inbox_blocked_reason(array_map(function ($r) { return ['brand_id' => $r['brand_id']]; }, $data['list']['rows'])) : '';
+        $data['staff']     = function_exists('se_appt_selectable_staff') ? se_appt_selectable_staff() : [];
+        $data['selected']  = $selected;
+        $data['conversation'] = null;
+        $data['evidence_redacted'] = $this->input->get('evidence') === 'redacted';
 
-        $data['messages']     = $this->se_whatsapp_model->messages((int) $conversation->id);
-        $data['media']        = function_exists('se_media_for_messages')
-            ? se_media_for_messages('wa', array_column($data['messages'], 'id')) : [];
-        $data['policy']       = se_wa_compose_policy($conversation);
-        $data['templates']    = se_wa_approved_templates((int) $conversation->brand_id);
-        $data['staff']        = se_appt_selectable_staff((int) $conversation->brand_id);
-        $data['queued']       = se_wa_out_health((int) $conversation->brand_id);
-        $data['tracker']      = function_exists('se_outbound_rows')
-            ? se_outbound_rows('se_wa_outbound', (int) $conversation->id, 'wamid') : [];
-        $data['dispatch_eta'] = function_exists('se_outbound_dispatch_eta') ? se_outbound_dispatch_eta() : null;
-        $this->load->view('se_whatsapp/conversation', $data);
+        if ($selected > 0) {
+            // Brand guard: a scoped lookup returns null for a foreign-brand conversation.
+            $conversation = $this->se_whatsapp_model->get_conversation($selected);
+            if (!$conversation) {
+                access_denied('se_whatsapp');
+            }
+            // Viewing the thread marks it read INSIDE the CRM. Local unread state
+            // only — sending a WhatsApp read receipt to the customer is a separate,
+            // policy-controlled action and is NOT triggered by opening the page.
+            if ((int) $conversation->unread_count > 0) {
+                $this->db->where('id', (int) $conversation->id)
+                         ->where('brand_id', (int) $conversation->brand_id)
+                         ->update(db_prefix() . 'se_wa_conversations', ['unread_count' => 0]);
+                $conversation->unread_count = 0;
+                foreach ($data['list']['rows'] as &$r) { if ($r['id'] === (int) $conversation->id) { $r['unread'] = 0; } }
+                unset($r);
+            }
+            $data['conversation'] = $conversation;
+            $page = se_wa_thread_page((int) $conversation->id, (int) $this->input->get('before'));
+            $data['messages']     = $page['messages'];
+            $data['older_before'] = $page['older_before'];
+            $data['media']        = function_exists('se_media_for_messages')
+                ? se_media_for_messages('wa', array_column($data['messages'], 'id')) : [];
+            $data['policy']       = se_wa_compose_policy($conversation);
+            $data['templates']    = se_wa_approved_templates((int) $conversation->brand_id);
+            $data['queued']       = se_wa_out_health((int) $conversation->brand_id);
+            $data['tracker']      = function_exists('se_outbound_rows')
+                ? se_outbound_rows('se_wa_outbound', (int) $conversation->id, 'wamid') : [];
+            $data['dispatch_eta'] = function_exists('se_outbound_dispatch_eta') ? se_outbound_dispatch_eta() : null;
+            $data['ctx_html']     = function_exists('se_journey_conversation_context') ? se_journey_conversation_context($conversation) : '';
+            $data['journey']      = function_exists('se_journey_find_by_wa') ? se_journey_find_by_wa((int) $conversation->brand_id, (string) $conversation->wa_user_id) : null;
+            $data['row']          = null;
+            foreach ($data['list']['rows'] as $r) { if ($r['id'] === (int) $conversation->id) { $data['row'] = $r; break; } }
+            $data['back_url']     = admin_url('se_whatsapp/se_whatsapp/inbox' . ($data['f']['f'] !== 'all' ? '?f=' . $data['f']['f'] : ''));
+        }
+        $data['build_ms'] = (int) round((microtime(true) - $t0) * 1000);
+        $this->load->view('se_whatsapp/inbox', $data);
     }
 
     /**

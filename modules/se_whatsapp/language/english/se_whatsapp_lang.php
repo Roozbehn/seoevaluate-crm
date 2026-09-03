@@ -110,3 +110,21 @@ $lang['se_wa_step_review_hint']    = 'Proven by a processed live webhook and at 
 $lang['se_wa_step_transport']      = 'Send transport enabled';
 $lang['se_wa_step_transport_hint'] = 'Registered only when the Cloud API credential and live transport are available.';
 $lang['se_wa_reply_blocked_media_invalid'] = 'That attachment is not available to send (missing, not stored, or not a type WhatsApp accepts).';
+
+/* Messages (CRM-M034/M035) */
+$lang['se_wa_conversations']  = 'Conversations';
+$lang['se_wa_search_ph']      = 'Name or phone…';
+$lang['se_wa_chip_all']       = 'All';
+$lang['se_wa_chip_unread']    = 'Unread';
+$lang['se_wa_chip_me']        = 'Assigned to me';
+$lang['se_wa_chip_attention'] = 'Needs action';
+$lang['se_wa_chip_unassigned'] = 'Unassigned';
+$lang['se_wa_more_threads']   = 'Older conversations';
+$lang['se_wa_load_older']     = 'Load older messages';
+$lang['se_wa_pick_thread']    = 'Pick a conversation';
+$lang['se_wa_pick_thread_hint'] = 'Select a patient on the left to open the messages here.';
+$lang['se_wa_ctx_info']       = 'Patient info';
+$lang['se_wa_preview_photo']  = 'Photo';
+$lang['se_wa_preview_audio']  = 'Voice message';
+$lang['se_wa_preview_document'] = 'File';
+$lang['se_wa_preview_you']    = 'You';

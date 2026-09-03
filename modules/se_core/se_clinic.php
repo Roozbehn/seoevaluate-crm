@@ -727,7 +727,8 @@ function se_clinic_thread_body_class($classes)
 {
     $CI = &get_instance();
     $uri = isset($CI->uri) ? (string) $CI->uri->uri_string() : '';
-    if (preg_match('#/(se_whatsapp|se_instagram)/[^/]+/conversation/#', '/' . $uri)) {
+    $inbox = preg_match('#/se_whatsapp/[^/]+/inbox$#', '/' . $uri) && (int) ($CI->input->get('c') ?? 0) > 0;
+    if ($inbox || preg_match('#/(se_whatsapp|se_instagram)/[^/]+/conversation/#', '/' . $uri)) {
         $classes[] = 'se-in-thread';
     }
 

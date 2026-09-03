@@ -362,6 +362,7 @@ require_once $SE_MODULES . '/se_core/se_website_lead.php';
 require_once $SE_MODULES . '/se_whatsapp/helpers.php';
 require_once $SE_MODULES . '/se_whatsapp/calls.php';
 require_once $SE_MODULES . '/se_whatsapp/outbound.php';
+require_once $SE_MODULES . '/se_whatsapp/inbox.php';
 require_once $SE_MODULES . '/se_whatsapp/templates.php';
 /* Patient journey (se_journey). Its sealed media store AND the inbox media
  * store it reads from are throw-away temp directories for the run, like the

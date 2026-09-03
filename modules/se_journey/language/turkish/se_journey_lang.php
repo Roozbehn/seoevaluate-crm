@@ -709,3 +709,9 @@ $lang['se_pw_ac_answered']       = 'yanıtlandı';
 $lang['se_pw_ac_unanswered']     = 'yanıt yok';
 $lang['se_pw_ac_blocked']        = 'gönderilemedi';
 $lang['se_pw_ac_skipped']        = 'atlandı';
+
+/* Conversation context column (CRM-M033/M036) */
+$lang['se_ctx_started']     = '%s önce başladı';
+$lang['se_ctx_step']        = '%d. adım / %d — %s';
+$lang['se_ctx_all_actions'] = 'Tüm işlemler ⋯';
+$lang['se_ctx_facts']       = 'Bilgiler';
