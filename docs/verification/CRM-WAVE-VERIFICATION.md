@@ -42,3 +42,10 @@
 - Proven: phone search in any formatting (spaces, dashes, parentheses, +90/0 prefixes); scope fail-closed; chips/sort/pagination; masked phones for staff without `view_health`; every row has one button; timeline shows no raw kinds, no "a → b" arrows, hides token/lead-sync/other-brand noise, truncates previews; automatic vs staff vs patient actors.
 - Reply from the Sohbet tab: the composer posts to the existing `se_whatsapp/reply/<id>` route (policy unchanged) with a same-site `back` field; the controller only follows a `back` that starts with admin_url().
 - Not testable in the harness (controllers are outside it): the view files were linted and read against the mockups; live check in the verification wave.
+
+## Wave 5 — Mesajlar
+- Start SHA: eb7f799 → End SHA: 3cca012
+- Files: modules/se_whatsapp/{inbox.php (new), controllers/Se_whatsapp.php (render_inbox, conversation → same page, reply_back), views/inbox.php (rewrite), views/conversation.php (removed), se_whatsapp.php (loader), language tr/en}, modules/se_journey/{ui.php (contextual actions, context column), language tr/en}, modules/se_core/{assets/se-ds.css (sheet, ctx actions), se_clinic.php (se-in-thread for inbox?c=), tests/{test_inbox.php (new), fake_db.php, bootstrap.php}}
+- Tests: **4 228 pass / 0 fail** (+50). Copy gate OK. PHP lint clean.
+- Tickets: M032 (markup/CSS complete; Playwright 390 assertions in the verification wave) M033 M034 M035 M036 M037 (done in Wave 2) — M038 Instagram tab stays PLANNED.
+- Proven: brand scope fail-closed; newest-inbound order; exact last-message preview (image after text); chips incl. legacy links; search by name / formatted phone / wa id; 50-row page + non-overlapping cursor page; thread newest-100 + older cursor; foreign-brand thread yields nothing; state → ≤4 buttons, next action first and primary, POST actions carry the return tab, view-only roles get no mutating buttons, paused automation offers Resume, closed offers only Reopen.
