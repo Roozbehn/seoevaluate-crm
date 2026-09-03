@@ -22,3 +22,7 @@ modules/perfex_dark_theme/
 # PHP error logs (runtime; incl. Claude php83-lint noise) - never commit
 error_log
 error_log.*
+
+# UI regression: session cookie + screenshots
+scripts/ui-regression/state.json
+scripts/ui-regression/out/
