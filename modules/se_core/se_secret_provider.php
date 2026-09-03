@@ -36,6 +36,11 @@ function se_secret_providers()
     return [
         'meta_capi'     => ['label' => 'Meta Conversions API token', 'per_brand' => true],
         'meta_page'     => ['label' => 'Meta Page access token', 'per_brand' => true],
+        // Separate from meta_capi so the business-messaging dataset permission
+        // can be revoked without taking website conversions down with it. When
+        // absent, the sender falls back to meta_capi (same system user holds
+        // both dataset permissions in this deployment).
+        'meta_mm_capi'  => ['label' => 'Meta Conversions API token (business messaging dataset)', 'per_brand' => true],
         'meta_app'      => ['label' => 'Meta app secret', 'per_brand' => false],
         'meta_verify'   => ['label' => 'Meta webhook verify token', 'per_brand' => false],
         'wa_app'        => ['label' => 'WhatsApp app secret', 'per_brand' => false],

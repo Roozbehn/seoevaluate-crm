@@ -1200,6 +1200,19 @@ function se_journey_create($brand_id, array $ctx, array $source, $lead_id)
     if ((int) $lead_id > 0 && (int) ($ctx['conversation_id'] ?? 0) > 0) {
         $CI->db->where('id', (int) $ctx['conversation_id'])->where('brand_id', (int) $brand_id)
                ->update(db_prefix() . 'se_wa_conversations', ['lead_id' => (int) $lead_id]);
+
+        /* A thread that a click-to-WhatsApp ad opened is the conversion that
+         * campaign exists to produce, and until now nothing reported it: the
+         * only conversion signals the system had all ran through the website,
+         * which a messages ad never touches. This is the first moment both
+         * halves are in hand — the ad's click id (captured on the FIRST
+         * inbound and never repeated) and the lead it belongs to.
+         *
+         * Queued, not sent: the outbox owns delivery, consent and retries,
+         * and the destination stays gated off until the owner enables it. */
+        if (function_exists('se_capi_messaging_queue_for_wa_conversation')) {
+            se_capi_messaging_queue_for_wa_conversation((int) $ctx['conversation_id'], (int) $lead_id);
+        }
     }
 
     return ['journey' => $j, 'created' => true];

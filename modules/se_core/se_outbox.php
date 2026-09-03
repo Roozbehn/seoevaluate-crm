@@ -318,6 +318,22 @@ function se_outbox_process_row($row, $worker = null)
                 $error     = (string) $result['error'];
                 break;
 
+            case 'meta_mm_capi':
+                /* Business messaging events (action_source
+                 * 'business_messaging') go to the MM dataset, never the web
+                 * one. Separate sender, separate dataset, separate token —
+                 * see se_capi_messaging.php for why folding them together
+                 * would be a mistake. */
+                $result    = function_exists('se_capi_messaging_send_event')
+                    ? se_capi_messaging_send_event($row)
+                    : ['ok' => false, 'error' => 'messaging CAPI sender not loaded',
+                       'class' => SE_OUTBOX_FAIL_GATED, 'code' => 'not_configured'];
+                $ok        = (bool) $result['ok'];
+                $class     = $result['class'] ?? SE_OUTBOX_FAIL_RETRYABLE;
+                $code      = $result['code'] ?? 'meta_mm_error';
+                $error     = (string) $result['error'];
+                break;
+
             case 'google_dm':
                 $result    = function_exists('se_google_dm_send_event')
                     ? se_google_dm_send_event($row)
