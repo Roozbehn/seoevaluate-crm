@@ -85,3 +85,10 @@
 - Files: modules/se_whatsapp/outbound.php, tests/test_wa_outbound.php
 - Tests: **4 380 pass / 0 fail**.
 - Tickets: M058 — deferred with justification: M065 M066 M067 (pure refactors, no user gain in this program; tests-first later), M059 BLOCKED-DECISION, M060 (host verification of secret locations first).
+
+## Verification wave — deploy, live pass, reverse audit
+- Deploy: `ba944ed` (Waves 0–10) → host after DB + files backup (`pre-wave10-20260904-003617`); `migrate_cli.php --verify` (v20 → 15 pending) → `--apply` (126/126, v21) → `--apply` again (no-op); host suite 4 380/0; `/docs/` `/.env.example` `/services/` 404.
+- Live pass (Chrome, iframes at 390/768/1024/1440/1920, 7 pages): see `CRM-UIUX-VISUAL-VERIFICATION-2026-09-04.md`. 7 defects found and fixed (`4850753`, `07b87d9`, `b3994eb`, follow-ups) and re-deployed; final measurements all green.
+- Reverse audit: 243 rows re-read; 12 gaps closed (`CRM-FINAL-GAP-CLOSURE-2026-09-04.md` §1); statuses regenerated (190 VERIFIED).
+- Docs: workflow E2E, productivity results, final verification (source completeness), executive handover.
+- Final tail deployed: `9dba859` + theme text-colour follow-up.
