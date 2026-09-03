@@ -57,3 +57,11 @@
 - Tickets: M039 M041 M042 M043 M044 (M040 agenda done in Wave 1; M003 calendar done in Wave 1).
 - Proven: conflict row + patient name; other staff free; ignore-self on edit; next free slot skips busy and cancelled-not-blocking; quarter-hour rounding; day-full → ''; message contains who/when/what/next; model names the refusal and the message on a real overlap; reschedule sends exactly one new confirmation, same-slot save none, location edit none.
 - Not in harness: the form's JS (duration/end hint) and the re-render path — checked by lint + live in the verification wave.
+
+## Wave 7 — Timers & automation safety
+- Start SHA: 1cfef18 → End SHA: dcde788
+- Files: modules/se_journey/{timers.php (new), se_journey.php (cron + require), helpers.php (quote_expired state/transitions), health.php (task titles TR), review.php, leadsync.php, ui.php, controllers/Se_journey.php + views/settings.php (kill switch), language tr/en}, tests/{test_journey_timers.php (new), bootstrap.php}
+- Tests: **4 275 pass / 0 fail** (+28). Copy gate OK. PHP lint clean.
+- Tickets: M045 M046 (gated on the approved flag — behaves as "task" until the owner approves a protocol) M048 — M047 NOT-APPLICABLE-WITH-EVIDENCE (auto-held would misrecord no-shows; replaced by the held_unrecorded timer + one-click prompt).
+- Proven: 7 thresholds fire once, young/terminal journeys never, second/third pass idempotent, new state period fires again, kill switch stops tasks and expiry, quote_sent→quote_expired by the system with late accept still allowed, unapproved protocol → task, approved protocol → plan + aftercare_active + no duplicate.
+- Rollback: option se_journey_timers=0 (no schema change).
