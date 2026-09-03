@@ -30,10 +30,10 @@ hooks()->add_action('admin_init', 'se_whatsapp_permissions');
 
 
 // Async: drain webhook events + consume due reminders after core cron tasks.
-hooks()->add_action('after_cron_run', 'se_wa_process_pending');
-hooks()->add_action('after_cron_run', 'se_wa_consume_due_reminders');
-hooks()->add_action('after_cron_run', 'se_wa_out_drain');
-hooks()->add_action('after_cron_run', 'se_wa_sync_templates_cron');   // throttled WABA template re-pull
+if (function_exists('se_cron_listener')) { se_cron_listener('se_wa_process_pending'); } else { hooks()->add_action('after_cron_run', 'se_wa_process_pending'); }
+if (function_exists('se_cron_listener')) { se_cron_listener('se_wa_consume_due_reminders'); } else { hooks()->add_action('after_cron_run', 'se_wa_consume_due_reminders'); }
+if (function_exists('se_cron_listener')) { se_cron_listener('se_wa_out_drain'); } else { hooks()->add_action('after_cron_run', 'se_wa_out_drain'); }
+if (function_exists('se_cron_listener')) { se_cron_listener('se_wa_sync_templates_cron'); } else { hooks()->add_action('after_cron_run', 'se_wa_sync_templates_cron'); }   // throttled WABA template re-pull
 
 // Conversation tab on the lead profile.
 hooks()->add_action('after_lead_tabs_content', 'se_whatsapp_lead_tab');

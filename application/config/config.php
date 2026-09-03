@@ -494,9 +494,10 @@ if (isset($app_csrf_exclude_uris)) {
     $config['csrf_exclude_uris'] = array_unique($config['csrf_exclude_uris']);
 }
 
+require_once __DIR__ . '/se_csrf_exempt.php';
 if ($config['csrf_protection'] == true
     && isset($_SERVER['REQUEST_URI'])
-    && strpos($_SERVER['REQUEST_URI'], 'gateways/') !== false) {
+    && se_csrf_gateways_exempt($_SERVER['REQUEST_URI'])) {
     $config['csrf_protection'] = false;
 }
 

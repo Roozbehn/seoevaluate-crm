@@ -38,7 +38,7 @@ $GLOBALS['SE_MEDIA_FETCHER'] = $GLOBALS['SE_MEDIA_FETCHER'] ?? null;
 // headless migration runner (tests/migrate_cli.php), which requires this
 // file for its schema statements outside the CI context, can load it.
 if (function_exists('hooks')) {
-    hooks()->add_action('after_cron_run', 'se_media_fetch_pending');
+    if (function_exists('se_cron_listener')) { se_cron_listener('se_media_fetch_pending'); } else { hooks()->add_action('after_cron_run', 'se_media_fetch_pending'); }
 }
 
 /** callable(array $row): array{ok:bool,bytes:string,mime:string,error:string,filename?:string} */
@@ -380,6 +380,11 @@ function se_media_live_fetch(array $row)
 /** Bounded GET. Token in the header only; body capped; errors sanitised. */
 function se_media_http_get($url, $token = '')
 {
+    // Only Meta's CDNs / Graph: the URL comes from a webhook or a Graph lookup
+    // and this function attaches the bearer token to the request.
+    if (function_exists('se_host_allowed') && !se_host_allowed($url, se_media_fetch_hosts())) {
+        return ['ok' => false, 'code' => 0, 'body' => '', 'mime' => '', 'error' => 'host_not_allowed'];
+    }
     $ch = curl_init($url);
     $headers = ['Accept: */*'];
     if ($token !== '') {

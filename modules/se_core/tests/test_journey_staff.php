@@ -368,3 +368,14 @@ se_test_remove_secret('wa_app');
 se_test_remove_secret('journey_key');
 $GLOBALS['SE_WA_TRANSPORT'] = null;
 $GLOBALS['SE_WA_MEDIA_FETCHER'] = null;
+
+se_group('Assignment: an assignee must belong to the brand (CRM-M012 / audit C3)');
+$db = se_test_db();
+$db->seed('tblse_staff_brands', [['staff_id' => 10, 'brand_id' => 1], ['staff_id' => 20, 'brand_id' => 2]]);
+se_eq(true, se_staff_in_brand(10, 1), 'staff 10 belongs to brand 1');
+se_eq(false, se_staff_in_brand(20, 1), 'staff 20 (brand 2) may not be assigned inside brand 1');
+se_eq(false, se_staff_in_brand(0, 1), 'staff 0 is never "in" a brand');
+se_eq(true, se_journey_public_base_url_allowed(''), 'empty base URL is allowed (site_url)');
+se_eq(false, se_journey_public_base_url_allowed('https://attacker.example/x', 'crm.example.com'), 'a foreign host is refused');
+se_eq(true, se_journey_public_base_url_allowed('https://links.crm.example.com/', 'crm.example.com'), 'a subdomain of the own host is allowed');
+se_eq(false, se_journey_public_base_url_allowed('http://crm.example/x'), 'plain http is refused');

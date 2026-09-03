@@ -2,6 +2,10 @@
 
 defined('BASEPATH') or exit('No direct script access allowed');
 
+if (!defined('SE_WA_DEFAULT_REMINDER_TEMPLATE')) {
+    define('SE_WA_DEFAULT_REMINDER_TEMPLATE', 'eyebrow_consultation_reminder_tr');
+}
+
 /**
  * WhatsApp OUTBOUND layer.
  *
@@ -417,10 +421,12 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
 
     $id = (int) $CI->db->insert_id();
 
-    // A human replying from the composer is a TAKEOVER: automation on that
-    // thread must pause until a staff member deliberately resumes it. The
-    // journey module owns that rule; this is only the notification.
-    if ((int) $staff_id > 0 && empty($message['origin']) && function_exists('se_journey_on_staff_send')) {
+    // A human reply pauses automation ONLY when the staff member asked for it
+    // (composer checkbox / ⏸ toggle → pause_automation=1). Pausing silently on
+    // every reply stopped reminders for exactly the patients a human had
+    // spoken to, and the Resume button lived on another page (audit F8).
+    if ((int) $staff_id > 0 && empty($message['origin']) && !empty($message['pause_automation'])
+        && function_exists('se_journey_on_staff_send')) {
         se_journey_on_staff_send($conv, (int) $staff_id, $id);
     }
 
@@ -830,6 +836,44 @@ function se_wa_record_outbound($row, $conv, $wamid)
  * created, and the outbound idempotency key makes a repeat a no-op, so a crash
  * between the two cannot produce two reminders for one appointment.
  */
+/**
+ * The template message a due reminder becomes. The appointment module enqueues
+ * reminders without a template_ref; the approved consultation reminder
+ * (registered by the journey template registry) is the default, and its two
+ * placeholders are the patient's first name and the appointment time.
+ */
+function se_wa_reminder_message(array $rem, $appt)
+{
+    $template = trim((string) ($rem['template_ref'] ?? ''));
+    if ($template === '') {
+        $template = SE_WA_DEFAULT_REMINDER_TEMPLATE;
+    }
+
+    $CI   = &get_instance();
+    $name = '';
+    if (!empty($appt->rel_id)) {
+        $CI->db->select('name')->where('id', (int) $appt->rel_id);
+        $lead = $CI->db->get(db_prefix() . 'leads')->row();
+        if ($lead && trim((string) $lead->name) !== '') {
+            $parts = preg_split('/\s+/', trim((string) $lead->name));
+            $name  = (string) $parts[0];
+        }
+    }
+    if ($name === '') {
+        $name = 'Merhaba';   // the template body already greets; never an empty placeholder
+    }
+    $when = !empty($appt->start_at) ? date('d.m.Y H:i', strtotime((string) $appt->start_at)) : '';
+
+    return [
+        'kind'              => 'template',
+        'template'          => $template,
+        'template_language' => 'tr',
+        'variables'         => [$name, $when],
+        'system'            => true,   // cron: no staff session, thread resolved by brand above
+        'dedup_salt'        => 'reminder:' . (int) ($rem['id'] ?? 0),
+    ];
+}
+
 function se_wa_consume_due_reminders($limit = 50)
 {
     $limit = (int) $limit; if ($limit < 1) { $limit = 50; }
@@ -846,8 +890,18 @@ function se_wa_consume_due_reminders($limit = 50)
     $queued = 0;
 
     foreach ($due as $rem) {
-        $CI->db->where('id', (int) $rem['id']);
+        // The reminder row points at the appointment through appointment_id;
+        // loading by the reminder's own id returned an unrelated (or no)
+        // appointment, so every reminder ended as "no conversation" / failed.
+        $CI->db->where('id', (int) ($rem['appointment_id'] ?? 0));
         $appt = $CI->db->get(db_prefix() . 'se_appointments')->row();
+
+        if (!$appt || in_array((string) ($appt->status ?? ''), ['cancelled', 'no_show'], true)) {
+            $CI->db->where('id', (int) $rem['id'])->update($table, [
+                'state' => 'skipped', 'last_error' => $appt ? 'appointment cancelled' : 'appointment missing',
+            ]);
+            continue;
+        }
 
         // Find the conversation for this appointment's lead, in the same brand.
         $CI->db->where('brand_id', (int) $rem['brand_id'])
@@ -870,11 +924,7 @@ function se_wa_consume_due_reminders($limit = 50)
             continue;   // another worker took it
         }
 
-        $res = se_wa_queue_message((int) $conv->id, [
-            'kind'     => 'template',
-            'template' => (string) $rem['template_ref'],
-            'system'   => true,   // cron: no staff session, thread resolved by brand above
-        ]);
+        $res = se_wa_queue_message((int) $conv->id, se_wa_reminder_message($rem, $appt));
 
         if ($res['ok'] || $res['reason'] === 'duplicate') {
             $queued++;

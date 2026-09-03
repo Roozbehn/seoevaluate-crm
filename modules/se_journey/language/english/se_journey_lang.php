@@ -437,3 +437,6 @@ $lang['se_journey_flow_done_publish'] = 'Flow published.';
 $lang['se_journey_flow_done_sync'] = 'Flow status synced.';
 $lang['se_journey_flow_json'] = 'Generated Flow JSON';
 $lang['se_journey_no_brand'] = 'No clinic brand selected.';
+$lang['se_journey_flag_ads_from_intake']      = 'Record the intake\'s marketing consent as advertising-measurement consent too (Meta Conversions API)';
+$lang['se_journey_flag_ads_from_intake_hint'] = 'Do not enable without counsel approval. While off, conversions of WhatsApp-intake patients are not sent and Integration Health shows them as "skipped: consent".';
+$lang['se_journey_assign_not_in_brand'] = 'The selected staff member does not belong to this brand.';

@@ -312,6 +312,56 @@ foreach (['image', 'document', 'audio', 'video'] as $k) {
 }
 se_eq(false, isset($allow['application/x-executable']), 'no executable type is allowlisted');
 
+
+/* ======================================================================== */
+se_group('Reminder consumer (appointment module) — CRM-M002');
+
+// The appointment module enqueues a reminder with NO template_ref, pointing at
+// the appointment through appointment_id. Before the fix the consumer loaded
+// the appointment by the REMINDER id and queued template '' — every reminder
+// ended "no conversation" or template_not_approved.
+$db->seed('tblleads', [['id' => 101, 'brand_id' => 1, 'name' => 'Ayşe Yılmaz', 'phonenumber' => '+905551112233']]);
+$db->seed('tblse_appointments', [
+    ['id' => 7001, 'brand_id' => 1, 'staff_id' => 10, 'rel_type' => 'lead', 'rel_id' => 101,
+     'status' => 'confirmed', 'title' => 'Ön görüşme', 'start_at' => '2026-09-12 14:00:00', 'end_at' => '2026-09-12 14:30:00'],
+    ['id' => 7002, 'brand_id' => 1, 'staff_id' => 10, 'rel_type' => 'lead', 'rel_id' => 101,
+     'status' => 'cancelled', 'title' => 'Ön görüşme', 'start_at' => '2026-09-13 14:00:00', 'end_at' => '2026-09-13 14:30:00'],
+]);
+$db->seed('tblse_wa_templates', [
+    ['id' => 1, 'brand_id' => 1, 'name' => 'appointment_reminder', 'language' => 'tr', 'category' => 'UTILITY', 'approval_state' => 'approved'],
+    ['id' => 3, 'brand_id' => 1, 'name' => SE_WA_DEFAULT_REMINDER_TEMPLATE, 'language' => 'tr', 'category' => 'UTILITY', 'approval_state' => 'approved',
+     'components_json' => json_encode([['type' => 'BODY', 'text' => 'Merhaba {{1}}, {{2}} tarihli görüşmenizi hatırlatırız.']])],
+]);
+$db->seed('tblse_wa_outbound', []);
+$db->seed('tblse_reminders', [
+    // id deliberately != appointment_id so the old (wrong) lookup cannot pass by accident
+    ['id' => 1, 'brand_id' => 1, 'appointment_id' => 7001, 'type' => 'appointment', 'channel' => 'whatsapp',
+     'state' => 'pending', 'attempts' => 0, 'template_ref' => null, 'scheduled_at' => date('Y-m-d H:i:s', time() - 60)],
+    ['id' => 2, 'brand_id' => 1, 'appointment_id' => 7002, 'type' => 'appointment', 'channel' => 'whatsapp',
+     'state' => 'pending', 'attempts' => 0, 'template_ref' => null, 'scheduled_at' => date('Y-m-d H:i:s', time() - 60)],
+    ['id' => 3, 'brand_id' => 1, 'appointment_id' => 99999, 'type' => 'appointment', 'channel' => 'whatsapp',
+     'state' => 'pending', 'attempts' => 0, 'template_ref' => null, 'scheduled_at' => date('Y-m-d H:i:s', time() - 60)],
+]);
+
+$msg = se_wa_reminder_message(['id' => 1, 'appointment_id' => 7001, 'template_ref' => ''], (object) ['rel_id' => 101, 'start_at' => '2026-09-12 14:00:00']);
+se_eq(SE_WA_DEFAULT_REMINDER_TEMPLATE, $msg['template'], 'an empty template_ref falls back to the approved consultation reminder');
+se_eq(['Ayşe', '12.09.2026 14:00'], $msg['variables'], 'placeholders are first name and appointment time');
+
+$queued = se_wa_consume_due_reminders();
+se_eq(1, $queued, 'exactly one reminder (the live appointment) was queued');
+$out = $db->rows('tblse_wa_outbound');
+se_eq(1, count($out), 'one outbound row');
+se_eq('template', $out[0]['kind'], 'as a template');
+se_eq(SE_WA_DEFAULT_REMINDER_TEMPLATE, $out[0]['template_name'], 'the approved reminder template');
+se_eq(['Ayşe', '12.09.2026 14:00'], json_decode($out[0]['variables_json'], true), 'with the ordered variables');
+$rems = []; foreach ($db->rows('tblse_reminders') as $r) { $rems[(int) $r['id']] = $r['state']; }
+se_eq('queued', $rems[1], 'the live reminder is marked queued');
+se_eq('skipped', $rems[2], 'a cancelled appointment reminder is skipped, not sent');
+se_eq('skipped', $rems[3], 'a reminder for a missing appointment is skipped');
+
+se_eq(0, se_wa_consume_due_reminders(), 'a second run queues nothing (claimed rows are not re-consumed)');
+se_eq(1, count($db->rows('tblse_wa_outbound')), 'and creates no second outbound row');
+
 // Leave the shared store clean for the next suite.
 se_test_remove_secret('wa_app');
 se_test_remove_secret('wa_token');

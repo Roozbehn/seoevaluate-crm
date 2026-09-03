@@ -16,6 +16,14 @@ AddDefaultCharset utf-8
   </IfModule>
 </FilesMatch>
 
+
+# --- Repository/documentation paths that must never be served (CRM-M011) ---
+# docs/ carries runbooks (incl. the origin IP), services/ carries Worker
+# sources, .env.example the host layout. None belongs to the web app.
+RedirectMatch 404 ^/(docs|services|scripts|\.cowork-transfer|\.crm-transfer)(/|$)
+RedirectMatch 404 ^/\.env(\.example)?$
+RedirectMatch 404 ^/(composer\.(json|lock)|package\.json|webpack\.mix\.js|tailwind\.config\.js)$
+
 <IfModule mod_rewrite.c>
 RewriteEngine on
 RewriteCond $1 !^(index\.php|resources|robots\.txt)

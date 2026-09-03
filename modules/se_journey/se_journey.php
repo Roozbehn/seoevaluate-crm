@@ -35,7 +35,7 @@ hooks()->add_action('admin_init', 'se_journey_grant_clinic_roles', 4);
 // aftercare, parked media, appointment sync. Inbound reactions are immediate
 // (they run inside the WhatsApp event drain, which the per-minute
 // dispatcher already calls).
-hooks()->add_action('after_cron_run', 'se_journey_cron');
+if (function_exists('se_cron_listener')) { se_cron_listener('se_journey_cron'); } else { hooks()->add_action('after_cron_run', 'se_journey_cron'); }
 
 // Journey summary on the lead profile.
 hooks()->add_action('after_lead_tabs_content', 'se_journey_lead_tab');

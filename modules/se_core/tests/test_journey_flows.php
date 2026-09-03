@@ -225,6 +225,17 @@ se_eq('IDENTITY', $r['screen'], 'granted → IDENTITY');
 $cs = se_journey_consent_state(se_test_journey_row());
 se_eq([true, true, false], [$cs['health_data'], $cs['marketing'], $cs['photo_publication']], 'consents recorded');
 se_eq('intake_started', se_test_journey_row()->state, 'state: intake_started');
+// CRM-M010: `ads` (what the conversion outbox needs) is NOT inferred from the
+// marketing tick unless the brand explicitly enabled that mapping.
+$jr = se_test_journey_row();
+se_eq(false, se_consent_granted((int) $jr->brand_id, 'lead', (int) $jr->lead_id, 'ads'), 'ads consent is NOT granted by default (owner/legal decision pending)');
+update_option('se_consent_ads_from_intake_1', 1);
+$r = se_journey_record_form_consent($jr, ['consent_health_data' => 'yes', 'consent_photo_publication' => 'no', 'consent_marketing' => 'yes']);
+se_eq(true, se_consent_granted((int) $jr->brand_id, 'lead', (int) $jr->lead_id, 'ads'), 'with the brand switch on, the marketing tick also records ads consent');
+$r = se_journey_record_form_consent($jr, ['consent_health_data' => 'yes', 'consent_photo_publication' => 'no', 'consent_marketing' => 'no']);
+se_eq(false, se_consent_granted((int) $jr->brand_id, 'lead', (int) $jr->lead_id, 'ads'), 'and unticking marketing withdraws ads too');
+update_option('se_consent_ads_from_intake_1', 0);
+$r = se_journey_record_form_consent($jr, ['consent_health_data' => 'yes', 'consent_photo_publication' => 'no', 'consent_marketing' => 'yes']);
 
 // INIT again (the patient reopens the flow) resumes at IDENTITY, not CONSENT.
 $r = se_journey_flow_handle(['version' => '3.0', 'action' => 'INIT', 'flow_token' => $flowToken]);

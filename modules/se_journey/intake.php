@@ -776,6 +776,17 @@ function se_journey_record_form_consent($j, array $input, $ip = '', $ua = '')
         } else {
             se_consent_withdraw($brand, $lead, $purpose, $src, $field, 'no');
         }
+        // Advertising-measurement consent (`ads`, what the conversion outbox
+        // requires) is recorded from the intake's marketing checkbox ONLY when
+        // the brand has explicitly enabled that mapping — a legal decision the
+        // owner/counsel take in Settings, never a default (CRM-M010).
+        if ($purpose === 'marketing' && se_journey_ads_consent_from_intake($brand)) {
+            if ($yes) {
+                se_consent_grant($brand, $lead, 'ads', $src, $field, 'yes');
+            } else {
+                se_consent_withdraw($brand, $lead, 'ads', $src, $field, 'no');
+            }
+        }
     }
     se_journey_event($j, 'consent_recorded', 'health_data=' . ($health ? 'yes' : 'no'), ['version' => se_consent_text_version($brand)], 'patient');
 
@@ -818,3 +829,15 @@ function se_journey_consent_texts($brand_id, $lang = 'tr')
 
     return $out;
 }
+
+/**
+ * Brand switch: does the intake's marketing consent also count as advertising
+ * measurement consent (purpose `ads`)? Default OFF. While off, every
+ * conversion of a WhatsApp-intake lead is skipped `consent_blocked` and the
+ * Health page says so; flipping it is an owner/legal decision.
+ */
+function se_journey_ads_consent_from_intake($brand_id)
+{
+    return (int) get_option('se_consent_ads_from_intake_' . (int) $brand_id) === 1;
+}
+

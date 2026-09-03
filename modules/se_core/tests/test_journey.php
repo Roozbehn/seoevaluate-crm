@@ -231,7 +231,11 @@ $conv->window_expires_at = date('Y-m-d H:i:s', time() + 3600);
 $db->tables['tblse_wa_conversations'][0]['window_expires_at'] = $conv->window_expires_at;
 $r = se_wa_queue_message((int) $conv->id, ['kind' => 'text', 'body' => 'Merhaba, ben Ayşe, nasıl yardımcı olabilirim?'], 11);
 se_eq(true, $r['ok'], 'the staff reply is queued');
-se_eq('paused_staff', se_test_journey_row()->automation_state, 'automation paused by staff');
+se_eq('active', se_test_journey_row()->automation_state, 'a plain staff reply does NOT pause automation (pause is opt-in, CRM-M006)');
+se_eq('staff', se_test_last_row('tblse_wa_outbound')['origin'], 'the outbound row is marked as a staff send');
+$r = se_wa_queue_message((int) $conv->id, ['kind' => 'text', 'body' => 'Bir de şunu sorayım', 'pause_automation' => true], 11);
+se_eq(true, $r['ok'], 'the explicit-pause reply is queued');
+se_eq('paused_staff', se_test_journey_row()->automation_state, 'automation paused only when the staff member asked for it');
 se_eq('staff', se_test_last_row('tblse_wa_outbound')['origin'], 'the outbound row is marked as a staff send');
 $blocked = se_journey_send_copy(se_test_journey_row(), 'options_repeat', [], ['purpose' => 'options_repeat']);
 se_eq('automation_paused_staff', $blocked['reason'], 'automated copy is blocked while staff own the thread');
@@ -552,6 +556,27 @@ se_eq(1, count(array_filter($db->rows('tblse_journey_tasks'), function ($t) { re
 se_eq(0, se_journey_run_reminders($base + 400 * 3600), 'and no further reminders EVER (loop prevention)');
 se_eq(0, se_journey_run_reminders($base + 4000 * 3600), 'still none');
 se_eq(2, count($reminders()), 'still exactly two rows');
+
+/* ======================================================================== */
+se_group('Journey: the reminder scan is not capped by unrelated journeys (CRM-M007 / T13)');
+
+// 120 journeys in staff-owned states with LOWER ids, then one patient-owned
+// journey. The old scan took the first 100 rows by id regardless of state and
+// never reached the patient.
+$rows = $db->rows('tblse_journeys');
+$victim = $rows[0];
+$filler = [];
+for ($i = 1; $i <= 120; $i++) {
+    $f = $victim; $f['id'] = 5000 + $i; $f['wa_user_id'] = '9055500' . str_pad((string) $i, 4, '0', STR_PAD_LEFT);
+    $f['state'] = 'ready_for_review'; $f['reminder_count'] = 0; $f['automation_state'] = 'active';
+    $filler[] = $f;
+}
+$victim['id'] = 5999; $victim['wa_user_id'] = '905559999999'; $victim['state'] = 'consent_pending'; $victim['reminder_count'] = 0;
+$victim['automation_state'] = 'active'; $victim['state_changed_at'] = date('Y-m-d H:i:s', $base); $victim['last_reminder_at'] = null; $victim['latest_touch_at'] = null;
+$db->seed('tblse_journeys', array_merge($filler, [$victim]));
+$db->seed('tblse_wa_outbound', []);
+$db->tables['tblse_wa_conversations'][0]['wa_user_id'] = '905559999999';
+se_eq(1, se_journey_run_reminders($base + 25 * 3600), 'the 121st journey (the only one waiting on the patient) gets its reminder');
 
 /* ======================================================================== */
 se_group('Journey: quiet hours defer scheduled messages; daily cap blocks; replies are exempt');

@@ -39,7 +39,7 @@ define('SE_GDM_MAX_AGE_DAYS', 90);         // <= 90 days
 define('SE_GDM_MAX_EVENTS', 2000);         // Data Manager per-request cap
 
 // Poll in-flight ingest requests after core cron tasks (retry/result visibility).
-hooks()->add_action('after_cron_run', 'se_gdm_poll_pending');
+if (function_exists('se_cron_listener')) { se_cron_listener('se_gdm_poll_pending'); } else { hooks()->add_action('after_cron_run', 'se_gdm_poll_pending'); }
 
 $GLOBALS['SE_GDM_SENDER'] = null;
 

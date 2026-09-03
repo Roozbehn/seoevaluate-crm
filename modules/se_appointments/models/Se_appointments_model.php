@@ -631,28 +631,66 @@ class Se_appointments_model extends App_Model
     /** Calendar feed for a date range, as FullCalendar-shaped events. */
     public function for_calendar($start, $end)
     {
-        $rows = $this->get('', []);
-
-        $colors = [
-            'scheduled' => '#4c84ff', 'confirmed' => '#03a9f4', 'held' => '#84c529',
-            'completed' => '#37bc9b', 'no_show' => '#fc2d42', 'cancelled' => '#b0bec5',
-        ];
+        $rows  = $this->get('', []);
+        $names = $this->patient_names($rows);
 
         $events = [];
         foreach ($rows as $r) {
             if ($r['start_at'] < $start || $r['start_at'] > $end) {
                 continue;
             }
+            $type    = function_exists('se_appt_type_key') ? se_appt_type_key($r['appointment_type'] ?? '') : 'consultation';
+            $patient = $names[$r['rel_type'] . ':' . (int) $r['rel_id']] ?? '';
+            $label   = function_exists('se_appt_type_label') ? se_appt_type_label($type) : $type;
             $events[] = [
-                'id'    => $r['id'],
-                'title' => $r['title'],
-                'start' => $r['start_at'],
-                'end'   => $r['end_at'],
-                'color' => $colors[$r['status']] ?? '#4c84ff',
-                'url'   => admin_url('se_appointments/view/' . $r['id']),
+                'id'        => $r['id'],
+                'title'     => trim($label . ($patient !== '' ? ' · ' . $patient : '')),
+                'start'     => $r['start_at'],
+                'end'       => $r['end_at'],
+                'className' => [function_exists('se_appt_type_class') ? se_appt_type_class($type) : '', 'st-' . $r['status']],
+                'url'       => admin_url('se_appointments/view/' . $r['id']),
+                'extendedProps' => [
+                    'type'    => $type,
+                    'status'  => $r['status'],
+                    'patient' => $patient,
+                    'staff'   => (string) ($r['staff_name'] ?? ''),
+                    'place'   => (string) ($r['location'] ?? ''),
+                ],
             ];
         }
 
         return $events;
+    }
+
+    /**
+     * Display names for the related records of a set of appointments, in one
+     * query per relation type (leads, clients) — never per row.
+     *
+     * @return array 'lead:123' => 'Ayşe Y.'
+     */
+    public function patient_names(array $rows)
+    {
+        $ids = ['lead' => [], 'client' => []];
+        foreach ($rows as $r) {
+            $t = (string) ($r['rel_type'] ?? '');
+            if (isset($ids[$t]) && (int) $r['rel_id'] > 0) {
+                $ids[$t][] = (int) $r['rel_id'];
+            }
+        }
+        $out = [];
+        if ($ids['lead']) {
+            $this->db->select('id, name')->where_in('id', array_unique($ids['lead']));
+            foreach ($this->db->get(db_prefix() . 'leads')->result_array() as $l) {
+                $out['lead:' . (int) $l['id']] = (string) $l['name'];
+            }
+        }
+        if ($ids['client']) {
+            $this->db->select('userid, company')->where_in('userid', array_unique($ids['client']));
+            foreach ($this->db->get(db_prefix() . 'clients')->result_array() as $c) {
+                $out['client:' . (int) $c['userid']] = (string) $c['company'];
+            }
+        }
+
+        return $out;
     }
 }

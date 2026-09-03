@@ -613,6 +613,13 @@ function se_journey_reminder_hours()
     return $out ?: [24, 72];
 }
 
+/** States in which the patient is being waited on and a reminder may go out. */
+function se_journey_reminder_states()
+{
+    return ['consent_pending', 'intake_link_sent', 'intake_started', 'intake_incomplete',
+            'photos_requested', 'photos_incomplete', 'photo_retake_requested'];
+}
+
 /** Which journeys are waiting on the PATIENT, and which reminder copy applies. */
 function se_journey_reminder_plan($state)
 {
@@ -640,7 +647,14 @@ function se_journey_run_reminders($now = null, $limit = 100)
     $hours = se_journey_reminder_hours();
     $queued = 0;
 
-    $CI->db->where('automation_state', 'active')->order_by('id', 'ASC')->limit(max(1, (int) $limit));
+    // Only journeys waiting on the PATIENT are candidates, and the cap counts
+    // candidates — not the first N journeys by id. The old query took the
+    // first 100 active journeys of any state, so a patient beyond #100 never
+    // received an intake/photo reminder (audit T13).
+    $CI->db->where('automation_state', 'active')
+           ->where_in('state', se_journey_reminder_states())
+           ->where('reminder_count <', count($hours))
+           ->order_by('id', 'ASC')->limit(max(1, (int) $limit));
     foreach ($CI->db->get(db_prefix() . 'se_journeys')->result_array() as $row) {
         $plan = se_journey_reminder_plan((string) $row['state']);
         if (!$plan) {

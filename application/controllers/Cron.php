@@ -8,7 +8,7 @@ class Cron extends App_Controller
     {
         update_option('cron_has_run_from_cli', 1);
 
-        if (defined('APP_CRON_KEY') && ($key != APP_CRON_KEY)) {
+        if (defined('APP_CRON_KEY') && !hash_equals((string) APP_CRON_KEY, (string) $key)) {
             header('HTTP/1.0 401 Unauthorized');
 
             exit('Passed cron job key is not correct. The cron job key should be the same like the one defined in APP_CRON_KEY constant.');

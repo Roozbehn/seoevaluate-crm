@@ -182,6 +182,7 @@ class Se_whatsapp extends AdminController
             'template'  => $template,
             'variables' => $variables,
             'media_id'  => $media_id ?? 0,
+            'pause_automation' => (int) $this->input->post('pause_automation') === 1,
         ], (int) get_staff_user_id());
 
         if ($result['ok']) {

@@ -487,3 +487,127 @@ function se_outbox_queue($brand_id, $lead_id, $destination, $event_name, array $
 
     return $CI->db->insert_id();
 }
+
+/* ---------------------------------------------------------------------------
+ * Cron listener isolation (CRM-M014 / AZCRM-OBS-004).
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Register an after_cron_run listener that cannot take the others down.
+ *
+ * Perfex runs hook listeners in sequence with no isolation: one fatal in the
+ * Google poll skipped the WhatsApp drain and the journey cron for that tick.
+ * Each SE listener now runs inside its own try/catch; a failure is recorded
+ * (class + message, redacted) under the option se_cron_last_errors and the
+ * next listener still runs.
+ *
+ * Idempotent per callable; safe to call at module load.
+ */
+function se_cron_listener($callable, $hook = 'after_cron_run', $priority = 10)
+{
+    hooks()->add_action($hook, function ($arg = null) use ($callable) {
+        return se_cron_run_isolated($callable, $arg);
+    }, $priority);
+}
+
+/** Run one cron step under isolation; returns its result or null on failure. */
+function se_cron_run_isolated($callable, $arg = null)
+{
+    $name = is_string($callable) ? $callable : 'closure';
+    try {
+        return call_user_func($callable, $arg);
+    } catch (\Throwable $e) {
+        $msg = get_class($e) . ': ' . mb_substr((string) $e->getMessage(), 0, 200);
+        $msg = preg_replace('/[A-Za-z0-9_\-]{24,}/', '[redacted]', $msg);   // token-shaped strings never reach the options table
+        $errors = [];
+        if (function_exists('get_option')) {
+            $errors = json_decode((string) get_option('se_cron_last_errors'), true) ?: [];
+        }
+        $errors[$name] = ['at' => date('Y-m-d H:i:s'), 'error' => $msg];
+        if (function_exists('update_option')) {
+            update_option('se_cron_last_errors', json_encode(array_slice($errors, -20, null, true)));
+        }
+        if (function_exists('log_message')) {
+            log_message('error', 'se_cron step ' . $name . ' failed: ' . $msg);
+        }
+
+        return null;
+    }
+}
+
+/** Does a staff member belong to a brand (admins belong to all)? Shared by journey and inbox assignment. */
+function se_staff_in_brand($staff_id, $brand_id)
+{
+    $staff_id = (int) $staff_id;
+    if ($staff_id <= 0) {
+        return false;
+    }
+    if (function_exists('is_admin') && is_admin($staff_id)) {
+        return true;
+    }
+    $CI = &get_instance();
+    $CI->db->where('staff_id', $staff_id)->where('brand_id', (int) $brand_id);
+
+    return $CI->db->count_all_results(db_prefix() . 'se_staff_brands') > 0;
+}
+
+/**
+ * A public base URL for patient links must be HTTPS on THIS installation's
+ * host (or a subdomain of it); a brand-config user could otherwise point
+ * every patient link at another site.
+ */
+function se_journey_public_base_url_allowed($url, $own_host = null)
+{
+    $url = trim((string) $url);
+    if ($url === '') {
+        return true;   // empty = use site_url
+    }
+    if (!preg_match('#^https://([a-z0-9.-]+)(?::\d+)?(/.*)?$#i', $url, $m)) {
+        return false;
+    }
+    $host = strtolower($m[1]);
+    $own  = $own_host !== null ? strtolower((string) $own_host)
+        : strtolower((string) parse_url(function_exists('site_url') ? site_url() : '', PHP_URL_HOST));
+    if ($own === '') {
+        return true;
+    }
+
+    return $host === $own || substr($host, -strlen('.' . $own)) === '.' . $own;
+}
+
+/* ---------------------------------------------------------------------------
+ * Outbound host allowlists (CRM-M012 / audit DiD-1, DiD-2).
+ * ------------------------------------------------------------------------- */
+
+/** Is a URL's host one of the allowed suffixes? Exact host or subdomain match. */
+function se_host_allowed($url, array $suffixes)
+{
+    $host = strtolower((string) parse_url((string) $url, PHP_URL_HOST));
+    if ($host === '') {
+        return false;
+    }
+    foreach ($suffixes as $sfx) {
+        $sfx = strtolower(ltrim((string) $sfx, '.'));
+        if ($sfx === '' ) { continue; }
+        if ($host === $sfx || substr($host, -strlen('.' . $sfx)) === '.' . $sfx) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/** Hosts the media fetcher may download from (Meta CDNs + Graph). */
+function se_media_fetch_hosts()
+{
+    $extra = array_filter(array_map('trim', explode(',', (string) (function_exists('get_option') ? get_option('se_media_fetch_hosts_extra') : ''))));
+
+    return array_merge(['lookaside.fbsbx.com', 'cdninstagram.com', 'fbcdn.net', 'graph.facebook.com', 'whatsapp.net', 'facebook.com'], $extra);
+}
+
+/** Hosts a browser push subscription endpoint may point at. */
+function se_push_endpoint_hosts()
+{
+    return ['fcm.googleapis.com', 'android.googleapis.com', 'push.apple.com', 'notify.windows.com', 'push.services.mozilla.com', 'updates.push.services.mozilla.com', 'web.push.apple.com'];
+}
+

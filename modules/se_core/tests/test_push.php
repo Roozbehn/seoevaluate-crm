@@ -143,6 +143,14 @@ se_eq(2, count(se_test_db()->rows('tblse_push_subscriptions')),
 se_push_subscribe(10, 'https://fcm.googleapis.com/fcm/send/phone', $browser['p256dh'], $browser['auth'], 'Android 15');
 se_eq(2, count(se_test_db()->rows('tblse_push_subscriptions')), 'a repeat subscribe does not duplicate');
 
+// Unsubscribe is scoped to the caller (CRM-M005 / AZCRM-SEC-002): another
+// staff member cannot remove this device by naming its endpoint.
+se_push_unsubscribe('https://fcm.googleapis.com/fcm/send/phone', 11);
+se_eq(2, count(se_test_db()->rows('tblse_push_subscriptions')), 'a different staff id cannot unsubscribe someone else\'s device');
+se_push_unsubscribe('https://fcm.googleapis.com/fcm/send/phone', 10);
+se_eq(1, count(se_test_db()->rows('tblse_push_subscriptions')), 'the owner can');
+se_push_subscribe(10, 'https://fcm.googleapis.com/fcm/send/phone', $browser['p256dh'], $browser['auth'], 'Android');
+
 // The endpoint is used as a curl target with our VAPID token attached, so an
 // unvalidated one is a server-side request forgery.
 se_eq(false, se_push_subscribe(10, 'http://fcm.googleapis.com/x', $browser['p256dh'], $browser['auth']),
@@ -279,3 +287,11 @@ se_eq(0, count($captured), 'and nothing is attempted');
 se_eq(false, se_push_configured(), 'and the CRM reports push as unconfigured');
 
 se_push_register_http(null);
+
+se_group('Push endpoints are restricted to known push services (CRM-M012)');
+se_eq(false, se_push_subscribe(10, 'https://evil.example.com/collect', $browser['p256dh'], $browser['auth'], 'x'), 'an arbitrary HTTPS host is refused');
+se_eq(true, se_host_allowed('https://updates.push.services.mozilla.com/wpush/v2/abc', se_push_endpoint_hosts()), 'Mozilla push is allowed');
+se_eq(true, se_host_allowed('https://web.push.apple.com/QF', se_push_endpoint_hosts()), 'Apple push is allowed');
+se_eq(false, se_host_allowed('https://fcm.googleapis.com.evil.com/x', se_push_endpoint_hosts()), 'a look-alike host is refused');
+se_eq(true, se_host_allowed('https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=1', se_media_fetch_hosts()), 'Meta attachment host allowed for media fetch');
+se_eq(false, se_host_allowed('https://attacker.example/x', se_media_fetch_hosts()), 'other hosts refused for media fetch');

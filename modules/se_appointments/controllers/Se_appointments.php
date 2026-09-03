@@ -17,6 +17,9 @@ class Se_appointments extends AdminController
         }
 
         $data['title'] = _l('se_appointments');
+        // Perfex ships FullCalendar v5 under assets/plugins/fullcalendar; the
+        // view used to assume the jQuery v3 plugin and silently rendered nothing.
+        add_calendar_assets();
         $this->load->view('se_appointments/calendar', $data);
     }
 

@@ -31,8 +31,8 @@ define('SE_LEADGEN_BACKOFF_BASE', 300);
 define('SE_LEADGEN_BACKOFF_CAP', 21600);
 define('SE_LEADGEN_GATED_RECHECK', 3600);
 
-hooks()->add_action('after_cron_run', 'se_leadgen_process_pending');
-hooks()->add_action('after_cron_run', 'se_leadgen_reconcile');
+if (function_exists('se_cron_listener')) { se_cron_listener('se_leadgen_process_pending'); } else { hooks()->add_action('after_cron_run', 'se_leadgen_process_pending'); }
+if (function_exists('se_cron_listener')) { se_cron_listener('se_leadgen_reconcile'); } else { hooks()->add_action('after_cron_run', 'se_leadgen_reconcile'); }
 
 /* ---------- receiver: see modules/se_core/controllers/Leadgen.php -------- */
 

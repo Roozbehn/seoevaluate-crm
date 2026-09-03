@@ -226,6 +226,23 @@ se_ok($msg !== null, 'the message was stored');
 se_eq(SE_WA_MAX_TEXT_LEN, mb_strlen($msg['body']), 'the body is truncated to the documented bound');
 
 /* ======================================================================== */
+se_group('Duplicate envelope does not inflate unread or re-extend the window (CRM-M013 / T15)');
+
+se_test_seed_wa();
+$db = se_test_db();
+$t0 = time() - 7200;
+se_wa_handle_inbound(1, 'PN1', ['id' => 'wamid.DUP', 'from' => 'U1', 'type' => 'text', 'text' => ['body' => 'merhaba'], 'timestamp' => $t0], []);
+$c1 = null; foreach ($db->rows('tblse_wa_conversations') as $r) { if (($r['wa_user_id'] ?? '') === 'U1') { $c1 = $r; } }
+se_eq(1, (int) $c1['unread_count'], 'first delivery: one unread');
+// Meta retries the SAME envelope a little later (same wamid, later timestamp).
+se_wa_handle_inbound(1, 'PN1', ['id' => 'wamid.DUP', 'from' => 'U1', 'type' => 'text', 'text' => ['body' => 'merhaba'], 'timestamp' => $t0 + 3000], []);
+$c2 = null; foreach ($db->rows('tblse_wa_conversations') as $r) { if (($r['wa_user_id'] ?? '') === 'U1') { $c2 = $r; } }
+se_eq(1, (int) $c2['unread_count'], 'the retry does not add a second unread');
+se_eq($c1['window_expires_at'], $c2['window_expires_at'], 'the retry does not re-extend the 24 h window');
+se_eq($c1['last_inbound_at'], $c2['last_inbound_at'], 'nor move last_inbound_at');
+se_eq(1, count(array_filter($db->rows('tblse_wa_messages'), function ($r) { return ($r['wamid'] ?? '') === 'wamid.DUP'; })), 'one stored message');
+
+/* ======================================================================== */
 se_group('Backoff and retention');
 
 foreach ([1, 2, 3, 4, 5] as $n) {

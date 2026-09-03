@@ -25,7 +25,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 define('SE_JOURNEY_MEDIA_MAX_BYTES', 5 * 1024 * 1024);
 define('SE_JOURNEY_MEDIA_MIN_DIM', 300);
-define('SE_JOURNEY_MEDIA_MAX_DIM', 8000);
+define('SE_JOURNEY_MEDIA_MAX_DIM', 4000);   // 8000² needed ~256 MB per decode (audit DiD-4)
 define('SE_JOURNEY_MEDIA_FALLBACK_DIR', '/home/hyundaic/_se_journey_media');
 define('SE_JOURNEY_MEDIA_SIGN_TTL', 600);
 

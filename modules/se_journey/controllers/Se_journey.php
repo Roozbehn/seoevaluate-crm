@@ -147,6 +147,13 @@ class Se_journey extends AdminController
             case 'assign':
                 $this->need('edit_review');
                 $sid = (int) $this->input->post('staff_id');
+                // Same rule as the WhatsApp inbox: an assignee must belong to the
+                // journey's brand (admins reach every brand). 0 = unassign.
+                if ($sid > 0 && !se_staff_in_brand($sid, (int) $j->brand_id)) {
+                    set_alert('warning', _l('se_journey_assign_not_in_brand'));
+                    redirect($back);
+                    return;
+                }
                 $this->db->where('id', (int) $j->id)->where('brand_id', (int) $j->brand_id)->update(db_prefix() . 'se_journeys', ['assigned_staff' => $sid, 'last_updated' => date('Y-m-d H:i:s')]);
                 se_journey_audit((int) $j->brand_id, (int) $j->id, 'assign', 'staff', (string) $sid);
                 break;
@@ -499,6 +506,7 @@ class Se_journey extends AdminController
             'interactive'  => se_journey_interactive_enabled($brand) ? 1 : 0,
             'auto_organic' => se_journey_auto_start_organic($brand) ? 1 : 0,
             'auto_website' => se_journey_auto_start_website($brand) ? 1 : 0,
+            'ads_from_intake' => function_exists('se_journey_ads_consent_from_intake') && se_journey_ads_consent_from_intake($brand) ? 1 : 0,
             'test_recipients' => implode(', ', se_journey_test_recipients($brand)),
             'intake_ttl_hours' => se_journey_intake_ttl_hours(),
             'reminder_hours' => implode(',', se_journey_reminder_hours()),
@@ -542,6 +550,8 @@ class Se_journey extends AdminController
             update_option('se_journey_interactive_' . $brand, (int) $this->input->post('interactive') === 1 ? 1 : 0);
             update_option('se_journey_auto_start_organic_' . $brand, (int) $this->input->post('auto_organic') === 1 ? 1 : 0);
             update_option('se_journey_auto_start_website_' . $brand, (int) $this->input->post('auto_website') === 1 ? 1 : 0);
+            // Owner/legal decision (CRM-M010): recorded as an explicit option, default off.
+            update_option('se_consent_ads_from_intake_' . $brand, (int) $this->input->post('ads_from_intake') === 1 ? 1 : 0);
             update_option('se_journey_test_recipients_' . $brand, mb_substr(preg_replace('/[^\d,\s;]/', '', (string) $this->input->post('test_recipients')), 0, 500));
             update_option('se_journey_intake_ttl_hours', max(1, min(336, (int) $this->input->post('intake_ttl_hours'))));
             update_option('se_journey_reminder_hours', preg_replace('/[^\d,]/', '', (string) $this->input->post('reminder_hours')));
@@ -549,7 +559,8 @@ class Se_journey extends AdminController
             update_option('se_journey_daily_cap', max(1, min(20, (int) $this->input->post('daily_cap'))));
             update_option('se_journey_urgent_staff_ids', preg_replace('/[^\d,\s]/', '', (string) $this->input->post('urgent_staff_ids')));
             $base = trim((string) $this->input->post('public_base_url'));
-            update_option('se_journey_public_base_url', preg_match('#^https://[a-z0-9.-]+(?::\d+)?(/.*)?$#i', $base) ? $base : '');
+            // Only this installation's own host may carry patient links (audit DiD-6).
+            update_option('se_journey_public_base_url', se_journey_public_base_url_allowed($base) ? $base : '');
             update_option('se_journey_quote_amount_policy_' . $brand, in_array((string) $this->input->post('quote_amount_policy'), ['hidden', 'range', 'exact'], true) ? (string) $this->input->post('quote_amount_policy') : 'range');
             update_option('se_journey_technical_fields_' . $brand, (int) $this->input->post('technical_fields') === 1 ? 1 : 0);
             update_option('se_journey_media_storage', in_array((string) $this->input->post('media_storage'), ['auto', 'r2', 'local'], true) ? (string) $this->input->post('media_storage') : 'auto');

@@ -87,7 +87,7 @@ class Se_pwa extends App_Controller
             return $this->json(403, ['ok' => false]);
         }
 
-        $body = json_decode(file_get_contents('php://input'), true);
+        $body = $this->payload();
         if (!is_array($body)) {
             return $this->json(400, ['ok' => false]);
         }
@@ -103,6 +103,22 @@ class Se_pwa extends App_Controller
         return $this->json($ok ? 200 : 400, ['ok' => $ok]);
     }
 
+    /**
+     * The JSON document the browser sent: as a `payload` form field (with the
+     * CSRF token beside it — CSRF verification reads $_POST) or, for older
+     * clients, as a raw JSON body.
+     */
+    private function payload()
+    {
+        $raw = $this->input->post('payload', false);
+        if (!is_string($raw) || $raw === '') {
+            $raw = file_get_contents('php://input');
+        }
+        $body = json_decode((string) $raw, true);
+
+        return is_array($body) ? $body : null;
+    }
+
     /** Removes this browser's subscription. */
     public function unsubscribe()
     {
@@ -111,10 +127,10 @@ class Se_pwa extends App_Controller
             return $this->json(403, ['ok' => false]);
         }
 
-        $body = json_decode(file_get_contents('php://input'), true);
+        $body = $this->payload();
         $endpoint = is_array($body) && isset($body['endpoint']) ? (string) $body['endpoint'] : '';
         if ($endpoint !== '') {
-            se_push_unsubscribe($endpoint);
+            se_push_unsubscribe($endpoint, $staff_id);   // only this staff member's own row
         }
 
         return $this->json(200, ['ok' => true]);

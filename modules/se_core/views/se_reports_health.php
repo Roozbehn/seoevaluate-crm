@@ -82,13 +82,17 @@
 
      // System / cron
      var cronState=d.cron_state||'unknown';
-     var sys=card('System / Cron',cronState,[
-       ['Status', cronState],
-       ['Last run', (d.cron_age_seconds==null?'never':esc(d.cron_age_seconds)+'s ago')],
-       ['Expected interval', esc(d.cron_expected_interval_seconds)+'s'],
-       ['Warn / fail after', esc(d.cron_warn_seconds)+'s / '+esc(d.cron_fail_seconds)+'s'],
-       ['Outbox pending / failed', esc(o.pending)+' / '+esc(o.failed)],
-       ['Outbox sent / dead', esc(o.sent)+' / '+esc(o.dead)]
+     var disp=d.dispatcher||{}, wq=d.wa_queue||{}, rem=d.reminders||{};
+     var skippedReasons=Object.keys(o.skipped_by_reason||{}).map(function(k){return esc((o.skipped_by_reason||{})[k])+' × '+esc(k);}).join(', ');
+     // The card is only green when cron AND the dispatcher are alive AND nothing was skipped or failed.
+     var sysState=(cronState==='healthy'&&disp.state==='healthy'&&!(o.skipped>0)&&!(o.failed>0)&&!(wq.failed>0)&&!(rem.failed>0))?'healthy'
+                 :((cronState==='failed'||disp.state==='failed')?'failed':'warning');
+     var sys=card('System / Cron / Gönderici',sysState,[
+       ['Cron', esc(cronState)+' · '+(d.cron_age_seconds==null?'never':esc(d.cron_age_seconds)+'s ago')+' (every '+esc(d.cron_expected_interval_seconds)+'s)'],
+       ['Gönderici (dispatcher)', esc(disp.state||'unknown')+' · '+(disp.age_seconds==null?'never ran':esc(disp.age_seconds)+'s ago')+' (every 60s)'],
+       ['Conversion outbox', 'pending '+esc(o.pending)+' · sent '+esc(o.sent)+' · failed '+esc(o.failed)+' · <b>skipped '+esc(o.skipped||0)+'</b>'+(skippedReasons?(' <small>('+skippedReasons+')</small>'):'')],
+       ['WhatsApp queue', 'pending '+esc(wq.pending||0)+' · sent '+esc(wq.sent||0)+' · failed '+esc(wq.failed||0)],
+       ['Appointment reminders', 'pending '+esc(rem.pending||0)+' · queued '+esc(rem.queued||0)+' · failed '+esc(rem.failed||0)+' · skipped '+esc(rem.skipped||0)]
      ]);
 
      // Meta CAPI (independent of Lead Ads). A dataset conflict is the most

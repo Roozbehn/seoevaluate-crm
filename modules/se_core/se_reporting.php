@@ -16,7 +16,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * tests; a real client lands once credentials exist).
  */
 
-hooks()->add_action('after_cron_run', 'se_report_import_all');
+if (function_exists('se_cron_listener')) { se_cron_listener('se_report_import_all'); } else { hooks()->add_action('after_cron_run', 'se_report_import_all'); }
 
 /* ----------------------------- internal metrics ------------------------- */
 
@@ -535,6 +535,45 @@ function se_integration_health($brand_id)
         : ($cronAge < SE_CRON_WARN_SECONDS ? 'healthy'
         : ($cronAge < SE_CRON_FAIL_SECONDS ? 'warning' : 'failed'));
 
+    // The per-minute dispatcher (Cloudflare Worker → se_core/dispatch) is what
+    // actually sends WhatsApp replies; its age was never shown, so a dead
+    // Worker looked "healthy" as long as the 15-minute cron still ran.
+    $dispatchAge   = function_exists('se_dispatch_age') ? se_dispatch_age() : null;
+    $dispatchState = $dispatchAge === null ? 'unknown' : ($dispatchAge <= 180 ? 'healthy' : ($dispatchAge <= 900 ? 'warning' : 'failed'));
+
+    // WhatsApp outbound queue and appointment reminders: the two queues a
+    // clinic notices first when they stall.
+    $waQueue   = se_report_wa_queue_counts($brand_id);
+    $reminders = se_report_reminder_counts($brand_id);
+
+    $skippedByReason = (array) ($outbox['skipped_by_reason'] ?? []);
+    $skippedTotal    = (int) ($outbox['skipped'] ?? 0);
+    $emit = $blk;
+    if ($skippedTotal > 0) {
+        $reasons = [];
+        foreach ($skippedByReason as $code => $n) { $reasons[] = $n . ' × ' . $code; }
+        $emit('outbox_skipped', $skippedTotal . ' conversion event(s) were never sent (' . implode(', ', $reasons) . ')',
+             'Ad platforms are not receiving these conversions', isset($skippedByReason['consent_blocked'])
+                ? 'consent_blocked: the intake records marketing consent, not "ads" — owner/legal decision required (Settings → Rıza metinleri → "Ads consent from intake")'
+                : 'Open the Conversion Outbox and read the skip reason',
+             se_health_link('se_core/se_outbox?status=skipped'));
+    }
+    if ($dispatchState === 'failed') {
+        $emit('dispatcher_stalled', 'Gönderici (dispatcher) has not run for ' . (int) $dispatchAge . ' s',
+             'WhatsApp replies and journey messages wait for the 15-minute cron', 'Check the Cloudflare Worker crm-dispatch and the dispatch key',
+             se_health_link('se_core/se_reports/health'));
+    }
+    if ((int) ($waQueue['failed'] ?? 0) > 0) {
+        $emit('wa_outbound_failed', (int) $waQueue['failed'] . ' WhatsApp message(s) failed permanently',
+             'Patients did not receive these messages', 'Open the thread; the failure reason is on the message',
+             se_health_link('se_whatsapp/se_whatsapp/inbox'));
+    }
+    if ((int) ($reminders['failed'] ?? 0) > 0) {
+        $emit('reminders_failed', (int) $reminders['failed'] . ' appointment reminder(s) failed',
+             'Patients were not reminded of their appointment', 'Check the approved reminder template and the patient thread',
+             se_health_link('se_appointments/se_appointments/manage'));
+    }
+
     return [
         'brand_id'        => $brand_id,
         'checked_at'      => $now,
@@ -542,11 +581,16 @@ function se_integration_health($brand_id)
         'google'          => $google,
         'whatsapp'        => $wa,
         'outbox'          => [
-            'pending' => (int) ($outbox['pending'] ?? 0),
-            'failed'  => (int) ($outbox['failed'] ?? 0),
-            'sent'    => (int) ($outbox['sent'] ?? 0),
-            'dead'    => (int) ($outbox['dead'] ?? 0),
+            'pending'   => (int) ($outbox['pending'] ?? 0),
+            'failed'    => (int) ($outbox['failed'] ?? 0),
+            'sent'      => (int) ($outbox['sent'] ?? 0) + (int) ($outbox['submitted'] ?? 0) + (int) ($outbox['confirmed'] ?? 0),
+            'confirmed' => (int) ($outbox['confirmed'] ?? 0),
+            'skipped'   => $skippedTotal,
+            'skipped_by_reason' => $skippedByReason,
         ],
+        'dispatcher'      => ['age_seconds' => $dispatchAge, 'state' => $dispatchState],
+        'wa_queue'        => $waQueue,
+        'reminders'       => $reminders,
         'instagram'       => $ig,
         'journey'         => $journey,
         'whatsapp_numbers' => $quality,   // back-compat
@@ -561,3 +605,42 @@ function se_integration_health($brand_id)
         'notes'           => $notes,
     ];
 }
+
+/** WhatsApp outbound queue counts by status (pending / processing / sent / failed). */
+function se_report_wa_queue_counts($brand_id = null)
+{
+    $CI = &get_instance();
+    $out = ['pending' => 0, 'processing' => 0, 'sent' => 0, 'failed' => 0];
+    if (!$CI->db->table_exists(db_prefix() . 'se_wa_outbound')) {
+        return $out;
+    }
+    if ($brand_id !== null) {
+        $CI->db->where('brand_id', (int) $brand_id);
+    }
+    $CI->db->select('status, COUNT(*) as c')->group_by('status');
+    foreach ($CI->db->get(db_prefix() . 'se_wa_outbound')->result_array() as $r) {
+        $out[(string) $r['status']] = (int) $r['c'];
+    }
+
+    return $out;
+}
+
+/** Appointment reminder counts by state (pending / queued / failed / skipped). */
+function se_report_reminder_counts($brand_id = null)
+{
+    $CI = &get_instance();
+    $out = ['pending' => 0, 'queued' => 0, 'failed' => 0, 'skipped' => 0];
+    if (!$CI->db->table_exists(db_prefix() . 'se_reminders')) {
+        return $out;
+    }
+    if ($brand_id !== null) {
+        $CI->db->where('brand_id', (int) $brand_id);
+    }
+    $CI->db->select('state, COUNT(*) as c')->group_by('state');
+    foreach ($CI->db->get(db_prefix() . 'se_reminders')->result_array() as $r) {
+        $out[(string) $r['state']] = (int) $r['c'];
+    }
+
+    return $out;
+}
+

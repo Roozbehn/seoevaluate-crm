@@ -25,7 +25,7 @@ define('SE_GOOGLE_MAX_AGE_DAYS', 90);       // and <= 90 days
 
 hooks()->add_action('lead_status_changed', 'se_outbox_on_status_change', 10, 1);
 hooks()->add_action('lead_converted_to_customer', 'se_outbox_on_converted', 10, 1);
-hooks()->add_action('after_cron_run', 'se_outbox_drain');
+if (function_exists('se_cron_listener')) { se_cron_listener('se_outbox_drain'); } else { hooks()->add_action('after_cron_run', 'se_outbox_drain'); }
 
 /**
  * Every eligible pipeline stage change becomes a conversion signal. Meta wants
@@ -451,6 +451,19 @@ function se_outbox_health($brand_id = null)
     foreach ($rows as $r) {
         $out[$r['status']] = (int) $r['c'];
     }
+
+    // Skipped rows are permanent non-deliveries (consent, no snapshot...) that
+    // the pending/failed counters never showed — the Health page said
+    // "healthy, 0 failed" while 7 of 7 conversions were skipped (audit T2).
+    if ($brand_id !== null) {
+        $CI->db->where('brand_id', (int) $brand_id);
+    }
+    $CI->db->select('error_code, COUNT(*) as c')->where('status', 'skipped')->group_by('error_code');
+    $out['skipped_by_reason'] = [];
+    foreach ($CI->db->get(db_prefix() . 'se_conversion_outbox')->result_array() as $r) {
+        $out['skipped_by_reason'][(string) ($r['error_code'] ?: 'unknown')] = (int) $r['c'];
+    }
+    $out['skipped'] = (int) array_sum($out['skipped_by_reason']);
 
     return $out;
 }

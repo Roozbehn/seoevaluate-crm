@@ -132,5 +132,14 @@ function se_webhook_record($provider, $event, $args = [])
 /** True when the current request is the on-host verification self-test. */
 function se_webhook_is_selftest()
 {
-    return isset($_SERVER['HTTP_X_SE_SELFTEST']) && (string) $_SERVER['HTTP_X_SE_SELFTEST'] !== '';
+    // The self-test flag writes *_route_ok_at evidence; it must be presented
+    // with the cron key, otherwise any GET could forge verification evidence.
+    if (!isset($_SERVER['HTTP_X_SE_SELFTEST']) || (string) $_SERVER['HTTP_X_SE_SELFTEST'] === '') {
+        return false;
+    }
+    if (!defined('APP_CRON_KEY') || (string) APP_CRON_KEY === '') {
+        return false;
+    }
+
+    return hash_equals((string) APP_CRON_KEY, (string) $_SERVER['HTTP_X_SE_SELFTEST']);
 }

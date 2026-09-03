@@ -437,3 +437,4 @@ $lang['se_journey_flow_done_publish'] = 'Akış yayınlandı.';
 $lang['se_journey_flow_done_sync'] = 'Akış durumu eşitlendi.';
 $lang['se_journey_flow_json'] = 'Üretilen Flow JSON';
 $lang['se_journey_no_brand'] = 'Klinik markası seçili değil.';
+$lang['se_journey_assign_not_in_brand'] = 'Seçilen personel bu markaya bağlı değil.';

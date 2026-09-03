@@ -361,6 +361,11 @@ function se_push_subscribe($staff_id, $endpoint, $p256dh, $auth, $user_agent = '
     if (empty($parts['scheme']) || strtolower($parts['scheme']) !== 'https' || empty($parts['host'])) {
         return false;
     }
+    // ...and only a known push service (browser vendors' endpoints), never an
+    // arbitrary HTTPS host a staff browser hands us.
+    if (function_exists('se_host_allowed') && !se_host_allowed($endpoint, se_push_endpoint_hosts())) {
+        return false;
+    }
 
     $hash  = hash('sha256', $endpoint);
     $table = db_prefix() . 'se_push_subscriptions';
@@ -391,11 +396,16 @@ function se_push_subscribe($staff_id, $endpoint, $p256dh, $auth, $user_agent = '
 }
 
 /** Removes one subscription. Called when a browser unsubscribes, and on 404/410. */
-function se_push_unsubscribe($endpoint)
+function se_push_unsubscribe($endpoint, $staff_id = 0)
 {
     $CI = &get_instance();
-    $CI->db->where('endpoint_hash', hash('sha256', $endpoint))
-           ->delete(db_prefix() . 'se_push_subscriptions');
+    $CI->db->where('endpoint_hash', hash('sha256', $endpoint));
+    // A staff member may only remove their own device; the endpoint alone is
+    // not proof of ownership (it is visible to any script on the page).
+    if ((int) $staff_id > 0) {
+        $CI->db->where('staff_id', (int) $staff_id);
+    }
+    $CI->db->delete(db_prefix() . 'se_push_subscriptions');
 
     return true;
 }

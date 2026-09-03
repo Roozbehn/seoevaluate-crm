@@ -71,6 +71,19 @@
     });
   }).catch(function () { paint('off'); });
 
+
+  /*
+   * Perfex verifies CSRF from $_POST, so a JSON body (which leaves $_POST
+   * empty) was refused with 403 whenever CSRF was on. Post as a form with the
+   * page's csrfData token and carry the JSON in a `payload` field.
+   */
+  function postForm(path, fields) {
+    var fd = new FormData();
+    Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
+    if (window.csrfData && csrfData.token_name) { fd.append(csrfData.token_name, csrfData.hash); }
+    return fetch(BASE + path, { method: 'POST', credentials: 'include', body: fd });
+  }
+
   window.sePushEnable = function () {
     return Notification.requestPermission().then(function (permission) {
       // 'denied' is terminal until the user changes it in browser settings —
@@ -90,10 +103,7 @@
               applicationServerKey: urlB64ToUint8Array(d.key)
             });
           }).then(function (sub) {
-            return fetch(BASE + '/se_core/se_pwa/subscribe', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              credentials: 'include', body: JSON.stringify(sub)
-            });
+            return postForm('/se_core/se_pwa/subscribe', { payload: JSON.stringify(sub) });
           }).then(function () { paint('on'); });
         });
     });
@@ -105,10 +115,7 @@
         if (!sub) { paint('off'); return; }
         var endpoint = sub.endpoint;
         return sub.unsubscribe().then(function () {
-          return fetch(BASE + '/se_core/se_pwa/unsubscribe', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            credentials: 'include', body: JSON.stringify({ endpoint: endpoint })
-          });
+          return postForm('/se_core/se_pwa/unsubscribe', { payload: JSON.stringify({ endpoint: endpoint }) });
         }).then(function () { paint('off'); });
       });
   };

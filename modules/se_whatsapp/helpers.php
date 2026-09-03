@@ -436,6 +436,15 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
     $ts = isset($msg['timestamp']) ? date('Y-m-d H:i:s', (int) $msg['timestamp']) : date('Y-m-d H:i:s');
     $window = date('Y-m-d H:i:s', strtotime($ts) + SE_WA_WINDOW_HOURS * 3600);
 
+    // Duplicate delivery (Meta retries the same envelope): decide it BEFORE
+    // touching the conversation row. Deciding it after the update let every
+    // retry add one to unread_count and re-extend the 24 h window (audit T15).
+    $msgTable = db_prefix() . 'se_wa_messages';
+    $CI->db->where('wamid', $wamid);
+    if ($CI->db->count_all_results($msgTable) > 0) {
+        return; // duplicate delivery
+    }
+
     // Health heartbeat: a real inbound message was ingested for this brand.
     // Timestamp only — never the sender number or any content.
     if (function_exists('update_option')) {
@@ -476,13 +485,7 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
         ]);
     }
 
-    // Message (dedup by wamid via unique key + guard).
-    $msgTable = db_prefix() . 'se_wa_messages';
-    $CI->db->where('wamid', $wamid);
-    if ($CI->db->count_all_results($msgTable) > 0) {
-        return; // duplicate delivery
-    }
-
+    // Message (the unique wamid key is the second guard behind the check above).
     $type = mb_substr((string) ($msg['type'] ?? 'text'), 0, 32);
     $body = $type === 'text' ? mb_substr((string) ($msg['text']['body'] ?? ''), 0, SE_WA_MAX_TEXT_LEN) : null;
     $media_ref = null;

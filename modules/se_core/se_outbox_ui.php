@@ -247,7 +247,10 @@ function se_dashboard_warnings()
     }
 
     // Consent configuration: without approved text nothing may be collected.
-    if (function_exists('se_consent_text_configured') && !se_consent_text_configured(0)) {
+    // Checked for the brands this staff member actually works in — brand 0
+    // (the global default) is normally empty while the clinic brand is fully
+    // configured, and the old check warned on every dashboard load (audit T18).
+    if (function_exists('se_consent_text_configured') && !se_consent_text_configured_anywhere()) {
         $warnings[] = ['level' => 'warning', 'text' => _l('se_warn_consent_unconfigured')];
     }
 
@@ -262,3 +265,20 @@ function se_dashboard_warnings()
 
     return $warnings;
 }
+
+/** Is approved consent text configured for any brand the staff member can see (or the global default)? */
+function se_consent_text_configured_anywhere($purpose = 'ads')
+{
+    $ids = function_exists('se_staff_brand_ids') ? se_staff_brand_ids() : [];
+    if (!in_array(0, $ids, true)) {
+        $ids[] = 0;
+    }
+    foreach ($ids as $brand_id) {
+        if (se_consent_text_configured((int) $brand_id, $purpose)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+

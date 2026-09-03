@@ -23,6 +23,7 @@ register_language_files(SE_APPOINTMENTS_MODULE_NAME, [SE_APPOINTMENTS_MODULE_NAM
 
 require_once __DIR__ . '/migrations.php';
 require_once __DIR__ . '/reminders.php';
+require_once __DIR__ . '/types.php';
 require_once __DIR__ . '/availability.php';
 require_once __DIR__ . '/gcal.php';
 

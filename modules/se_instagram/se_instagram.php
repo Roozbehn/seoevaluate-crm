@@ -22,8 +22,8 @@ register_activation_hook(SE_INSTAGRAM_MODULE_NAME, 'se_instagram_activation');
 hooks()->add_action('admin_init', 'se_instagram_permissions');
 
 // Async: drain webhook events + outbound queue after core cron tasks.
-hooks()->add_action('after_cron_run', 'se_ig_process_pending');
-hooks()->add_action('after_cron_run', 'se_ig_out_drain');
+if (function_exists('se_cron_listener')) { se_cron_listener('se_ig_process_pending'); } else { hooks()->add_action('after_cron_run', 'se_ig_process_pending'); }
+if (function_exists('se_cron_listener')) { se_cron_listener('se_ig_out_drain'); } else { hooks()->add_action('after_cron_run', 'se_ig_out_drain'); }
 
 function se_instagram_activation()
 {
