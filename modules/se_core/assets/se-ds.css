@@ -368,3 +368,5 @@ body.se-clinic a:focus-visible,body.se-clinic button:focus-visible,body.se-clini
   body.se-clinic .se-hastalar-chips .se-help{width:100%;margin-inline-start:0;display:flex;gap:12px;flex-wrap:wrap}
   body.se-clinic .se-hastalar-chips .se-help a{display:inline-flex;align-items:center;min-height:44px}
 }
+/* Our pages always paint their own text colour from the tokens (the theme plugin sets body colour for its own mode). */
+body.se-clinic .se-page,body.se-clinic .se-tabbar{color:var(--se-text)}
