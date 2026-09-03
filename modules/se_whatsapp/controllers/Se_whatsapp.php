@@ -248,8 +248,7 @@ class Se_whatsapp extends AdminController
         $r = se_wa_sync_templates($brand);
 
         if ($r['ok']) {
-            set_alert('success', sprintf(_l('se_wa_templates_synced'),
-                (int) $r['approved'], (int) $r['inserted'], (int) $r['updated'], (int) $r['removed']));
+            set_alert('success', _l('se_wa_templates_synced', [(int) $r['approved'], (int) $r['inserted'], (int) $r['updated'], (int) $r['removed']]));
         } else {
             set_alert('warning', _l('se_wa_templates_sync_failed') . ': ' . $r['reason']);
         }

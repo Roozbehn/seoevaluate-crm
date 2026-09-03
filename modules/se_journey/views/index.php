@@ -18,7 +18,7 @@ se_ui_header(_l('se_journeys'), $actions, _l('se_journey_subtitle'));
 <div class="row"><div class="col-md-12">
   <div class="alert alert-<?php echo $readiness['blocking'] ? 'warning' : 'info'; ?>">
     <i class="fa fa-info-circle"></i>
-    <?php echo html_escape(sprintf(_l('se_journey_readiness_summary'), (int) $readiness['blocking'])); ?>
+    <?php echo html_escape(_l('se_journey_readiness_summary', [(int) $readiness['blocking']])); ?>
     <a href="<?php echo admin_url('se_journey/se_journey/settings'); ?>"><?php echo html_escape(_l('se_journey_settings')); ?> &raquo;</a>
   </div>
 </div></div>

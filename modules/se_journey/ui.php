@@ -304,8 +304,8 @@ function se_journey_conversation_context($conv, array $opts = [])
     $idx = array_search($stage, $stages, true);
     $srcKey = 'se_journey_source_' . (string) $j->source; $src = _l($srcKey); if ($src === $srcKey) { $src = (string) $j->source; }
 
-    $h .= '<div><h3>' . html_escape($name) . '</h3><div class="se-help">' . html_escape(trim($src . ' · ' . sprintf(_l('se_ctx_started'), se_ui_age($j->date_created)), ' ·')) . '</div></div>';
-    $h .= '<div>' . se_ui_state_badge($j->state) . ($idx !== false ? ' <span class="se-help" style="margin-inline-start:6px">' . html_escape(sprintf(_l('se_ctx_step'), $idx + 1, count($stages), se_ui_stage_label($stage))) . '</span>' : '')
+    $h .= '<div><h3>' . html_escape($name) . '</h3><div class="se-help">' . html_escape(trim($src . ' · ' . _l('se_ctx_started', [se_ui_age($j->date_created)]), ' ·')) . '</div></div>';
+    $h .= '<div>' . se_ui_state_badge($j->state) . ($idx !== false ? ' <span class="se-help" style="margin-inline-start:6px">' . html_escape(_l('se_ctx_step', [$idx + 1, count($stages), se_ui_stage_label($stage)])) . '</span>' : '')
         . ((int) $j->urgent === 1 ? ' ' . se_ui_ds_badge('danger', _l('se_journey_urgent'), true) : '') . '</div>';
     if (!empty($na['sentence'])) {
         $h .= '<div class="se-next" style="padding:12px"><div><div class="k">' . html_escape(_l('se_ui_next_action')) . '</div><div class="v" style="font-size:15px">' . html_escape($na['sentence']) . '</div>'

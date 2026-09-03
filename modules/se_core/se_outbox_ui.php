@@ -243,7 +243,7 @@ function se_dashboard_warnings()
     if ($age === null) {
         $warnings[] = ['level' => 'error', 'text' => _l('se_warn_cron_never')];
     } elseif ($age > 3600) {
-        $warnings[] = ['level' => 'error', 'text' => sprintf(_l('se_warn_cron_stale'), (int) round($age / 60))];
+        $warnings[] = ['level' => 'error', 'text' => _l('se_warn_cron_stale', [(int) round($age / 60)])];
     }
 
     // Consent configuration: without approved text nothing may be collected.
@@ -357,24 +357,24 @@ function se_dashboard_system_card()
     $rem     = function_exists('se_report_reminder_counts') ? se_report_reminder_counts(null) : [];
 
     if ($cronAge === null || $cronAge > 3600) {
-        $out['alerts'][] = ['tone' => 'danger', 'text' => $cronAge === null ? _l('se_sys_cron_never') : sprintf(_l('se_sys_cron_stale'), (int) round($cronAge / 60)), 'href' => admin_url('se_core/se_reports/health')];
+        $out['alerts'][] = ['tone' => 'danger', 'text' => $cronAge === null ? _l('se_sys_cron_never') : _l('se_sys_cron_stale', [(int) round($cronAge / 60)]), 'href' => admin_url('se_core/se_reports/health')];
     }
     if ($dispAge !== null && $dispAge > 900) {
-        $out['alerts'][] = ['tone' => 'danger', 'text' => sprintf(_l('se_sys_dispatch_stale'), (int) round($dispAge / 60)), 'href' => admin_url('se_core/se_reports/health')];
+        $out['alerts'][] = ['tone' => 'danger', 'text' => _l('se_sys_dispatch_stale', [(int) round($dispAge / 60)]), 'href' => admin_url('se_core/se_reports/health')];
     }
     if ($skipped > 0) {
         $reasons = [];
         foreach ((array) ($outbox['skipped_by_reason'] ?? []) as $code => $n) { $reasons[] = $n . ' × ' . _l('se_skip_' . $code) ; }
-        $out['alerts'][] = ['tone' => 'warning', 'text' => sprintf(_l('se_sys_outbox_skipped'), $skipped, implode(', ', $reasons)), 'href' => admin_url('se_core/se_outbox?status=skipped')];
+        $out['alerts'][] = ['tone' => 'warning', 'text' => _l('se_sys_outbox_skipped', [$skipped, implode(', ', $reasons)]), 'href' => admin_url('se_core/se_outbox?status=skipped')];
     }
     if ($failed > 0) {
-        $out['alerts'][] = ['tone' => 'warning', 'text' => sprintf(_l('se_sys_outbox_failed'), $failed), 'href' => admin_url('se_core/se_outbox?status=failed')];
+        $out['alerts'][] = ['tone' => 'warning', 'text' => _l('se_sys_outbox_failed', [$failed]), 'href' => admin_url('se_core/se_outbox?status=failed')];
     }
     if ((int) ($wa['failed'] ?? 0) > 0) {
-        $out['alerts'][] = ['tone' => 'danger', 'text' => sprintf(_l('se_sys_wa_failed'), (int) $wa['failed']), 'href' => admin_url('se_whatsapp/se_whatsapp/inbox')];
+        $out['alerts'][] = ['tone' => 'danger', 'text' => _l('se_sys_wa_failed', [(int) $wa['failed']]), 'href' => admin_url('se_whatsapp/se_whatsapp/inbox')];
     }
     if ((int) ($rem['failed'] ?? 0) > 0) {
-        $out['alerts'][] = ['tone' => 'warning', 'text' => sprintf(_l('se_sys_reminders_failed'), (int) $rem['failed']), 'href' => admin_url('se_appointments/se_appointments/manage')];
+        $out['alerts'][] = ['tone' => 'warning', 'text' => _l('se_sys_reminders_failed', [(int) $rem['failed']]), 'href' => admin_url('se_appointments/se_appointments/manage')];
     }
     if (function_exists('se_consent_text_configured_anywhere') && !se_consent_text_configured_anywhere()) {
         $out['alerts'][] = ['tone' => 'warning', 'text' => _l('se_warn_consent_unconfigured'), 'href' => admin_url('se_core/se_consent')];

@@ -57,7 +57,7 @@ foreach ($leads as $l) { if ($relType === 'lead' && (int) $l['id'] === $relId) {
             <label class="se-chip<?php echo $type === $k ? ' on' : ''; ?>"><input type="radio" name="appointment_type" value="<?php echo $k; ?>" data-minutes="<?php echo (int) $t['minutes']; ?>"<?php echo $type === $k ? ' checked' : ''; ?> class="se-sr"> <?php echo html_escape($t['label']); ?></label>
           <?php } ?>
         </div>
-        <span class="se-help" id="se-type-hint"><?php echo html_escape(sprintf(_l('se_appt_type_default_duration'), se_appt_type_label($type), $fmtDur(se_appt_type_minutes($type)))); ?></span>
+        <span class="se-help" id="se-type-hint"><?php echo html_escape(_l('se_appt_type_default_duration', [se_appt_type_label($type), $fmtDur(se_appt_type_minutes($type))])); ?></span>
       </fieldset>
 
       <div class="se-field"><label for="rel_id"><?php echo _l('se_appt_patient'); ?></label>

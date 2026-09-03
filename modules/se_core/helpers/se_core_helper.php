@@ -619,8 +619,12 @@ function se_push_endpoint_hosts()
  */
 function se_tr($key, $default, ...$args)
 {
-    $t = _l($key);
-    $t = ($t === $key || $t === '') ? $default : $t;
+    // Perfex's _l() consumes %placeholders itself (sprintf with its label argument),
+    // so the arguments go THROUGH _l; the harness stub returns the key → default path.
+    $t = $args ? _l($key, $args) : _l($key);
+    if ($t === $key || $t === '') {
+        return $args ? vsprintf($default, $args) : $default;
+    }
 
-    return $args ? vsprintf($t, $args) : $t;
+    return $t;
 }

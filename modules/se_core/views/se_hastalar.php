@@ -17,7 +17,7 @@ $active = array_sum((array) $stages);
 ?>
   <div class="se-page-head">
     <h1><?php echo _l('se_nav_hastalar'); ?></h1>
-    <span class="se-sub"><?php echo html_escape(sprintf(_l('se_hastalar_subtitle'), (int) $active)); ?></span>
+    <span class="se-sub"><?php echo html_escape(_l('se_hastalar_subtitle', [(int) $active])); ?></span>
     <div class="se-actions">
       <?php if (!empty($can_create_lead)) { echo se_ui_btn(_l('se_today_new_patient'), admin_url('leads'), 'primary', ['icon' => '＋']); } ?>
     </div>
@@ -74,7 +74,7 @@ $active = array_sum((array) $stages);
       <?php } ?>
       </tbody></table></div>
     <div class="se-pager">
-      <span><?php echo html_escape(sprintf(_l('se_hastalar_range'), ($result['page'] - 1) * SE_HASTALAR_PAGE + 1, min($result['total'], $result['page'] * SE_HASTALAR_PAGE), $result['total'])); ?><?php if ($result['capped']) { echo ' · ', html_escape(sprintf(_l('se_hastalar_capped'), SE_HASTALAR_SCAN)); } ?></span>
+      <span><?php echo html_escape(_l('se_hastalar_range', [($result['page'] - 1) * SE_HASTALAR_PAGE + 1, min($result['total'], $result['page'] * SE_HASTALAR_PAGE), $result['total']])); ?><?php if ($result['capped']) { echo ' · ', html_escape(_l('se_hastalar_capped', [SE_HASTALAR_SCAN])); } ?></span>
       <span style="margin-inline-start:auto"></span>
       <?php if ($result['page'] > 1) { echo se_ui_btn(_l('se_hastalar_prev'), $link(['page' => $result['page'] - 1]), 'secondary', ['sm' => true]); } ?>
       <?php if ($result['page'] < $result['pages']) { echo se_ui_btn(_l('se_hastalar_next'), $link(['page' => $result['page'] + 1]), 'secondary', ['sm' => true]); } ?>

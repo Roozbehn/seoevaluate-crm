@@ -7,7 +7,7 @@
   <div class="col-md-5">
     <div class="panel_s"><div class="panel-body">
       <h5><?php echo html_escape(_l('se_journey_readiness')); ?>
-        <?php if ($readiness) { echo $readiness['go_live_ready'] ? se_ui_badge('ok', _l('se_journey_go_live_ready')) : se_ui_badge('warning', sprintf(_l('se_journey_readiness_summary'), (int) $readiness['blocking'])); } ?></h5>
+        <?php if ($readiness) { echo $readiness['go_live_ready'] ? se_ui_badge('ok', _l('se_journey_go_live_ready')) : se_ui_badge('warning', _l('se_journey_readiness_summary', [(int) $readiness['blocking']])); } ?></h5>
       <?php if ($readiness) { ?>
       <div class="table-responsive"><table class="table table-condensed"><tbody>
       <?php foreach ($readiness['items'] as $it) { ?>

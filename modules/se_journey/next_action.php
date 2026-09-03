@@ -49,7 +49,8 @@ function se_journey_next_action($j, array $ctx = [], $now = null)
     $age   = max(0, $now - $since);
     $base  = 'se_journey/se_journey/view/' . (int) ($j->id ?? 0);
     $url   = function ($tab = '') use ($base) { return admin_url($base . ($tab !== '' ? '?tab=' . $tab : '')); };
-    $L     = function ($k, $a = null, $b = null) { $t = _l($k); return $a === null ? $t : sprintf($t, $a, $b); };
+    // Perfex's _l() sprintf's the line with its second argument, so placeholders must be filled THROUGH _l (never sprintf after it).
+    $L     = function ($k, $a = null, $b = null) { return $a === null ? _l($k) : _l($k, $b === null ? [$a] : [$a, $b]); };
     $ageT  = function_exists('se_ui_age') ? se_ui_age($since, $now) : (string) $age;
 
     $out = function ($key, $owner, $priority, $tone, $sentence, $reason, $label, $u, $ghost = false) use ($age) {
@@ -108,7 +109,7 @@ function se_journey_next_action($j, array $ctx = [], $now = null)
             }
             if ($now - $sentAt >= SE_NA_QUOTE_FOLLOWUP) {
                 $left = $validUntil ? (int) floor(($validUntil - $now) / 86400) : null;
-                return $out('quote_followup', 'staff', 3, 'warning', $L('se_na_quote_followup'), $L('se_na_quote_followup_reason', se_ui_age($sentAt, $now), $left === null ? '' : sprintf(_l('se_na_days_valid'), $left)), $L('se_na_btn_remind'), $url('chat'));
+                return $out('quote_followup', 'staff', 3, 'warning', $L('se_na_quote_followup'), $L('se_na_quote_followup_reason', se_ui_age($sentAt, $now), $left === null ? '' : _l('se_na_days_valid', [$left])), $L('se_na_btn_remind'), $url('chat'));
             }
             return $out('quote_wait', 'patient', 3, 'info', $L('se_na_wait_patient'), $L('se_na_wait_quote_reason', se_ui_age($sentAt, $now)), '', '', true);
         case 'quote_expired':
@@ -189,7 +190,7 @@ function se_journey_event_label($kind, array $ev = [])
     $kind   = (string) $kind;
     $detail = (string) ($ev['detail'] ?? '');
     $to     = (string) ($ev['to'] ?? '');
-    $L = function ($k, $a = null) { $t = _l($k); return $a === null ? $t : sprintf($t, $a); };
+    $L = function ($k, $a = null) { return $a === null ? _l($k) : _l($k, [$a]); };
 
     // Transitions read as the resulting state, never "a → b".
     if ($kind === 'transition' && $to !== '') {

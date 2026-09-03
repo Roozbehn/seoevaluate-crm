@@ -16,7 +16,7 @@ $active = array_sum((array) $stages);
 ?>
   <div class="se-page-head">
     <h1><?php echo _l('se_nav_today'); ?></h1>
-    <span class="se-sub"><?php echo html_escape(sprintf(_l('se_today_subtitle'), count($appts), $total)); ?></span>
+    <span class="se-sub"><?php echo html_escape(_l('se_today_subtitle', [count($appts), $total])); ?></span>
     <div class="se-actions">
       <?php if (!empty($can_create_appt)) { echo se_ui_btn(_l('se_today_new_appt'), admin_url('se_appointments/create'), 'secondary', ['icon' => '＋']); } ?>
       <?php if (!empty($can_create_lead)) { echo se_ui_btn(_l('se_today_new_patient'), admin_url('leads'), 'primary', ['icon' => '＋']); } ?>

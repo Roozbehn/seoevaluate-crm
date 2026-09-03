@@ -12,5 +12,8 @@ if grep -niE "yolculu|fırsat|potansiyel müşteri|\baday\b|konsültasyon" $TR 2
 # Staff views only. Patient-facing public views (modules/se_journey/views/public) carry approved patient copy and are
 # reported separately (see docs/verification) — they are an owner decision, not a staff-UI rule.
 if grep -rniE "hekim|doktor|\bDr\.|cerrah|klinisyen" modules/se_*/views modules/se_*/ui.php modules/se_core/se_chat_ui.php 2>/dev/null | grep -v "views/public/"; then echo "FAIL: forbidden title in a staff view"; fail=1; fi
+# 3. Perfex's _l() sprintf's the line with its second argument, so `sprintf(_l('k'), $x)` renders "0"/"" in production
+#    while the harness stub hides it. Placeholders must go THROUGH _l: _l('k', [$x]) — or se_tr() for pure functions.
+if grep -rnE "v?sprintf\(\s*_l\(" modules --include=*.php 2>/dev/null | grep -v "/tests/"; then echo "FAIL: sprintf(_l(...)) — pass the arguments to _l() instead"; fail=1; fi
 [ $fail -eq 0 ] && echo "copy gate: OK"
 exit $fail

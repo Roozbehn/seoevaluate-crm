@@ -290,7 +290,7 @@ function se_journey_attention_row_from(array $it, $now)
         $inAt = strtotime((string) $u['last_inbound_at']) ?: $now;
         if ($now - $inAt < SE_NA_UNANSWERED_THREAD) { return null; }
         $na = ['key' => 'unread', 'owner' => 'staff', 'priority' => 3, 'tone' => 'info', 'sentence' => _l('se_na_unread'),
-               'reason' => sprintf(_l('se_na_unread_reason'), (int) $u['unread_count'], se_ui_age($inAt, $now)), 'age' => $now - $inAt,
+               'reason' => _l('se_na_unread_reason', [(int) $u['unread_count'], se_ui_age($inAt, $now)]), 'age' => $now - $inAt,
                'action_label' => _l('se_na_btn_reply'), 'url' => admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $u['id']), 'ghost' => false];
     }
     $name = $it['name'];
@@ -340,7 +340,7 @@ function se_journey_attention_queue($limit = 25, $now = null)
         $name = $lead && trim((string) $lead['name']) !== '' ? se_ui_short_name($lead['name']) : se_ui_phone($u['wa_user_id'], true, false);
         $rows[] = [
             'journey_id' => 0, 'lead_id' => (int) $u['lead_id'], 'conversation_id' => $cid, 'who' => $name, 'state' => '',
-            'why' => _l('se_na_new_thread'), 'tone' => 'info', 'reason' => sprintf(_l('se_na_unread_reason'), (int) $u['unread_count'], se_ui_age($inAt, $now)),
+            'why' => _l('se_na_new_thread'), 'tone' => 'info', 'reason' => _l('se_na_unread_reason', [(int) $u['unread_count'], se_ui_age($inAt, $now)]),
             'age' => $now - $inAt, 'hot' => false, 'priority' => 3, 'action_label' => _l('se_na_btn_reply'),
             'url' => admin_url('se_whatsapp/se_whatsapp/conversation/' . $cid), 'key' => 'unread_no_journey', 'unread' => (int) $u['unread_count'],
             'aria' => $name . ' — ' . _l('se_na_btn_reply'),
