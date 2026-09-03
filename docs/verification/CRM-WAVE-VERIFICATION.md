@@ -65,3 +65,10 @@
 - Tickets: M045 M046 (gated on the approved flag — behaves as "task" until the owner approves a protocol) M048 — M047 NOT-APPLICABLE-WITH-EVIDENCE (auto-held would misrecord no-shows; replaced by the held_unrecorded timer + one-click prompt).
 - Proven: 7 thresholds fire once, young/terminal journeys never, second/third pass idempotent, new state period fires again, kill switch stops tasks and expiry, quote_sent→quote_expired by the system with late accept still allowed, unapproved protocol → task, approved protocol → plan + aftercare_active + no duplicate.
 - Rollback: option se_journey_timers=0 (no schema change).
+
+## Wave 8 — Data model / integrations / performance
+- Start SHA: 574382d → End SHA: c1aa38d
+- Files: modules/se_core/migrations.php (v21), services/crm-media/src/index.js, modules/se_whatsapp/helpers.php (se_wa_redact_error), tests/{test_migrations.php, test_webhook.php}
+- Tests: **4 281 pass / 0 fail**. Copy gate OK. Worker smoke test (node): no key → 503, empty sig → 404 bad_sig, empty bearer → falls to signed path → 404.
+- Tickets: M053 (code; host apply pending) M061 M073 — PLANNED with reasons: M050 M052 M054 M055 M056 M057 M051 M060 M074 M062 (host).
+- Deploy note for v21: `php migrate_cli.php --verify` shows 15 pending statements; `--apply` after a DB backup; each is IF NOT EXISTS so a partial apply is safe to re-run.
