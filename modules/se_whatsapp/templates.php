@@ -233,6 +233,13 @@ function se_wa_sync_templates($brand_id)
     $out['ok'] = true;
     update_option('se_wa_templates_synced_at_' . $brand_id, se_db_now());
     update_option('se_wa_templates_last_error_' . $brand_id, '');
+    update_option('se_wa_templates_resync_' . $brand_id, '0');
+
+    // Registry rows follow the mirror (approval status, category) — a webhook
+    // may have said "approved" seconds ago; the pull is what confirms it.
+    if (function_exists('se_journey_sync_template_status')) {
+        se_journey_sync_template_status($brand_id);
+    }
 
     return $out;
 }
@@ -261,13 +268,28 @@ function se_wa_handle_template_status($brand_id, array $value)
     $CI->db->where('brand_id', (int) $brand_id)->where('name', $name)->where('language', $lang);
     $existing = $CI->db->get($table)->row_array();
 
+    // A row the mirror has never seen carries no body, so the composer would
+    // offer the template without its placeholders and the send would fail at
+    // Meta (#132000). The journey registry submitted the text Meta approved:
+    // fill from it now; the forced re-pull below replaces it with Meta's copy.
+    $fill = [];
+    if ((!$existing || trim((string) ($existing['body'] ?? '')) === '') && function_exists('se_journey_template_hint')) {
+        $hint = se_journey_template_hint((int) $brand_id, $name);
+        if ($hint && trim((string) $hint['body']) !== '') {
+            $fill = [
+                'body'      => mb_substr((string) $hint['body'], 0, 4096),
+                'variables' => $hint['variables'] ? mb_substr(implode(',', $hint['variables']), 0, 255) : null,
+            ];
+        }
+    }
+
     if ($existing) {
-        $CI->db->where('id', (int) $existing['id'])->update($table, [
+        $CI->db->where('id', (int) $existing['id'])->update($table, $fill + [
             'approval_state' => mb_substr($event, 0, 16),
             'last_updated'   => se_db_now(),
         ]);
     } else {
-        $CI->db->insert($table, [
+        $CI->db->insert($table, $fill + [
             'brand_id'       => (int) $brand_id,
             'name'           => mb_substr($name, 0, 128),
             'language'       => mb_substr($lang, 0, 8),
@@ -275,6 +297,11 @@ function se_wa_handle_template_status($brand_id, array $value)
             'date_created'   => se_db_now(),
             'last_updated'   => se_db_now(),
         ]);
+    }
+    if (!$existing || trim((string) ($existing['body'] ?? '')) === '') {
+        // Meta's copy is the authority (body, category, quality): ask the next
+        // cron for a full pull regardless of the six-hour throttle.
+        update_option('se_wa_templates_resync_' . (int) $brand_id, '1');
     }
 
     update_option('se_wa_template_status_at_' . (int) $brand_id, se_db_now());
@@ -299,8 +326,9 @@ function se_wa_sync_templates_cron()
 
     $ran = 0;
     foreach (array_keys($brands) as $brand_id) {
-        $last = (string) get_option('se_wa_templates_synced_at_' . $brand_id);
-        if ($last !== '' && strtotime($last) !== false
+        $last   = (string) get_option('se_wa_templates_synced_at_' . $brand_id);
+        $forced = (string) get_option('se_wa_templates_resync_' . $brand_id) === '1';   // a status webhook inserted a body-less row
+        if (!$forced && $last !== '' && strtotime($last) !== false
             && strtotime($last) > strtotime(se_db_now()) - SE_WA_TEMPLATE_SYNC_INTERVAL) {
             continue;
         }

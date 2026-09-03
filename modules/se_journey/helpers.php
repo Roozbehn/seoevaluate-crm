@@ -982,6 +982,90 @@ function se_journey_find_by_lead($brand_id, $lead_id)
     return $CI->db->get(db_prefix() . 'se_journeys')->row();
 }
 
+/** Does the CRM lead row still exist for this brand? (By id + brand, never staff scope.) */
+function se_journey_lead_exists($brand_id, $lead_id)
+{
+    if ((int) $lead_id <= 0) {
+        return false;
+    }
+    $CI = &get_instance();
+    $CI->db->select('id')->where('id', (int) $lead_id)->where('brand_id', (int) $brand_id);
+
+    return (bool) $CI->db->get(db_prefix() . 'leads')->row();
+}
+
+/**
+ * Point a journey (and its WhatsApp thread) at another CRM lead of the same
+ * brand. Used when the lead the journey was started from no longer exists —
+ * deleted in the CRM while the website pipeline re-created it under a new id.
+ * The health record, photos and timeline stay with the journey; only the
+ * lead link moves, and the new lead is brought up to date at once.
+ */
+function se_journey_relink_lead($journey, $lead_id, $staff_id = 0)
+{
+    $CI = &get_instance();
+    $j  = is_object($journey) ? $journey : se_journey_get_raw((int) $journey);
+    if (!$j || (int) $lead_id <= 0 || !se_journey_lead_exists((int) $j->brand_id, (int) $lead_id)) {
+        return false;
+    }
+    $old = (int) $j->lead_id;
+    $now = date('Y-m-d H:i:s');
+    $CI->db->where('id', (int) $j->id)->where('brand_id', (int) $j->brand_id)
+           ->update(db_prefix() . 'se_journeys', ['lead_id' => (int) $lead_id, 'last_updated' => $now]);
+    $j->lead_id = (int) $lead_id;
+    if ((int) $j->wa_conversation_id > 0) {
+        $CI->db->where('id', (int) $j->wa_conversation_id)->where('brand_id', (int) $j->brand_id)
+               ->update(db_prefix() . 'se_wa_conversations', ['lead_id' => (int) $lead_id, 'last_updated' => $now]);
+    }
+    se_journey_event($j, 'lead_linked', 'journey linked to CRM lead #' . (int) $lead_id . ($old > 0 ? ' (was #' . $old . ')' : ''),
+        ['lead_id' => (int) $lead_id, 'previous_lead_id' => $old], $staff_id > 0 ? 'staff' : 'system', $staff_id > 0 ? (int) $staff_id : null, 'lead', (string) $lead_id);
+    se_journey_audit((int) $j->brand_id, (int) $j->id, 'lead_relink', 'lead', (string) $lead_id, $old > 0 ? 'was #' . $old : null);
+    if (function_exists('se_journey_sync_lead')) {
+        try {
+            se_journey_sync_lead($j, 'relink');
+        } catch (Throwable $e) {
+            se_journey_audit((int) $j->brand_id, (int) $j->id, 'lead_sync_failed', 'lead', (string) $lead_id, mb_substr(basename($e->getFile()) . ':' . $e->getLine(), 0, 191));
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Perfex `after_lead_deleted`: a journey never dies with its lead row. The
+ * link is cleared (a later lead with the same number re-links through
+ * se_journey_start_from_lead) and the timeline says what happened, so a
+ * patient who submitted the website form again is not left invisible.
+ */
+function se_journey_on_lead_deleted($lead_id)
+{
+    $lead_id = (int) (is_array($lead_id) ? ($lead_id['lead_id'] ?? 0) : $lead_id);
+    if ($lead_id <= 0) {
+        return 0;
+    }
+    $CI = &get_instance();
+    $CI->db->where('lead_id', $lead_id);
+    $rows = $CI->db->get(db_prefix() . 'se_journeys')->result();
+    $n = 0;
+    foreach ($rows as $j) {
+        $now = date('Y-m-d H:i:s');
+        $CI->db->where('id', (int) $j->id)->where('brand_id', (int) $j->brand_id)
+               ->update(db_prefix() . 'se_journeys', ['lead_id' => 0, 'last_updated' => $now]);
+        if ((int) $j->wa_conversation_id > 0) {
+            $CI->db->where('id', (int) $j->wa_conversation_id)->where('brand_id', (int) $j->brand_id)->where('lead_id', $lead_id)
+                   ->update(db_prefix() . 'se_wa_conversations', ['lead_id' => 0, 'last_updated' => $now]);
+        }
+        $j->lead_id = 0;
+        se_journey_event($j, 'lead_deleted', 'CRM lead #' . $lead_id . ' was deleted — the journey continues; start it again from the patient\'s new lead to re-link',
+            ['previous_lead_id' => $lead_id], 'staff', function_exists('get_staff_user_id') ? ((int) get_staff_user_id() ?: null) : null, 'lead', (string) $lead_id);
+        se_journey_task($j, 'lead_deleted', 'CRM lead #' . $lead_id . ' was deleted while the journey was active — link the patient\'s current lead (Start journey on the new lead)', 'normal', null, (string) $lead_id);
+        se_journey_audit((int) $j->brand_id, (int) $j->id, 'lead_deleted', 'lead', (string) $lead_id);
+        $n++;
+    }
+
+    return $n;
+}
+
 /** Brand-scoped list with optional state filter (dashboard, list screen). */
 function se_journey_list(array $filters = [])
 {
@@ -1247,9 +1331,15 @@ function se_journey_start_from_conversation($conv, $staff_id, array $opts = [])
             return ['ok' => false, 'reason' => 'create_failed', 'mode' => '', 'journey' => null, 'created' => false];
         }
         se_journey_event($j, 'staff_started', 'journey created from the WhatsApp thread', [], 'staff', (int) $staff_id, 'wa_conversation', (string) ($conv->id ?? ''), 'staff:' . (int) $staff_id);
+    } elseif ((int) ($opts['lead_id'] ?? 0) > 0 && (int) $opts['lead_id'] !== (int) $j->lead_id && !se_journey_lead_exists($brand, (int) $j->lead_id)) {
+        // The journey's CRM lead is gone (deleted in the CRM, or never set) and
+        // the same number arrived as a new lead — one patient, one journey:
+        // re-link rather than leave the journey pointing at nothing.
+        se_journey_relink_lead($j, (int) $opts['lead_id'], (int) $staff_id);
+        $relinked = true;
     }
     if ((string) $j->state !== 'new_whatsapp_enquiry') {
-        return ['ok' => false, 'reason' => 'already_started', 'mode' => '', 'journey' => $j, 'created' => $created];
+        return ['ok' => false, 'reason' => !empty($relinked) ? 'relinked' : 'already_started', 'mode' => '', 'journey' => $j, 'created' => $created];
     }
     if (!function_exists('se_journey_send_welcome')) {
         return ['ok' => false, 'reason' => 'messaging_unavailable', 'mode' => '', 'journey' => $j, 'created' => $created];

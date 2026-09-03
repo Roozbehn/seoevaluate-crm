@@ -368,3 +368,134 @@ $r = se_journey_send_privacy_and_link(se_test_journey_row(), 'staff:10', 'staff'
 se_wa_out_drain();
 se_ok(strpos(end($GLOBALS['se_wa_sent'])['body'], '/se_journey/intake/') !== false, 'flows off → the secure link');
 se_eq(['ready' => false, 'reason' => 'flows_off', 'flow_id' => ''], se_journey_flow_ready(1, 'intake'), 'readiness names the reason');
+
+/* ======================================================================== */
+se_group('Journey flows: the composer cannot send a FLOW-button template as a plain template — it goes through the journey');
+
+// Production, 2026-09-03: a staff member picked eyebrow_intake_flow_tr in the
+// conversation composer. The mirror row had been inserted by the approval
+// webhook alone (no body, no variables), so no placeholder was asked for, no
+// flow token existed, and Meta refused the send: (#132000) "Number of
+// parameters does not match the expected number of params".
+se_test_seed_journey(['options' => ['se_journey_flows_1' => 1, 'se_journey_flow_id_intake_1' => '10001', 'se_journey_flow_status_intake_1' => 'PUBLISHED',
+                                     'se_journey_flow_id_booking_1' => '10002', 'se_journey_flow_status_booking_1' => 'PUBLISHED']]);
+se_test_act_as(10, [], true);
+$db = se_test_db();
+se_test_install_secret('flow_key', $kp['private']);
+se_journey_seed_templates(1);
+foreach ($db->tables['tblse_journey_templates'] as &$row) { if (in_array($row['logical_name'], ['eyebrow_intake_flow_tr', 'eyebrow_booking_flow_tr', 'eyebrow_journey_start_tr'], true)) { $row['approval_status'] = 'approved'; } }
+unset($row);
+
+// The registry knows what the mirror does not yet.
+$hint = se_journey_template_hint(1, 'eyebrow_intake_flow_tr');
+se_eq(['1'], $hint['variables'], 'the registry names the {{1}} placeholder');
+se_eq('intake', $hint['flow_kind'], 'and the FLOW button (intake)');
+se_eq('booking', se_journey_template_hint(1, 'eyebrow_booking_flow_tr')['flow_kind'], 'booking flow template');
+se_eq('', se_journey_template_hint(1, 'eyebrow_journey_start_tr')['flow_kind'], 'a plain template has no flow');
+se_eq(null, se_journey_template_hint(1, 'no_such_template'), 'unknown template → null');
+se_eq(null, se_journey_template_hint(2, 'eyebrow_intake_flow_tr'), 'another brand → null');
+
+// The approval webhook inserts the mirror row WITH the registry's body and placeholders, and asks for a forced re-pull.
+se_eq(true, se_wa_handle_template_status(1, ['event' => 'APPROVED', 'message_template_id' => '1362571199278702', 'message_template_name' => 'eyebrow_intake_flow_tr', 'message_template_language' => 'tr']), 'status webhook applied');
+$mirror = null; foreach ($db->rows('tblse_wa_templates') as $t) { if ($t['name'] === 'eyebrow_intake_flow_tr') { $mirror = $t; } }
+se_eq('approved', $mirror['approval_state'], 'mirror row approved');
+se_eq('1', $mirror['variables'], 'the mirror row carries the placeholder list right away (no fifteen-minute gap)');
+se_ok(strpos((string) $mirror['body'], '{{1}}') !== false, 'and the body');
+se_eq('1', get_option('se_wa_templates_resync_1'), "Meta's copy is still requested: forced re-pull flagged");
+// Forced re-pull runs on the next cron even though the last sync is fresh; the flag clears.
+update_option('se_wa_templates_synced_at_1', se_db_now());
+$pulled = 0;
+se_wa_register_template_fetcher(function ($waba) use (&$pulled) { $pulled++; return ['ok' => true, 'templates' => [['name' => 'eyebrow_intake_flow_tr', 'language' => 'tr', 'status' => 'APPROVED', 'category' => 'UTILITY',
+    'components' => [['type' => 'BODY', 'text' => 'Merhaba {{1}}, form.'], ['type' => 'BUTTONS', 'buttons' => [['type' => 'FLOW', 'text' => 'Formu Doldur']]]]]]]; });
+se_eq(1, se_wa_sync_templates_cron(), 'the cron pulled despite the throttle');
+se_eq(1, $pulled, 'exactly once');
+se_eq('0', get_option('se_wa_templates_resync_1'), 'flag cleared');
+se_eq(0, se_wa_sync_templates_cron(), 'and the throttle applies again');
+$mirror = null; foreach ($db->rows('tblse_wa_templates') as $t) { if ($t['name'] === 'eyebrow_intake_flow_tr') { $mirror = $t; } }
+se_eq('Merhaba {{1}}, form.', $mirror['body'], "Meta's copy replaced the registry's");
+se_eq('UTILITY', $mirror['category'], 'with its category');
+$GLOBALS['SE_WA_TEMPLATE_FETCHER'] = null;
+$db->seed('tblse_wa_templates', [
+    ['id' => 1, 'brand_id' => 1, 'name' => 'eyebrow_intake_flow_tr', 'language' => 'tr', 'category' => 'UTILITY', 'approval_state' => 'approved', 'body' => null, 'variables' => null],
+    ['id' => 2, 'brand_id' => 1, 'name' => 'eyebrow_booking_flow_tr', 'language' => 'tr', 'category' => 'UTILITY', 'approval_state' => 'approved', 'body' => null, 'variables' => null],
+    ['id' => 3, 'brand_id' => 1, 'name' => 'eyebrow_journey_start_tr', 'language' => 'tr', 'category' => 'UTILITY', 'approval_state' => 'approved', 'variables' => '1'],
+]);
+
+// A thread whose window has closed, with a journey at consent_pending.
+se_test_wa_deliver(se_test_wa_body('905000000005', 'kaş ekimi fiyat', se_test_wamid(), ['name' => 'Elif']));
+foreach ($db->tables['tblse_wa_conversations'] as &$c) { $c['window_expires_at'] = date('Y-m-d H:i:s', time() - 86400); }
+unset($c);
+$j = se_test_journey_row();
+se_journey_transition($j, 'welcome_sent', 'test', 'staff', 10, null, null, true);
+se_journey_transition(se_test_journey_row(), 'privacy_notice_sent', 'test', 'staff', 10, null, null, true);
+se_journey_transition(se_test_journey_row(), 'consent_pending', 'test', 'staff', 10, null, null, true);
+$conv = null; foreach ($db->rows('tblse_wa_conversations') as $c) { $conv = (object) $c; }
+
+// 1. The plain-template path (what the composer used to do) is refused at queue time, before Meta.
+$before = count($db->rows('tblse_wa_outbound'));
+$r = se_wa_queue_message((int) $conv->id, ['kind' => 'template', 'template' => 'eyebrow_intake_flow_tr', 'variables' => []], 10);
+se_eq('flow_button_required', $r['reason'], 'a FLOW-button template without a flow token is refused at queue time');
+$r = se_wa_queue_message((int) $conv->id, ['kind' => 'template', 'template' => 'eyebrow_intake_flow_tr', 'variables' => ['Elif']], 10);
+se_eq('flow_button_required', $r['reason'], 'even with the name filled in');
+se_eq($before, count($db->rows('tblse_wa_outbound')), 'nothing queued');
+// A body-less mirror row still gets its placeholders from the registry for a plain template.
+$r = se_wa_queue_message((int) $conv->id, ['kind' => 'template', 'template' => 'eyebrow_journey_start_tr', 'variables' => []], 10);
+se_eq('template_variables', $r['reason'], 'a plain template with a placeholder still needs its value');
+
+// 2. The composer routes the flow template through the journey: outside the window → the template WITH its flow token.
+$r = se_journey_compose_template($conv, 'eyebrow_intake_flow_tr', 10);
+se_wa_out_drain();
+se_eq(true, $r['ok'], 'sent through the journey');
+se_eq('template', $r['mode'], 'window closed → the approved template');
+$last = end($GLOBALS['se_wa_sent']);
+se_eq(['template', 'eyebrow_intake_flow_tr'], [$last['kind'], $last['template']], 'the FLOW-button template');
+se_eq(['Elif'], $last['variables'], 'with the {{1}} name');
+se_ok(strpos((string) $last['payload']['flow_button']['flow_token'], 'intake.') === 0, 'and a per-message flow token');
+$p = se_wa_template_send_payload($last);
+se_eq(['body', 'button'], array_column($p['template']['components'], 'type'), 'Cloud API: body parameters + the flow button component (what #132000 was missing)');
+se_eq(1, count($p['template']['components'][0]['parameters']), 'one body parameter');
+se_eq('consent_pending', se_test_journey_row()->state, 'journey state as after a staff "Resend link"');
+$audit = array_filter($db->rows('tblse_journey_audit'), function ($a) { return $a['action'] === 'composer_flow_template'; });
+se_eq(1, count($audit), 'audited as a composer send');
+
+// Inside the window → the interactive Flow message, never the template.
+foreach ($db->tables['tblse_wa_conversations'] as &$c) { $c['window_expires_at'] = date('Y-m-d H:i:s', time() + 3600); }
+unset($c);
+$r = se_journey_compose_template($conv, 'eyebrow_intake_flow_tr', 10);
+se_wa_out_drain();
+se_eq(['inwindow', true], [$r['mode'], $r['ok']], 'window open → in-window');
+$last = end($GLOBALS['se_wa_sent']);
+se_eq('interactive', $last['kind'], 'the Flow message');
+se_eq(['10001', 'CONSENT'], [$last['payload']['flow']['flow_id'] ?? '', $last['payload']['flow']['flow_action_payload']['screen'] ?? ''], 'the intake Flow CTA, entry screen CONSENT');
+
+// The booking template goes through the calendar step.
+$r = se_journey_compose_template($conv, 'eyebrow_booking_flow_tr', 10);
+se_wa_out_drain();
+se_eq(true, $r['ok'], 'booking flow sent through the journey');
+$last = end($GLOBALS['se_wa_sent']);
+se_eq('10002', $last['payload']['flow']['flow_id'] ?? '', 'the booking flow');
+
+// 3. Not a flow template → null: the composer proceeds as before.
+se_eq(null, se_journey_compose_template($conv, 'eyebrow_journey_start_tr', 10), 'a plain template is not routed');
+se_eq(null, se_journey_compose_template($conv, 'unknown_tpl', 10), 'an unknown template is not routed');
+
+// 4. No journey on the thread → a clear reason, nothing sent; no permission → refused.
+$db->tables['tblse_wa_conversations'][] = ['id' => 77, 'brand_id' => 1, 'phone_number_id' => SE_TEST_PN, 'wa_user_id' => '905000000099', 'lead_id' => 0, 'client_id' => 0,
+    'assigned_staff' => 0, 'unread_count' => 0, 'last_inbound_at' => date('Y-m-d H:i:s'), 'window_expires_at' => date('Y-m-d H:i:s', time() + 3600), 'state' => 'open', 'date_created' => date('Y-m-d H:i:s'), 'last_updated' => date('Y-m-d H:i:s')];
+$sentBefore = count($GLOBALS['se_wa_sent']);
+$r = se_journey_compose_template((object) end($db->tables['tblse_wa_conversations']), 'eyebrow_intake_flow_tr', 10);
+se_eq(['ok' => false, 'reason' => 'journey_required'], ['ok' => $r['ok'], 'reason' => $r['reason']], 'no journey → journey_required');
+se_test_act_as(11, ['view'], false);
+$r = se_journey_compose_template($conv, 'eyebrow_intake_flow_tr', 11);
+se_eq('journey_permission', $r['reason'], 'a role without edit_review cannot operate the journey from the composer');
+se_test_act_as(10, [], true);
+se_eq($sentBefore, count($GLOBALS['se_wa_sent']), 'nothing sent in either case');
+
+// 5. Sandbox: recorded on the timeline, not sent — and the composer is told so.
+update_option('se_journey_sandbox_1', 1);
+$sentBefore = count($GLOBALS['se_wa_sent']);
+$r = se_journey_compose_template($conv, 'eyebrow_intake_flow_tr', 10);
+se_wa_out_drain();
+se_eq(['ok' => true, 'mode' => 'sandbox'], ['ok' => $r['ok'], 'mode' => $r['mode']], 'sandbox mode reported');
+se_eq($sentBefore, count($GLOBALS['se_wa_sent']), 'nothing sent');
+update_option('se_journey_sandbox_1', 0);
