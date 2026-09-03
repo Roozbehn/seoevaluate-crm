@@ -44,10 +44,10 @@
             </div></td>
         <td><?php echo se_ui_badge($tone, _l('se_journey_tpl_' . $r['approval_status'])); ?>
             <?php if ($r['approval_status'] === 'approved' && !$inMirror) { ?><br /><small class="text-warning"><?php echo html_escape(_l('se_journey_not_in_mirror')); ?></small><?php } ?>
-            <?php if ($r['rejection_reason']) { ?><br /><small class="text-danger"><?php echo html_escape($r['rejection_reason']); ?></small><?php } ?></td>
-        <td class="hidden-xs"><?php echo html_escape($r['category_requested']); ?><?php echo $r['category_meta'] && $r['category_meta'] !== $r['category_requested'] ? ' → <strong>' . html_escape($r['category_meta']) . '</strong>' : ''; ?></td>
-        <td class="hidden-xs"><small><?php echo html_escape($r['meta_template_id'] ?: '—'); ?></small></td>
-        <td class="hidden-xs"><small><?php echo html_escape($r['last_sync_at'] ?: '—'); ?></small></td>
+            <?php if (!empty($r['rejection_reason'])) { ?><br /><small class="text-danger"><?php echo html_escape($r['rejection_reason']); ?></small><?php } ?></td>
+        <td class="hidden-xs"><?php echo html_escape($r['category_requested']); ?><?php echo !empty($r['category_meta']) && $r['category_meta'] !== $r['category_requested'] ? ' → <strong>' . html_escape($r['category_meta']) . '</strong>' : ''; ?></td>
+        <td class="hidden-xs"><small><?php echo html_escape(($r['meta_template_id'] ?? '') ?: '—'); ?></small></td>
+        <td class="hidden-xs"><small><?php echo html_escape(($r['last_sync_at'] ?? '') ?: '—'); ?></small></td>
       </tr>
     <?php } ?>
     </tbody>

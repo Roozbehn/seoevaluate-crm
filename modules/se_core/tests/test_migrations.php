@@ -8,7 +8,8 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 se_group('Schema version and statement shape');
 
-se_eq(21, SE_CORE_SCHEMA_VERSION, 'se_core schema version is 21 (v19 = web push subscriptions, v20 = WhatsApp call log, v21 = hot-path indexes)');
+se_eq(22, SE_CORE_SCHEMA_VERSION, 'se_core schema version is 22 (v19 = web push subscriptions, v20 = WhatsApp call log, v21 = hot-path indexes, v22 = reminder outbound back-link)');
+se_eq(2, count(array_filter(se_core_migration_statements(), function ($q) { return stripos($q, 'se_reminders`') !== false && stripos($q, 'IF NOT EXISTS') !== false && stripos($q, 'outbound_id') !== false; })), 'v22: reminder outbound_id column + index, both guarded');
 se_eq(15, count(array_filter(se_core_migration_statements(), function ($q) { return stripos($q, 'ADD INDEX IF NOT EXISTS') !== false && (stripos($q, 'se_journeys`') !== false || stripos($q, 'se_wa_') !== false || stripos($q, 'se_appointments`') !== false || stripos($q, 'se_journey_tasks`') !== false || stripos($q, 'se_journey_quotes`') !== false); })) >= 15 ? 15 : 0, 'v21 adds the 15 hot-path indexes, all guarded');
 
 $stmts = se_core_migration_statements();

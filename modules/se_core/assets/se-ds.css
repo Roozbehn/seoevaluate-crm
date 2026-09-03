@@ -8,6 +8,7 @@
 :root{
   --se-bg:#1e1e2e; --se-surface:#31324a; --se-surface-2:#3a3c58; --se-surface-3:#44465f; --se-border:#44465f; --se-border-strong:#7c7e9c;
   --se-text:#e4e4e7; --se-text-2:#b0b0bb; --se-text-3:#a8a8b3;
+  --se-on-soft:#ffffff; --se-tabbar-bg:#25263a; --se-tabbar-active:#ffffff;
   --se-primary:#4f5bf0; --se-primary-hover:#4650e0; --se-primary-soft:rgba(79,91,240,.18); --se-link:#9aa3ff;
   --se-positive:#6ee7b7; --se-positive-soft:rgba(52,211,153,.16); --se-positive-solid:#34d399;
   --se-warning:#fbbf24; --se-warning-soft:rgba(251,191,36,.16);
@@ -25,7 +26,8 @@
 /* Light theme tokens (Perfex light mode / no dark-theme plugin) */
 body.se-theme-light,html[data-theme=light] body,html[data-perfex-theme="light"] body,body.light-mode{
   --se-bg:#f4f4f7; --se-surface:#ffffff; --se-surface-2:#eef0f5; --se-surface-3:#e2e5ee; --se-border:#dcdfe8; --se-border-strong:#8b90a6;
-  --se-text:#1f2937; --se-text-2:#4b5563; --se-text-3:#6b7280;
+  --se-text:#1f2937; --se-text-2:#4b5563; --se-text-3:#5b6270;
+  --se-on-soft:#2f37b8; --se-tabbar-bg:#ffffff; --se-tabbar-active:#3d46c9;
   --se-primary:#4650e0; --se-primary-hover:#3d46c9; --se-primary-soft:rgba(70,80,224,.10); --se-link:#3d46c9; --se-focus:#3d46c9;
   --se-positive:#047857; --se-positive-soft:rgba(16,185,129,.14); --se-warning:#b45309; --se-warning-soft:rgba(245,158,11,.16);
   --se-danger:#b91c1c; --se-danger-soft:rgba(239,68,68,.12); --se-info:#1d4ed8; --se-info-soft:rgba(59,130,246,.12);
@@ -53,10 +55,11 @@ body.se-theme-light,html[data-theme=light] body,html[data-perfex-theme="light"] 
 .se-stack>*+*{margin-top:var(--se-sp-4)}
 /* buttons */
 .se-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:var(--se-ctrl);padding:0 16px;border-radius:var(--se-r-md);border:1px solid transparent;font:600 var(--se-fs-sm)/1 inherit;font-family:inherit;color:var(--se-text);background:var(--se-surface-2);cursor:pointer;white-space:nowrap}
-.se-btn-primary{background:var(--se-primary);color:#fff}
+.se-btn-primary,.se-page a.se-btn-primary{background:var(--se-primary);color:#fff}
+.se-page a.se-btn-secondary{color:var(--se-text)}
 .se-btn-secondary{background:transparent;border-color:var(--se-border-strong);color:var(--se-text)}
 .se-btn-ghost{background:transparent;color:var(--se-link)}
-.se-btn-danger{background:transparent;border-color:var(--se-danger);color:var(--se-danger)}
+.se-btn-danger,.se-page a.se-btn-danger{background:transparent;border-color:var(--se-danger);color:var(--se-danger)}
 .se-btn-sm{height:32px;padding:0 12px;font-size:13px}
 .se-btn-block{width:100%}
 /* badges */
@@ -107,7 +110,7 @@ body.se-theme-light,html[data-theme=light] body,html[data-perfex-theme="light"] 
 /* toolbar / filters */
 .se-toolbar{display:flex;gap:var(--se-sp-2);flex-wrap:wrap;align-items:center;margin-bottom:var(--se-sp-4)}
 .se-chip{height:36px;padding:0 14px;border-radius:var(--se-r-pill);border:1px solid var(--se-border-strong);background:transparent;color:var(--se-text-2);font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px}
-.se-chip.on{background:var(--se-primary-soft);border-color:var(--se-primary);color:#fff}
+.se-chip.on{background:var(--se-primary-soft);border-color:var(--se-primary);color:var(--se-on-soft)}
 .se-input{height:var(--se-ctrl);width:100%;background:var(--se-bg);border:1px solid var(--se-border-strong);border-radius:var(--se-r-md);color:var(--se-text);padding:0 12px;font:inherit}
 .se-field{display:flex;flex-direction:column;gap:6px}
 .se-field label{font-size:var(--se-fs-sm);font-weight:600;color:var(--se-text-2)}
@@ -117,7 +120,7 @@ body.se-theme-light,html[data-theme=light] body,html[data-perfex-theme="light"] 
 .se-chip input.se-sr+*{pointer-events:none}.se-chip:has(input:focus-visible){outline:2px solid var(--se-focus,#8ab4f8);outline-offset:2px}
 /* patient header */
 .se-ph{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--se-sp-4);align-items:start}
-.se-avatar{width:48px;height:48px;border-radius:50%;background:var(--se-primary-soft);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.se-avatar{width:48px;height:48px;border-radius:50%;background:var(--se-primary-soft);color:var(--se-on-soft);display:flex;align-items:center;justify-content:center;font-weight:700}
 .se-ph h1{font-size:22px;margin:0 0 4px;font-weight:600}
 .se-ph .se-idline{color:var(--se-text-2);font-size:var(--se-fs-sm);display:flex;gap:10px;flex-wrap:wrap}
 .se-ph .se-idline span+span::before{content:"·";margin-inline-end:10px;color:var(--se-text-3)}
@@ -142,7 +145,7 @@ body.se-theme-light,html[data-theme=light] body,html[data-perfex-theme="light"] 
 /* tabs */
 .se-tabs{display:flex;gap:2px;border-bottom:1px solid var(--se-border);overflow-x:auto;margin-bottom:var(--se-sp-4)}
 .se-tabs a{height:44px;display:inline-flex;align-items:center;padding:0 14px;color:var(--se-text-2);font-weight:600;font-size:var(--se-fs-sm);border-bottom:2px solid transparent;white-space:nowrap}
-.se-tabs a.active{color:#fff;border-color:var(--se-primary)}
+.se-tabs a.active{color:var(--se-text);border-color:var(--se-primary)}
 .se-tabs a .n{margin-inline-start:6px;background:var(--se-surface-2);border-radius:var(--se-r-pill);padding:1px 7px;font-size:12px;color:var(--se-text-2)}
 /* timeline */
 .se-tl{list-style:none;margin:0;padding:0;position:relative}
@@ -255,9 +258,9 @@ body.se-theme-light,html[data-theme=light] body,html[data-perfex-theme="light"] 
 @media (max-width:767px){
   .se-main{padding:var(--se-sp-4);padding-bottom:80px}
   .se-grid-8-4{grid-template-columns:1fr}
-  .se-tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;bottom:0;left:0;right:0;height:64px;background:#25263a;border-top:1px solid var(--se-border);z-index:6}
+  .se-tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;bottom:0;left:0;right:0;height:64px;background:var(--se-tabbar-bg);border-top:1px solid var(--se-border);z-index:6}
   .se-tabbar a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;color:var(--se-text-2);position:relative}
-  .se-tabbar a.active{color:#fff}
+  .se-tabbar a.active{color:var(--se-tabbar-active)}
   .se-tabbar a .i{font-size:20px}
   .se-tabbar a .se-count{position:absolute;top:8px;right:calc(50% - 22px);background:var(--se-action);color:#1e1e2e;font-size:11px;font-weight:700;border-radius:var(--se-r-pill);padding:0 5px}
   .se-btn{height:var(--se-ctrl-m)}

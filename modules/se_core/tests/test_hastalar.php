@@ -129,3 +129,16 @@ $r2 = se_hastalar_query(se_hastalar_filters(['page' => 2]), $now);
 se_eq(19, count($r2['rows']), 'page 2 has the rest');
 se_eq(2, se_hastalar_query(se_hastalar_filters(['page' => 9]), $now)['page'], 'page beyond the end clamps');
 se_eq(false, $r['capped'], 'not capped below the scan limit');
+
+/* ======================================================================== */
+se_group('Hastalar: query count is bounded (no N+1 per row)');
+se_hastalar_seed($ago, $now, 40);
+se_test_act_as(10, []);
+$db = se_test_db(); $db->selects = [];
+se_hastalar_query(se_hastalar_filters([]), $now);
+$n25 = array_sum($db->selects);
+$db->selects = [];
+se_hastalar_query(se_hastalar_filters(['page' => 2]), $now);
+$n19 = array_sum($db->selects);
+se_ok($n25 <= 20, "a 25-row page runs a bounded number of SELECTs ({$n25} ≤ 20)");
+se_ok(abs($n25 - $n19) <= 2, "and the count does not grow with the row count (25 rows: {$n25}, 19 rows: {$n19})");

@@ -25,6 +25,10 @@
     name(document.querySelector('#header .quick-actions, #header .dropdown-quick-actions a'), L.quick || 'Hızlı ekle');
     var search = document.querySelector('#header input[type="search"], #search_input, #header .search-input');
     if (search && !search.getAttribute('aria-label')) { search.setAttribute('aria-label', L.search || 'Ara'); }
+    // Perfex 3.4 header: the search submit (icon only) and the mobile menu chevron carry no name.
+    var searchIcon = document.querySelector('#header .fa-search');
+    name(searchIcon ? searchIcon.closest('button') : null, L.search || 'Ara');
+    name(document.querySelector('#header .navbar-toggle, #header .mobile-menu-toggle'), L.menu || 'Menüyü aç/kapat');
   }
 
   function skipLink() {

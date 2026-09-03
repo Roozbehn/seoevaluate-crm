@@ -311,7 +311,7 @@ $tabs = [
         <div class="se-grid" style="grid-template-columns:1fr 1fr">
           <div class="se-field"><label for="se-rv-staff"><?php echo _l('se_journey_assignee'); ?></label>
             <select id="se-rv-staff" name="assigned_staff" class="se-input" <?php echo $can['edit_review'] ? '' : 'disabled'; ?>><option value="0">—</option><?php foreach ($staff as $s) { ?><option value="<?php echo (int) $s['staffid']; ?>"<?php echo (int) $j->assigned_staff === (int) $s['staffid'] ? ' selected' : ''; ?>><?php echo html_escape(trim($s['firstname'] . ' ' . $s['lastname'])); ?></option><?php } ?></select></div>
-          <div class="se-field"><label for="se-rv-due"><?php echo _l('se_journey_due'); ?></label><input id="se-rv-due" type="datetime-local" name="due_at" class="se-input" value="<?php echo html_escape($review && $review->due_at ? date('Y-m-d\TH:i', strtotime($review->due_at)) : ''); ?>" <?php echo $can['edit_review'] ? '' : 'disabled'; ?> /></div>
+          <div class="se-field"><label for="se-rv-due"><?php echo _l('se_journey_due'); ?></label><input id="se-rv-due" type="datetime-local" name="due_at" class="se-input" value="<?php echo html_escape($review && !empty($review->due_at) ? date('Y-m-d\TH:i', strtotime($review->due_at)) : ''); ?>" <?php echo $can['edit_review'] ? '' : 'disabled'; ?> /></div>
         </div>
         <div class="se-field"><label for="se-rv-decision"><?php echo _l('se_journey_decision'); ?></label>
           <select id="se-rv-decision" name="decision" class="se-input" <?php echo $can['edit_review'] ? '' : 'disabled'; ?>>

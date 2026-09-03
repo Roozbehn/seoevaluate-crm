@@ -179,6 +179,36 @@ se_eq(false, $gate['ok'], 'a row with no recorded consent never sends');
 se_eq('no ad consent at event time', $gate['reason'], 'reason names the missing consent');
 
 /* ======================================================================== */
+se_group('CAPI consent E2E: marketing tick + ads mapping OFF → conversion skipped consent_blocked, visible on Health, nothing transmitted');
+
+se_test_seed_outbox();
+$db = se_test_db();
+$db->seed('tblse_wa_numbers', []); $db->seed('tblse_ig_accounts', []); $db->seed('tblse_meta_forms', []); $db->seed('tblse_outbox', []);
+$db->seed('tblse_wa_outbound', []); $db->seed('tblse_reminders', []);
+// The patient ticked MARKETING on the intake; the brand mapping to `ads` is OFF (default).
+$leads = $db->rows('tblleads'); $leads[0]['consent_ads'] = 0; $db->seed('tblleads', $leads);
+se_consent_record(1, 'lead', 101, 'marketing', SE_CONSENT_GRANTED, 'kvkk-v1', 'wa_intake', 0, 'consent_marketing', 'yes');
+se_eq('', (string) get_option('se_consent_ads_from_intake_1'), 'the ads mapping option is unset (OFF)');
+se_eq(false, se_consent_granted(1, 'lead', 101, 'ads'), 'no ads consent derives from the marketing tick');
+$GLOBALS['se_test']['options']['se_capi_enabled_1'] = 1;
+se_test_install_secret('meta_capi_1', 'zz-capi-fixture-token');   // a token IS present: consent must be the only blocker
+$q = se_outbox_queue(1, 101, 'meta_capi', 'Lead', [], date('Y-m-d H:i:s'));
+se_eq(1, count($db->rows('tblse_conversion_outbox')), 'the conversion is queued (the intent is kept)');
+$r = se_outbox_drain();
+$row = $db->rows('tblse_conversion_outbox')[0];
+se_eq(['skipped', 'consent_blocked'], [$row['status'], $row['error_code']], 'the drain skips it with reason consent_blocked — it never reaches the transport');
+se_eq(0, (int) $row['attempts'], 'no delivery attempt was made');
+$h = se_integration_health(1);
+se_eq(1, (int) ($h['outbox']['skipped_by_reason']['consent_blocked'] ?? 0), 'Health shows the skipped conversion by reason');
+$blk = null; foreach ((array) ($h['blockers'] ?? []) as $b) { if (stripos(json_encode($b), 'consent') !== false) { $blk = $b; } }
+se_ok($blk !== null, 'Health is not green: a consent blocker is listed');
+se_ok(stripos((string) ($blk['action'] ?? ''), 'owner/legal') !== false, 'and names the owner/legal decision that unblocks it');
+// Re-queue is refused while the reason stands (no silent retry).
+se_eq(false, se_outbox_requeue((int) $row['id'])['ok'], 'a staff re-queue of a consent-blocked row is refused');
+se_test_remove_secret('meta_capi_1');
+unset($GLOBALS['se_test']['options']['se_capi_enabled_1']);
+
+/* ======================================================================== */
 se_group('Gated failures do not consume retry attempts');
 
 se_test_seed_outbox();

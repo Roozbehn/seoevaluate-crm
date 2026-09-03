@@ -371,6 +371,43 @@ se_eq('skipped', $rems[3], 'a reminder for a missing appointment is skipped');
 se_eq(0, se_wa_consume_due_reminders(), 'a second run queues nothing (claimed rows are not re-consumed)');
 se_eq(1, count($db->rows('tblse_wa_outbound')), 'and creates no second outbound row');
 
+/* ======================================================================== */
+se_group('Reminder E2E (isolated): appointment → reminder → approved template → outbound → fake transport → reminder sent');
+
+$rems = []; foreach ($db->rows('tblse_reminders') as $r) { $rems[(int) $r['id']] = $r; }
+$out = $db->rows('tblse_wa_outbound')[0];
+se_eq((int) $out['id'], (int) $rems[1]['outbound_id'], 'the reminder carries the outbound row it became (v22 back-link)');
+se_eq(7001, (int) $rems[1]['appointment_id'], 'for the correct appointment id');
+se_eq(null, $rems[2]['outbound_id'] ?? null, 'the cancelled appointment never reached the outbound queue');
+
+// The drain sends through the FAKE transport: nothing leaves the harness.
+$GLOBALS['se_wa_sent'] = [];
+se_wa_register_transport(function ($m) { $GLOBALS['se_wa_sent'][] = $m; return ['ok' => true, 'wamid' => 'wamid.REMINDER.FIXTURE']; });
+se_eq(1, se_wa_out_drain(), 'the drain processed the one outbound row');
+se_eq(1, count($GLOBALS['se_wa_sent']), 'exactly one message reached the (fake) transport');
+se_eq([SE_WA_DEFAULT_REMINDER_TEMPLATE, 'template'], [$GLOBALS['se_wa_sent'][0]['template'] ?? $GLOBALS['se_wa_sent'][0]['template_name'] ?? '', $GLOBALS['se_wa_sent'][0]['kind'] ?? 'template'], 'the approved reminder template');
+$out = $db->rows('tblse_wa_outbound')[0];
+se_eq(['sent', 'wamid.REMINDER.FIXTURE'], [$out['status'], $out['wamid']], 'outbound row sent with the wamid');
+$rems = []; foreach ($db->rows('tblse_reminders') as $r) { $rems[(int) $r['id']] = $r; }
+se_eq('sent', $rems[1]['state'], 'the reminder state is SENT (was stuck at queued before v22)');
+se_ok(!empty($rems[1]['sent_at']), 'with sent_at');
+se_eq('skipped', $rems[2]['state'], 'the cancelled appointment reminder stays skipped — no message');
+se_eq(1, count($GLOBALS['se_wa_sent']), 'and nothing else was sent');
+
+// A permanent transport failure is mirrored as a failed reminder (visible on Health), never silently lost.
+$db->seed('tblse_wa_outbound', []);
+$db->seed('tblse_reminders', [
+    ['id' => 4, 'brand_id' => 1, 'appointment_id' => 7001, 'type' => 'appointment', 'channel' => 'whatsapp',
+     'state' => 'pending', 'attempts' => 0, 'template_ref' => null, 'scheduled_at' => date('Y-m-d H:i:s', time() - 60), 'outbound_id' => null],
+]);
+se_eq(1, se_wa_consume_due_reminders(), 'queued again for the live appointment');
+se_wa_register_transport(function ($m) { return ['ok' => false, 'code' => 400, 'error' => 'bad request']; });
+se_wa_out_drain();
+$rems = []; foreach ($db->rows('tblse_reminders') as $r) { $rems[(int) $r['id']] = $r; }
+se_eq('failed', $rems[4]['state'], 'a permanent send failure marks the reminder failed');
+se_ok((string) $rems[4]['last_error'] !== '', 'with the reason');
+se_wa_register_transport(function ($m) { $GLOBALS['se_wa_sent'][] = $m; return ['ok' => true, 'wamid' => 'w-after']; });
+
 // Leave the shared store clean for the next suite.
 se_test_remove_secret('wa_app');
 se_test_remove_secret('wa_token');

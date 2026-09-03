@@ -118,6 +118,8 @@ $db = se_timers_seed($ago, $now);
 se_journey_run_timers($now);
 se_eq(0, count($db->rows('tblse_journey_aftercare_plans')), 'default protocol is unapproved → no auto-start');
 se_ok(in_array('7:timer_aftercare', $kinds($db), true), 'staff get the "start the plan" task instead');
+se_eq(0, count($db->rows('tblse_wa_outbound')), 'and NO patient message was queued automatically (approval flag off)');
+se_eq('procedure_completed', se_journey_get_raw(7)->state, 'the journey is not moved either — visible task, not a silent skip');
 $db = se_timers_seed($ago, $now);
 $GLOBALS['se_test']['options'] = ['se_journey_aftercare_protocols_1' => json_encode([['key' => 'standard', 'version' => '2', 'approved' => 1, 'name' => 'Standart',
     'steps' => [['key' => 'day1', 'label' => '1. gün', 'offset_hours' => 24, 'kind' => 'checkin', 'template' => 'eyebrow_aftercare_checkin_tr']]]])];
@@ -128,3 +130,4 @@ se_eq('aftercare_active', se_journey_get_raw(7)->state, 'journey 7 → aftercare
 se_ok(!in_array('7:timer_aftercare', $kinds($db), true), 'and no "start the plan" task is left behind');
 se_eq(1, count(array_filter($db->rows('tblse_journey_events'), function ($e) { return $e['kind'] === 'auto_started'; })), 'logged as auto-started');
 se_eq(0, se_journey_run_timers($now)['aftercare'], 'not started twice');
+se_eq(0, count(array_filter($db->rows('tblse_wa_outbound'), function ($o) { return $o['status'] === 'sent'; })), 'starting the plan sends nothing immediately — the first step is scheduled for +24 h through the queue');

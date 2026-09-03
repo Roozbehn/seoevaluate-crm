@@ -9,7 +9,7 @@ Version: 1.0.0
 Requires at least: 3.4.1
 */
 
-define('SE_DS_VERSION', '1.1.0');
+define('SE_DS_VERSION', '1.2.0');
 
 /** Cache-busting asset version: DS version + file mtime, so an edited CSS/JS is never served stale by the browser or the CDN edge. */
 function se_asset_v($rel)

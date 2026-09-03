@@ -2,9 +2,9 @@
 <?php init_head(); $c = $conversation;
 $evidence_redacted = $this->input->get('evidence') === 'redacted';
 $contact_label = se_ig_redacted_contact($c->igsid); ?>
-<div id="wrapper"><div class="content">
+<div id="wrapper"><div class="content se-page se-messages">
 
-<?php se_ui_header(_l('se_instagram') . ' — ' . $contact_label, [
+<?php se_ui_header(_l('se_nav_messages') . ' · Instagram — ' . $contact_label, [
     ['href' => admin_url('se_instagram/se_instagram/inbox'), 'label' => _l('se_back'), 'icon' => 'fa-arrow-left'],
 ]); ?>
 
@@ -66,14 +66,14 @@ $contact_label = se_ig_redacted_contact($c->igsid); ?>
     <div class="panel_s"><div class="panel-body">
       <h5><?php echo html_escape(_l('se_ig_assigned_staff')); ?></h5>
       <?php echo form_open(admin_url('se_instagram/se_instagram/assign/' . (int) $c->id)); ?>
-        <div class="form-group"><select class="form-control" name="staff_id">
+        <div class="se-field"><label class="se-sr" for="se-ig-assign"><?php echo html_escape(_l('se_ig_assigned_staff')); ?></label><select class="se-input" id="se-ig-assign" name="staff_id">
           <option value="0"><?php echo html_escape(_l('se_ig_unassigned')); ?></option>
           <?php foreach ($staff as $s) { ?>
             <option value="<?php echo (int) $s['staffid']; ?>"<?php echo (int) $c->assigned_staff === (int) $s['staffid'] ? ' selected' : ''; ?>>
               <?php echo html_escape(trim($s['firstname'] . ' ' . $s['lastname'])); ?></option>
           <?php } ?>
         </select></div>
-        <button type="submit" class="btn btn-default btn-sm"><?php echo html_escape(_l('submit')); ?></button>
+        <button type="submit" class="se-btn se-btn-secondary"><?php echo html_escape(_l('submit')); ?></button>
       <?php echo form_close(); ?>
     </div></div>
     <?php } ?>

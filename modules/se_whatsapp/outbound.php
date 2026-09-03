@@ -649,9 +649,34 @@ function se_wa_out_drain($limit = 50)
                ->where('locked_by', $worker)
                ->where('fence', (int) $row['fence'])
                ->update($table, $update);
+
+        if ($CI->db->affected_rows() > 0) {
+            se_wa_out_reflect_reminder($row, $update);
+        }
     }
 
     return count($rows);
+}
+
+/**
+ * Mirror a final outbound outcome onto the appointment reminder it came from
+ * (se_reminders.outbound_id, v22): sent → `sent` + sent_at; a permanent
+ * failure → `failed` + last_error. Transient retries leave the reminder queued.
+ */
+function se_wa_out_reflect_reminder(array $row, array $update)
+{
+    $CI = &get_instance();
+    $t  = db_prefix() . 'se_reminders';
+    if (!$CI->db->table_exists($t)) { return; }
+    $status = (string) ($update['status'] ?? '');
+    if ($status === 'sent') {
+        $CI->db->where('outbound_id', (int) $row['id'])->where('state', 'queued')
+               ->update($t, ['state' => 'sent', 'sent_at' => (string) ($update['sent_at'] ?? date('Y-m-d H:i:s')), 'last_error' => null]);
+    } elseif (in_array($status, ['failed', 'skipped'], true)) {
+        $CI->db->where('outbound_id', (int) $row['id'])->where('state', 'queued')
+               ->update($t, ['state' => 'failed', 'failed_at' => date('Y-m-d H:i:s'),
+                             'last_error' => mb_substr((string) ($update['last_error'] ?? $status), 0, 255)]);
+    }
 }
 
 /** Decide the outcome for one claimed outbound row. */
@@ -947,6 +972,10 @@ function se_wa_consume_due_reminders($limit = 50)
 
         if ($res['ok'] || $res['reason'] === 'duplicate') {
             $queued++;
+            if (!empty($res['id'])) {
+                // Back-link so the drain can mark this reminder sent/failed (v22).
+                $CI->db->where('id', (int) $rem['id'])->update($table, ['outbound_id' => (int) $res['id']]);
+            }
         } else {
             $CI->db->where('id', (int) $rem['id'])->update($table, [
                 'state' => 'failed', 'last_error' => mb_substr($res['reason'], 0, 255),

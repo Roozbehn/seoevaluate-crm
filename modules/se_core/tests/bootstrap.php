@@ -204,7 +204,21 @@ function update_option($name, $value)
 
 function add_option($name, $value) { return update_option($name, $value); }
 
-function _l($key, $x = '') { return $key; }
+/* Identity by default (tests assert on keys). The view renderer sets $GLOBALS['SE_LANG'] to a real language
+ * file so rendered pages carry the real strings — with Perfex's sprintf-with-label semantics reproduced. */
+function _l($key, $x = '')
+{
+    if (!empty($GLOBALS['SE_LANG']) && isset($GLOBALS['SE_LANG'][$key])) {
+        $line = $GLOBALS['SE_LANG'][$key];
+        if ($x !== '' && $x !== null && strpos($line, '%') !== false) {
+            return @vsprintf($line, is_array($x) ? $x : [$x]) ?: $line;
+        }
+
+        return $line;
+    }
+
+    return $key;
+}
 
 function log_activity($msg) { $GLOBALS['se_test']['activity'][] = $msg; }
 

@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 21);
+define('SE_CORE_SCHEMA_VERSION', 22);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -427,6 +427,13 @@ function se_core_migration_statements()
 
     /* --- v8.8: brand-scoping index coverage for tenant queries ------------- */
     $stmts[] = "ALTER TABLE `{$p}se_staff_brands` ADD INDEX IF NOT EXISTS `staff_id` (`staff_id`)";
+
+    /* --- v22: appointment reminder → outbound back-link (closure 2026-09-04) --
+     * A reminder used to stop at `queued`; the WhatsApp drain now records
+     * `sent`/`failed` on the reminder through the outbound row it became.
+     * Additive: one nullable column + index. Rollback: DROP COLUMN. */
+    $stmts[] = "ALTER TABLE `{$p}se_reminders` ADD COLUMN IF NOT EXISTS `outbound_id` bigint(20) DEFAULT NULL";
+    $stmts[] = "ALTER TABLE `{$p}se_reminders` ADD INDEX IF NOT EXISTS `outbound_id` (`outbound_id`)";
 
     /* =====================================================================
      * Phase 13 (schema v9) — Meta Lead Ads queue durability. Additive only.

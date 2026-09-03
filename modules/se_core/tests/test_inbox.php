@@ -150,3 +150,17 @@ $a = se_journey_contextual_actions($J('closed_lost'), $all, se_journey_next_acti
 se_eq(['se_pw_reopen'], $labels($a), 'closed: only reopen');
 $html = se_journey_render_actions($a);
 se_ok(strpos($html, 'se-btn') !== false && strpos($html, 'se_pw_reopen') !== false, 'renders DS buttons');
+
+/* ======================================================================== */
+se_group('Inbox rows: query count is bounded (no N+1 per conversation)');
+se_inbox_seed($ago, $now, 60);
+se_test_act_as(10, ['se_journey.view']);
+$db = se_test_db(); $db->selects = [];
+$r = se_wa_inbox_rows(se_wa_inbox_filters([]), $now);
+$n50 = array_sum($db->selects);
+$tables50 = $db->selects; $db->selects = [];
+se_wa_inbox_rows(se_wa_inbox_filters(['before' => $r['next_before']]), $now);
+$n13 = array_sum($db->selects);
+se_ok($n50 <= 20, "a 50-row page runs a bounded number of SELECTs ({$n50} ≤ 20)");
+se_ok(max($tables50) <= 2, 'no table is queried more than twice for one page (per-row lookups would show as 50): ' . json_encode($tables50));
+se_ok($n13 <= $n50, "a smaller page never needs more queries (50 rows: {$n50}, 13 rows: {$n13})");

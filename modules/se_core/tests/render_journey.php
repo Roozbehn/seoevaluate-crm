@@ -47,10 +47,11 @@ function set_alert($t, $m) {}
 function redirect($u) { throw new RuntimeException('redirect ' . $u); }
 function set_status_header($c) {}
 
-/* Language: real files (English) so every key used by the views resolves. */
+/* Language: real files (English by default; SE_RENDER_LANG=turkish for the Turkish copy gate) so every key used by the views resolves. */
 $lang = [];
-foreach (['se_core', 'se_whatsapp', 'se_appointments', 'se_journey'] as $m) {
-    $f = dirname(dirname(__DIR__)) . '/' . $m . '/language/english/' . $m . '_lang.php';
+$SE_RENDER_LANG = preg_replace('/[^a-z]/', '', (string) getenv('SE_RENDER_LANG')) ?: 'english';
+foreach (['se_core', 'se_whatsapp', 'se_appointments', 'se_journey', 'se_instagram'] as $m) {
+    $f = dirname(dirname(__DIR__)) . '/' . $m . '/language/' . $SE_RENDER_LANG . '/' . $m . '_lang.php';
     if (is_file($f)) { include $f; }
 }
 $GLOBALS['SE_LANG'] = $lang;
@@ -133,17 +134,19 @@ function journey_view_data($j, $tab, $r) {
         $CI = &get_instance(); $CI->db->where('rel_id', (int) $j->lead_id)->where('brand_id', 1); $data['appointments'] = $CI->db->get('tblse_appointments')->result_array();
         $data['aftercare'] = se_journey_aftercare_events($j); $data['protocols'] = se_journey_aftercare_protocols(1); $data['preop'] = se_journey_preop_checklist(1);
     }
-    // timeline (same merge as the controller)
-    $items = [];
+    // Same shape as Se_journey::view() after Wave 4: human timeline, header facts, next action.
     $CI = &get_instance();
-    $CI->db->where('conversation_id', (int) $j->wa_conversation_id)->order_by('id', 'DESC')->limit(50);
-    foreach ($CI->db->get('tblse_wa_messages')->result_array() as $m) { $items[] = ['at' => ($m['received_at'] ?? '') ?: (($m['sent_at'] ?? '') ?: $m['date_created']), 'kind' => 'wa_' . $m['direction'], 'label' => ($m['direction'] === 'in' ? 'Inbound' : 'Outbound') . ' · ' . $m['type'] . (($m['delivery_state'] ?? '') ? ' · ' . $m['delivery_state'] : ''), 'text' => $m['type'] === 'image' ? '[photo]' : mb_substr((string) $m['body'], 0, 300), 'actor' => $m['source'] ?? '']; }
-    $CI->db->where('journey_id', (int) $j->id)->order_by('id', 'DESC');
-    foreach ($CI->db->get('tblse_journey_transitions')->result_array() as $t) { $items[] = ['at' => $t['created_at'], 'kind' => 'transition', 'label' => ($t['from_state'] ?: '—') . ' → ' . $t['to_state'], 'text' => $t['trigger_key'], 'actor' => $t['actor_type']]; }
-    $CI->db->where('journey_id', (int) $j->id)->order_by('id', 'DESC');
-    foreach ($CI->db->get('tblse_journey_events')->result_array() as $e) { $items[] = ['at' => $e['created_at'], 'kind' => 'event', 'label' => $e['kind'], 'text' => (string) $e['summary'], 'actor' => $e['actor_type']]; }
-    usort($items, function ($a, $b) { return strcmp((string) $b['at'], (string) $a['at']); });
-    $data['timeline'] = $items;
+    $CI->db->where('id', (int) $j->lead_id);
+    $data['lead'] = $CI->db->get('tblleads')->row_array() ?: null;
+    $data['name'] = $data['lead'] && trim((string) $data['lead']['name']) !== '' ? (string) $data['lead']['name'] : (string) ($j->display_name ?? '');
+    $data['phone'] = se_ui_phone($data['lead']['phonenumber'] ?? (string) $j->wa_user_id, false, false);
+    $batch = se_journey_batch_context([(array) $j], null, ['next_appointment' => true]);
+    $item = $batch['items'][0] ?? null;
+    $data['na'] = $item ? $item['na'] : se_journey_next_action_for($j);
+    $data['next_appointment'] = $item ? $item['next_appointment'] : null;
+    $data['wa_failed'] = false; $data['unread'] = 0;
+    $data['quote_latest'] = se_journey_quote_latest($j);
+    $data['timeline'] = se_journey_timeline_human($j, 150);
     return $data;
 }
 
