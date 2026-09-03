@@ -501,6 +501,7 @@ class Se_journey extends AdminController
             'quote_amount_policy' => se_journey_quote_amount_policy($brand),
             'preop_text_approved' => (int) get_option('se_journey_preop_text_approved_' . $brand),
             'preop_info_url' => (string) get_option('se_journey_preop_info_url_' . $brand),
+            'consultation_info_approved' => (int) get_option('se_journey_consultation_info_approved_' . $brand),
             'technical_fields' => (int) get_option('se_journey_technical_fields_' . $brand),
             'media_storage' => (string) get_option('se_journey_media_storage') ?: 'auto',
             'media_storage_status' => se_journey_media_storage_status(),
@@ -563,6 +564,7 @@ class Se_journey extends AdminController
             update_option('se_journey_preop_text_approved_' . $brand, (int) $this->input->post('preop_text_approved') === 1 ? 1 : 0);
             $url = trim((string) $this->input->post('preop_info_url'));
             update_option('se_journey_preop_info_url_' . $brand, preg_match('#^https://#i', $url) ? mb_substr($url, 0, 500) : '');
+            update_option('se_journey_consultation_info_approved_' . $brand, (int) $this->input->post('consultation_info_approved') === 1 ? 1 : 0);
             update_option('se_journey_ask_infectious_' . $brand, (int) $this->input->post('ask_infectious') === 1 ? 1 : 0);
             $protocols = json_decode((string) $this->input->post('protocols_json'), true);
             if (is_array($protocols)) {

@@ -345,6 +345,12 @@ function se_journey_quote_send($quote_id, $staff_id)
 
         return ['ok' => false, 'reason' => 'send_' . $r['reason']];
     }
+    // The quote alone does not explain the procedure, what to do before it or
+    // what recovery looks like — send those links right behind it (gated
+    // separately; see se_journey_send_consultation_information).
+    if (function_exists('se_journey_send_consultation_information')) {
+        se_journey_send_consultation_information($j);
+    }
     $now = date('Y-m-d H:i:s');
     se_guarded_update(db_prefix() . 'se_journey_quotes', 'id', (int) $q->id, [
         'status' => 'sent', 'sent_at' => $now, 'sent_by' => (int) $staff_id, 'snapshot_json' => $json,
