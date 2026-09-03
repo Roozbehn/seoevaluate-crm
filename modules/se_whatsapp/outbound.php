@@ -476,7 +476,10 @@ function se_wa_interactive_payload($body, array $p)
         $f = $p['flow'];
         $params = ['flow_message_version' => (string) ($f['flow_message_version'] ?? '3'), 'flow_token' => (string) $f['flow_token'],
                    'flow_id' => (string) $f['flow_id'], 'flow_cta' => (string) $f['flow_cta'], 'flow_action' => (string) ($f['flow_action'] ?? 'navigate')];
-        if (!empty($f['flow_action_payload']) && is_array($f['flow_action_payload'])) {
+        // flow_action_payload (first screen + its data) exists only for
+        // navigate; with data_exchange the endpoint answers INIT with the
+        // first screen, and Meta refuses the field (#131009).
+        if ($params['flow_action'] === 'navigate' && !empty($f['flow_action_payload']) && is_array($f['flow_action_payload'])) {
             $params['flow_action_payload'] = $f['flow_action_payload'];
         }
         $interactive = ['type' => 'flow', 'body' => ['text' => $body], 'action' => ['name' => 'flow', 'parameters' => $params]];
@@ -526,7 +529,8 @@ function se_wa_shape_interactive(array $message)
             'flow_token' => $token, 'flow_id' => $flowId, 'flow_cta' => $cta,
             'flow_action' => (string) ($f['flow_action'] ?? 'navigate') === 'data_exchange' ? 'data_exchange' : 'navigate',
         ]];
-        if (!empty($f['flow_action_payload']) && is_array($f['flow_action_payload'])) {
+        // Only navigate carries a first-screen payload (see se_wa_interactive_payload).
+        if ($payload['flow']['flow_action'] === 'navigate' && !empty($f['flow_action_payload']) && is_array($f['flow_action_payload'])) {
             $payload['flow']['flow_action_payload'] = $f['flow_action_payload'];
         }
         $footer = trim((string) ($message['footer'] ?? ''));

@@ -741,13 +741,18 @@ function se_journey_send_flow($j, $kind, $body, $correlation = '', array $opts =
     $spec = [
         'purpose' => (string) ($opts['purpose'] ?? ($kind . '_flow')), 'kind' => 'interactive', 'body' => (string) $body,
         'interactive_type' => 'flow', 'correlation' => $correlation, 'bypass_pause' => !empty($opts['bypass_pause']),
+        // data_exchange: the endpoint answers Meta's INIT with the first screen
+        // (consent, or where the patient left off), so the message carries NO
+        // flow_action_payload — Meta refuses one with data_exchange (#131009,
+        // seen live 2026-09-03), exactly as the template button refuses
+        // navigate_screen (2388203). The entry screen in the definition is
+        // documentation of what INIT returns first, not a message field.
         'flow' => ['flow_message_version' => SE_JOURNEY_FLOW_MESSAGE_VERSION, 'flow_token' => $flowToken, 'flow_id' => $ready['flow_id'],
-                   'flow_cta' => se_journey_flow_trim($def['cta'], 20), 'flow_action' => 'data_exchange',
-                   'flow_action_payload' => ['screen' => $def['entry'], 'data' => ['init' => true]]],
+                   'flow_cta' => se_journey_flow_trim($def['cta'], 20), 'flow_action' => 'data_exchange'],
         'dedup_salt' => 'f' . substr(hash('sha256', $flowToken), 0, 12),
         // Outside the window: the template with the FLOW button (approved once the flow id exists).
         'template' => $def['template'], 'template_vars' => [se_journey_template_name($j)],
-        'template_flow' => ['index' => 0, 'flow_token' => $flowToken, 'flow_action_data' => ['init' => true]],
+        'template_flow' => ['index' => 0, 'flow_token' => $flowToken],
     ];
 
     return se_journey_send($j, $spec);

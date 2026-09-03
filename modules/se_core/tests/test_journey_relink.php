@@ -102,3 +102,51 @@ se_eq('already_started', se_journey_start_from_lead(702, 10)['reason'], 'a dupli
 se_eq(701, (int) se_test_journey_row()->lead_id, 'the link stays with the existing lead');
 se_eq(false, se_journey_relink_lead(se_test_journey_row(), 9999, 10), 'relink to a lead that does not exist is refused');
 se_eq(false, se_journey_relink_lead(se_test_journey_row(), 0, 10), 'relink to nothing is refused');
+
+/* ======================================================================== */
+se_group('Journey restart: a later journey on the SAME thread gets its own welcome (idempotency is per journey)');
+
+// Production 2026-09-03: after the test purge the owner started a new journey on
+// his old thread. The welcome was "already queued": the outbound idempotency
+// key is (thread, kind, content) and the PREVIOUS journey's welcome row still
+// existed — nothing was sent. The journey id is part of the key now.
+se_test_seed_journey(['leads' => [
+    ['id' => 710, 'brand_id' => 1, 'name' => 'Web Aday', 'phonenumber' => '+905000000041', 'email' => 'r@example.com', 'status' => 5, 'source' => 7, 'consent_marketing' => 1, 'consent_ads' => 0, 'lost' => 0, 'junk' => 0, 'lastcontact' => null, 'default_language' => '', 'country' => 0, 'city' => ''],
+]]);
+se_test_act_as(10, [], true);
+$db = se_test_db();
+update_option('se_journey_enabled_1', 1);
+se_journey_seed_templates(1);
+foreach ($db->tables['tblse_journey_templates'] as &$row) { if ($row['logical_name'] === 'eyebrow_journey_start_tr') { $row['approval_status'] = 'approved'; } }
+unset($row);
+$db->seed('tblse_wa_templates', [['id' => 1, 'brand_id' => 1, 'name' => 'eyebrow_journey_start_tr', 'language' => 'tr', 'category' => 'UTILITY', 'approval_state' => 'approved', 'variables' => '1']]);
+
+// First journey: the patient wrote (window open) → welcome with buttons, in-window.
+se_test_wa_deliver(se_test_wa_body('905000000041', 'kaş ekimi hakkında bilgi almak istiyorum', se_test_wamid(), ['name' => 'Rana']));
+$first = se_test_journey_row();
+$r = se_journey_send_welcome($first, 'staff:10');
+se_wa_out_drain();
+se_eq(['inwindow', ''], [$r['mode'], $r['reason']], 'first journey: welcome queued in-window');
+$sentAfterFirst = count($GLOBALS['se_wa_sent']);
+
+// The journey is purged (rows removed) while the thread and its outbound history stay — exactly the purge.
+$db->tables['tblse_journeys'] = [];
+$db->tables['tblse_journey_events'] = [];
+$db->tables['tblse_journey_transitions'] = [];
+
+// A new journey on the same thread, from the (new) lead.
+$r = se_journey_start_from_lead(710, 10);
+se_wa_out_drain();
+se_eq(true, $r['ok'], 'second journey started on the same thread');
+se_eq(true, $r['created'], 'a new journey row');
+se_eq('inwindow', $r['mode'], 'window still open → in-window welcome');
+se_eq($sentAfterFirst + 1, count($GLOBALS['se_wa_sent']), 'the welcome went out AGAIN — not "already queued" by the first journey\'s row');
+$ev = array_filter($db->rows('tblse_journey_events'), function ($e) { return $e['kind'] === 'wa_outbound'; });
+se_ok(!in_array(true, array_map(function ($e) { return strpos((string) $e['summary'], 'already queued') !== false; }, $ev), true), 'the timeline does not say "already queued"');
+$second = se_test_journey_row();
+// Within ONE journey the same message is still one row.
+$sentBefore = count($GLOBALS['se_wa_sent']);
+$r = se_journey_send_welcome($second, 'staff:10');
+se_wa_out_drain();
+se_eq('duplicate', $r['reason'], 'the same welcome twice in one journey is still deduplicated');
+se_eq($sentBefore, count($GLOBALS['se_wa_sent']), 'nothing resent');

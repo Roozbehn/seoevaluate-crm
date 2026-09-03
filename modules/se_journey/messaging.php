@@ -352,7 +352,13 @@ function se_journey_send($j, array $spec)
     }
 
     $origin = 'journey:' . mb_substr($purpose, 0, 36);
-    $salt   = (string) ($spec['dedup_salt'] ?? '');
+    // The queue's idempotency key is (thread, kind, content): identical wording
+    // is one row per thread, for ever. A LATER journey on the same thread (a
+    // returning patient; a test restarted after a purge) would have its
+    // welcome silently "already queued" by the previous journey's row — seen
+    // live 2026-09-03. The journey id makes the key per journey; the caller's
+    // salt still distinguishes repeats within one journey.
+    $salt   = 'j' . (int) $j->id . ((string) ($spec['dedup_salt'] ?? '') !== '' ? ':' . (string) $spec['dedup_salt'] : '');
 
     if ($policy['mode'] === 'freeform') {
         $kind = ($spec['kind'] ?? 'text') === 'interactive' ? 'interactive' : 'text';

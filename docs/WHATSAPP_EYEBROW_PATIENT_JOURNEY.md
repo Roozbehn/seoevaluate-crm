@@ -753,6 +753,28 @@ otherwise the template with `{{1}}` + the flow-button component; the journey **s
 `se_wa_reply_blocked_flow_button_required|journey_required|journey_permission`. Suite **3,577
 pass, 0 fail** (`test_journey_relink.php` + the composer group in `test_journey_flows.php`).
 
+### 16.5 Addendum — the first real Flow send, and a welcome that was "already queued" (2026-09-03 12:30 +03)
+
+Fresh test after the purge (§16.4 data removed): website form → lead → *Start WhatsApp evaluation*
+on the owner's original thread (window open). Two silent failures, both fixed and covered:
+
+**(#131009) Parameter value is not valid** on the in-window Flow message (`journey:privacy_and_flow`,
+outbound #900629/#900630). The message carried `flow_action: data_exchange` **and**
+`flow_action_payload: {screen: CONSENT, data: {init: true}}`. `flow_action_payload` exists only for
+`navigate` ("required if flow_action is navigate, must be omitted otherwise"); with `data_exchange`
+Meta calls the endpoint with `INIT` and the endpoint names the first screen — which
+`se_journey_flow_intake_step` / `_booking_step` already did. `se_journey_send_flow` no longer sends
+it, `se_wa_shape_interactive` / `se_wa_interactive_payload` accept it only with `navigate`, and the
+template FLOW button sends the token alone (no `flow_action_data`). Same family as 2388203
+(`navigate_screen` with `data_exchange` in the template definition).
+
+**"welcome (inwindow, already queued)"** — nothing sent. The outbound idempotency key is
+(thread, kind, content); the previous journey's welcome row on the same thread survived the purge
+(threads were kept), so the new journey's identical welcome was deduplicated for ever — the same
+would hit any returning patient. `se_journey_send` now prefixes every dedup salt with the journey id
+(`j<id>[:salt]`): one row per message per journey, still one row for a repeat inside a journey.
+Regression tests: `test_journey_relink.php` (restart group), `test_journey_flows.php`.
+
 **Not done, by design (owner steps, in order):**
 
 1. Log in once as admin (seeds the 11 template rows, grants the journey capabilities to Clinic Owner / Sales).

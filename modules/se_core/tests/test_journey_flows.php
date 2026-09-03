@@ -186,7 +186,15 @@ se_eq('consent_pending', $j->state, 'state: consent_pending (the step happened)'
 $last = end($GLOBALS['se_wa_sent']);
 se_eq('interactive', $last['kind'], 'in-window: an interactive message');
 se_eq('flow', $last['payload']['flow']['flow_action'] === 'data_exchange' ? 'flow' : 'x', 'a Flow CTA with data_exchange');
-se_eq(['3', '10001', 'Formu Doldur', 'CONSENT'], [$last['payload']['flow']['flow_message_version'], $last['payload']['flow']['flow_id'], $last['payload']['flow']['flow_cta'], $last['payload']['flow']['flow_action_payload']['screen']], 'version, id, CTA (≤ 20), entry screen');
+se_eq(['3', '10001', 'Formu Doldur'], [$last['payload']['flow']['flow_message_version'], $last['payload']['flow']['flow_id'], $last['payload']['flow']['flow_cta']], 'version, id, CTA (≤ 20)');
+se_ok(!isset($last['payload']['flow']['flow_action_payload']), 'NO flow_action_payload with data_exchange — Meta refused it live (#131009); INIT names the first screen');
+se_ok(!isset(se_wa_interactive_payload($last['body'], $last['payload'])['action']['parameters']['flow_action_payload']), 'nor in the Cloud API body');
+se_eq(['flow_message_version', 'flow_token', 'flow_id', 'flow_cta', 'flow_action'], array_keys(se_wa_interactive_payload($last['body'], $last['payload'])['action']['parameters']), 'exactly the five data_exchange parameters');
+// navigate keeps its first-screen payload; a data_exchange definition that still carries one is stripped at queue time.
+$nav = se_wa_shape_interactive(['body' => 'x', 'interactive_type' => 'flow', 'flow' => ['flow_token' => 't', 'flow_id' => '1', 'flow_cta' => 'Aç', 'flow_action' => 'navigate', 'flow_action_payload' => ['screen' => 'A']]]);
+se_eq('A', $nav['payload']['flow']['flow_action_payload']['screen'] ?? '', 'navigate carries the screen');
+$dx = se_wa_shape_interactive(['body' => 'x', 'interactive_type' => 'flow', 'flow' => ['flow_token' => 't', 'flow_id' => '1', 'flow_cta' => 'Aç', 'flow_action' => 'data_exchange', 'flow_action_payload' => ['screen' => 'A']]]);
+se_ok(!isset($dx['payload']['flow']['flow_action_payload']), 'data_exchange drops it');
 $flowToken = $last['payload']['flow']['flow_token'];
 se_ok(strpos($flowToken, 'intake.') === 0, 'flow_token = kind.token');
 se_ok(strpos($last['body'], 'WhatsApp içinde') !== false, 'the body explains the in-chat form');
@@ -297,7 +305,8 @@ se_authz_reset_cache();
 se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, '', se_test_wamid(), ['interactive' => ['type' => 'button_reply', 'button_reply' => ['id' => 'jr_quote_accept', 'title' => 'Teklifi Kabul Et']]]));
 se_eq('quote_accepted', se_test_journey_row()->state, 'accepted');
 $last = end($GLOBALS['se_wa_sent']);
-se_eq(['interactive', '10002', 'Tarih Seç', 'DAY'], [$last['kind'], $last['payload']['flow']['flow_id'], $last['payload']['flow']['flow_cta'], $last['payload']['flow']['flow_action_payload']['screen']], 'the booking FLOW went instead of the calendar link');
+se_eq(['interactive', '10002', 'Tarih Seç', 'data_exchange'], [$last['kind'], $last['payload']['flow']['flow_id'], $last['payload']['flow']['flow_cta'], $last['payload']['flow']['flow_action']], 'the booking FLOW went instead of the calendar link');
+se_ok(!isset($last['payload']['flow']['flow_action_payload']), 'no first-screen payload (data_exchange)');
 se_ok(strpos((string) $last['body'], '/book') === false, 'no link');
 $bookToken = $last['payload']['flow']['flow_token'];
 
@@ -359,6 +368,7 @@ $p = se_wa_template_send_payload($last);
 $btn = end($p['template']['components']);
 se_eq(['button', 'flow', '0', 'action'], [$btn['type'], $btn['sub_type'], $btn['index'], $btn['parameters'][0]['type']], 'Cloud API button component sub_type flow');
 se_eq($last['payload']['flow_button']['flow_token'], $btn['parameters'][0]['action']['flow_token'], 'carrying the flow_token');
+se_eq(['flow_token'], array_keys($btn['parameters'][0]['action']), 'the action carries the token alone — no flow_action_data with data_exchange');
 
 // Flows switched off → the classic link, unchanged.
 $GLOBALS['se_test']['options']['se_journey_flows_1'] = 0;
@@ -466,7 +476,7 @@ se_wa_out_drain();
 se_eq(['inwindow', true], [$r['mode'], $r['ok']], 'window open → in-window');
 $last = end($GLOBALS['se_wa_sent']);
 se_eq('interactive', $last['kind'], 'the Flow message');
-se_eq(['10001', 'CONSENT'], [$last['payload']['flow']['flow_id'] ?? '', $last['payload']['flow']['flow_action_payload']['screen'] ?? ''], 'the intake Flow CTA, entry screen CONSENT');
+se_eq(['10001', 'data_exchange', false], [$last['payload']['flow']['flow_id'] ?? '', $last['payload']['flow']['flow_action'] ?? '', isset($last['payload']['flow']['flow_action_payload'])], 'the intake Flow CTA (data_exchange, no first-screen payload)');
 
 // The booking template goes through the calendar step.
 $r = se_journey_compose_template($conv, 'eyebrow_booking_flow_tr', 10);
