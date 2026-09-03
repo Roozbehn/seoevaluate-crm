@@ -19,31 +19,41 @@ require "modules/se_core/se_push.php";
 echo json_encode(se_push_vapid_generate()), PHP_EOL;'
 ```
 
-Install the JSON it prints with the safe installer, which reads from stdin and
-never puts a value in argv or a log:
+Write it to a file on the host and install it with the safe installer, which
+keeps the value out of argv, shell history and process lists:
 
 ```bash
-/home/hyundaic/bin/se-secret-install.sh webpush_vapid
+/home/hyundaic/bin/se-secret-install.sh webpush_vapid --file /tmp/.vapid.json
+rm -f /tmp/.vapid.json
 ```
+
+**Done on 2026-09-03.** `se_push_configured()` returns true on the host.
 
 **The public half must never change.** Regenerating the keypair silently
 invalidates every subscription that already exists, and the only symptom is
 that notifications stop, with nothing in any log.
 
-## 2. Serve the service worker from the site root
+## 2. Service worker scope — already handled
 
-A service worker only controls pages at or below its own URL. Served from
-`/se_core/se_pwa/sw` it would control nothing useful. Add to `.htaccess` at the
-docroot, above the existing CI rewrite:
+A service worker only controls pages at or below its OWN url, so one served
+from `/se_core/se_pwa/sw` would ordinarily control nothing useful and would
+never receive a push for an `/admin` page.
 
-```apache
-RewriteRule ^sw\.js$ index.php/se_core/se_pwa/sw [L]
+The controller sends `Service-Worker-Allowed: /`, which is exactly the header
+that lets a worker served from a subpath claim root scope, and `pwa.js`
+registers with `{ scope: '/' }`. **Nothing needs to be added to `.htaccess`.**
+
+A root `RewriteRule ^sw\.js$` was tried on this host and did not take — the
+CodeIgniter catch-all wins and CI 404s the URI — so it was reverted rather than
+left in place doing nothing. Verified live instead:
+
+```
+$ curl -sI https://crm.roozbeh.com.tr/se_core/se_pwa/sw
+content-type: application/javascript; charset=utf-8
+service-worker-allowed: /
 ```
 
-The controller already sends `Service-Worker-Allowed: /`, which is what lets a
-worker served from a subpath claim root scope. Without one of these two, the
-worker registers successfully and then never receives a push — which looks
-exactly like a broken subscription.
+If a future host makes the rewrite work, it is an optimisation, not a fix.
 
 ## 3. Replace the placeholder icons
 
