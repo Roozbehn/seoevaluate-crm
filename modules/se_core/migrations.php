@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 20);
+define('SE_CORE_SCHEMA_VERSION', 21);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -400,6 +400,30 @@ function se_core_migration_statements()
         KEY `conversation_id` (`conversation_id`),
         KEY `brand_id` (`brand_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    /* --- v21: hot-path indexes (AZCRM-PERF-001 / CRM-M053) ------------------
+     * Additive and idempotent (ADD INDEX IF NOT EXISTS). Applied on the host
+     * only through migrate_cli.php --apply after a backup; runtime migrate()
+     * also picks it up. Covers: status-webhook lookups by wamid, the Bugün /
+     * Mesajlar queries (brand + last_inbound_at, lead_id), the attention
+     * queue and timers (state + automation_state), attention rows by
+     * conversation, and the reminder scan.
+     */
+    $stmts[] = "ALTER TABLE `{$p}se_wa_outbound` ADD INDEX IF NOT EXISTS `wamid` (`wamid`)";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_outbound` ADD INDEX IF NOT EXISTS `conv_status` (`conversation_id`,`status`)";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_conversations` ADD INDEX IF NOT EXISTS `lead_id` (`lead_id`)";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_conversations` ADD INDEX IF NOT EXISTS `brand_last_inbound` (`brand_id`,`last_inbound_at`)";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_conversations` ADD INDEX IF NOT EXISTS `brand_unread` (`brand_id`,`unread_count`)";
+    $stmts[] = "ALTER TABLE `{$p}se_wa_messages` ADD INDEX IF NOT EXISTS `conv_id` (`conversation_id`,`id`)";
+    $stmts[] = "ALTER TABLE `{$p}se_journeys` ADD INDEX IF NOT EXISTS `automation_state` (`automation_state`,`state`)";
+    $stmts[] = "ALTER TABLE `{$p}se_journeys` ADD INDEX IF NOT EXISTS `wa_conversation_id` (`wa_conversation_id`)";
+    $stmts[] = "ALTER TABLE `{$p}se_journeys` ADD INDEX IF NOT EXISTS `lead_id` (`lead_id`)";
+    $stmts[] = "ALTER TABLE `{$p}se_journeys` ADD INDEX IF NOT EXISTS `brand_last_updated` (`brand_id`,`last_updated`)";
+    $stmts[] = "ALTER TABLE `{$p}se_appointments` ADD INDEX IF NOT EXISTS `brand_start` (`brand_id`,`start_at`)";
+    $stmts[] = "ALTER TABLE `{$p}se_appointments` ADD INDEX IF NOT EXISTS `rel` (`rel_type`,`rel_id`,`start_at`)";
+    $stmts[] = "ALTER TABLE `{$p}se_appointments` ADD INDEX IF NOT EXISTS `staff_start` (`staff_id`,`start_at`)";
+    $stmts[] = "ALTER TABLE `{$p}se_journey_tasks` ADD INDEX IF NOT EXISTS `journey_state` (`journey_id`,`state`)";
+    $stmts[] = "ALTER TABLE `{$p}se_journey_quotes` ADD INDEX IF NOT EXISTS `journey_id` (`journey_id`)";
 
     /* --- v8.8: brand-scoping index coverage for tenant queries ------------- */
     $stmts[] = "ALTER TABLE `{$p}se_staff_brands` ADD INDEX IF NOT EXISTS `staff_id` (`staff_id`)";

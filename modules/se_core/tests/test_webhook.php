@@ -454,3 +454,13 @@ se_ok(strpos($html, 'ZZ-OWN-BRAND-APPT') !== false && strpos($html, 'ZZ-FOREIGN-
 /* ----------------------------------------------------------------------- */
 se_test_webhook_purge_secrets();
 se_test_reset();
+
+/* ======================================================================== */
+se_group('Webhook failure keeps a redacted message (AZCRM-OBS-003 / CRM-M073)');
+$e = new RuntimeException('Graph said 401 for +905551112233 with token EAABsbCS1iHgBAOZCZBZCZBZCZBZC0123456789abcdef at /home/user/public_html/modules/x.php');
+$m = se_wa_redact_error($e);
+se_ok(strpos($m, 'RuntimeException') === 0, 'class first: ' . $m);
+se_ok(strpos($m, '905551112233') === false && strpos($m, '[phone]') !== false, 'phone redacted');
+se_ok(strpos($m, 'EAABsbCS') === false && strpos($m, '[token]') !== false, 'token redacted');
+se_ok(strpos($m, 'public_html') === false && strpos($m, '[path]') !== false, 'path redacted');
+se_ok(mb_strlen(se_wa_redact_error(new RuntimeException(str_repeat('x', 500)))) <= 200, 'capped at 200 chars');

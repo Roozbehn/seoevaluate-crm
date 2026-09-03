@@ -213,6 +213,18 @@ function se_wa_store_event($raw_body, $signature_valid)
 }
 
 /** Exponential backoff with full jitter for webhook reprocessing. */
+/** Exception class + message with tokens/phones/paths redacted, capped for the last_error column. */
+function se_wa_redact_error($e)
+{
+    $msg = (string) $e->getMessage();
+    $msg = preg_replace('/[A-Za-z0-9_\-]{24,}/', '[token]', $msg);     // bearer/app secrets/wamids
+    $msg = preg_replace('/\+?\d{9,15}/', '[phone]', $msg);              // phone numbers
+    $msg = preg_replace('#/[^\s:]+\.php#', '[path]', $msg);             // file paths
+    $msg = preg_replace('/\s+/', ' ', trim($msg));
+
+    return mb_substr(get_class($e) . ($msg !== '' ? ': ' . $msg : ''), 0, 200);
+}
+
 function se_wa_backoff_seconds($attempts)
 {
     $exp = SE_WA_BACKOFF_BASE * (2 ** max(0, (int) $attempts - 1));
@@ -327,10 +339,12 @@ function se_wa_process_pending($limit = 100)
         try {
             se_wa_process_event($ev);
         } catch (SeWaPermanentError $e) {
-            $error     = 'routing failure';
+            $error     = 'routing failure: ' . se_wa_redact_error($e);
             $permanent = true;
-        } catch (Exception $e) {
-            $error = 'processing error';
+        } catch (Throwable $e) {
+            // Class + redacted message (AZCRM-OBS-003): "processing error" alone
+            // made every failure look identical on the Health page.
+            $error = 'processing error: ' . se_wa_redact_error($e);
         }
 
         $attempts = (int) $ev['attempts'] + 1;

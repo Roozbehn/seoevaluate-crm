@@ -15,13 +15,16 @@
  */
 export default {
   async fetch(req, env) {
+    // Fail closed (AZCRM-SEC-004): without a configured MEDIA_KEY every path is
+    // refused. Previously an empty key made `Bearer ` and an HMAC over '' valid.
+    if (!env.MEDIA_KEY || env.MEDIA_KEY.length < 32 || !env.PREFIX) return json(503, { ok: false, reason: 'not_configured' });
     const url = new URL(req.url);
     if (!url.pathname.startsWith('/o/')) return json(404, { ok: false, reason: 'not_found' });
     const key = decodeURIComponent(url.pathname.slice(3));
     if (!key || key.includes('..') || !key.startsWith(env.PREFIX)) return json(404, { ok: false, reason: 'bad_key' });
 
     const bearer = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-    const authed = bearer && timingSafeEqual(bearer, env.MEDIA_KEY || '');
+    const authed = !!bearer && timingSafeEqual(bearer, env.MEDIA_KEY);
 
     if (req.method === 'PUT') {
       if (!authed) return json(401, { ok: false, reason: 'unauthorized' });
@@ -41,7 +44,8 @@ export default {
         const exp = parseInt(url.searchParams.get('exp') || '0', 10);
         const sig = url.searchParams.get('sig') || '';
         if (!exp || exp < Math.floor(Date.now() / 1000)) return json(404, { ok: false, reason: 'expired' });
-        const want = await hmacHex(env.MEDIA_KEY || '', key + '|' + exp);
+        if (!sig) return json(404, { ok: false, reason: 'bad_sig' });
+        const want = await hmacHex(env.MEDIA_KEY, key + '|' + exp);
         if (!timingSafeEqual(sig, want)) return json(404, { ok: false, reason: 'bad_sig' });
       }
       const range = req.headers.get('Range');

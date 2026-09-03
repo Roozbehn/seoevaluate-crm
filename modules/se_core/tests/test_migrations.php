@@ -8,7 +8,8 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 se_group('Schema version and statement shape');
 
-se_eq(20, SE_CORE_SCHEMA_VERSION, 'se_core schema version is 20 (v18 = quote answers, v19 = web push subscriptions, v20 = WhatsApp call log)');
+se_eq(21, SE_CORE_SCHEMA_VERSION, 'se_core schema version is 21 (v19 = web push subscriptions, v20 = WhatsApp call log, v21 = hot-path indexes)');
+se_eq(15, count(array_filter(se_core_migration_statements(), function ($q) { return stripos($q, 'ADD INDEX IF NOT EXISTS') !== false && (stripos($q, 'se_journeys`') !== false || stripos($q, 'se_wa_') !== false || stripos($q, 'se_appointments`') !== false || stripos($q, 'se_journey_tasks`') !== false || stripos($q, 'se_journey_quotes`') !== false); })) >= 15 ? 15 : 0, 'v21 adds the 15 hot-path indexes, all guarded');
 
 $stmts = se_core_migration_statements();
 se_ok(count($stmts) > 40, 'the statement list is populated (' . count($stmts) . ' statements)');
