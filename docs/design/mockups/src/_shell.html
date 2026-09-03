@@ -1,0 +1,29 @@
+<!-- SHELL TEMPLATE: header + sidebar + tabbar. Copied into each mockup; {{ACTIVE}} marks the active item -->
+<header class="se-header">
+  <button class="se-iconbtn" aria-label="Menüyü aç">☰</button>
+  <div class="se-brand">Azin Asgari</div>
+  <div class="se-search" role="search">🔍 <span>Hasta, telefon veya sohbet ara…</span> <span style="margin-inline-start:auto;font-size:12px">⌘K</span></div>
+  <button class="se-iconbtn" aria-label="Bildirimler, 3 yeni">🔔<span class="se-dot"></span></button>
+  <button class="se-iconbtn" aria-label="Yeni kayıt">＋</button>
+  <button class="se-iconbtn" aria-label="Hesap: Roozbeh">RN</button>
+</header>
+<aside class="se-sidebar" aria-label="Ana menü">
+  <ul class="se-nav">
+    <li class="se-nav-group">Operasyon</li>
+    <li><a href="#" class="{{today}}"><span class="i">☀️</span>Bugün<span class="se-count">6</span></a></li>
+    <li><a href="#" class="{{patients}}"><span class="i">👤</span>Hastalar</a></li>
+    <li><a href="#" class="{{messages}}"><span class="i">💬</span>Mesajlar<span class="se-count">3</span></a></li>
+    <li><a href="#" class="{{appointments}}"><span class="i">📅</span>Randevular</a></li>
+    <li class="se-nav-group">Yönetim</li>
+    <li><a href="#"><span class="i">📈</span>Raporlar</a></li>
+    <li><a href="#"><span class="i">🔌</span>Entegrasyonlar</a></li>
+    <li><a href="#"><span class="i">⚙️</span>Ayarlar</a></li>
+  </ul>
+</aside>
+<nav class="se-tabbar" aria-label="Alt menü">
+  <a href="#" class="{{today}}"><span class="i">☀️</span>Bugün<span class="se-count">6</span></a>
+  <a href="#" class="{{patients}}"><span class="i">👤</span>Hastalar</a>
+  <a href="#" class="{{messages}}"><span class="i">💬</span>Mesajlar<span class="se-count">3</span></a>
+  <a href="#" class="{{appointments}}"><span class="i">📅</span>Randevu</a>
+  <a href="#"><span class="i">☰</span>Diğer</a>
+</nav>

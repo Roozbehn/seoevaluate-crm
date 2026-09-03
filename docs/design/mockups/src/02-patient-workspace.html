@@ -1,0 +1,71 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hasta çalışma alanı — Azin CRM mockup</title><link rel="stylesheet" href="azin-ds.css"></head>
+<body><div class="se-shell">
+{{SHELL patients}}
+<main class="se-main">
+  <div class="se-card" style="margin-bottom:16px">
+    <div class="se-ph">
+      <div class="se-avatar" aria-hidden="true">EK</div>
+      <div>
+        <h1>Elif K. <span class="se-badge se-badge-action" style="vertical-align:middle;margin-inline-start:8px">Fotoğraflar geldi</span></h1>
+        <div class="se-idline"><span>+90 5•• ••• 27 41</span><span>Türkçe</span><span>Instagram reklamı</span><span>Sorumlu: Azin Asgari</span></div>
+        <dl class="se-facts">
+          <div><dt>Son temas</dt><dd>42 dk önce · WhatsApp</dd></div>
+          <div><dt>Randevu</dt><dd>—</dd></div>
+          <div><dt>Otomatik mesajlar</dt><dd><span class="se-badge se-badge-positive se-badge-plain" style="height:20px;font-size:12px">Açık</span></dd></div>
+          <div><dt>Rıza</dt><dd>Sağlık ✓ · Pazarlama ✓ · Yayın ✗</dd></div>
+          <div><dt>Sohbet penceresi</dt><dd>Açık · 23 sa kaldı</dd></div>
+        </dl>
+      </div>
+      <div class="se-ph-actions" style="display:flex;gap:8px"><button class="se-btn se-btn-primary">💬 WhatsApp'tan yaz</button><button class="se-btn se-btn-secondary">＋ Randevu</button><button class="se-btn se-btn-secondary" aria-label="Diğer işlemler">⋯</button></div>
+    </div>
+    <div class="se-stages" aria-label="Hasta süreci">
+      <span class="done" data-n="1">Talep</span><span class="done" data-n="2">Değerlendirme</span><span class="now" data-n="3">İnceleme</span><span data-n="4">Teklif</span><span data-n="5">Ön görüşme</span><span data-n="6">Kaş ekimi</span><span data-n="7">Bakım</span>
+    </div>
+    <div class="se-next">
+      <div><div class="k">Sonraki adım</div><div class="v">Gönderilen kaş fotoğraflarını inceleyin</div><div class="m">3 fotoğraf 42 dk önce geldi · form 2 sa önce tamamlandı · işaret yok</div></div>
+      <button class="se-btn se-btn-primary">Fotoğrafları incele</button>
+    </div>
+  </div>
+
+  <nav class="se-tabs" aria-label="Hasta sekmeleri">
+    <a href="#" class="active">Genel</a><a href="#">Sohbet<span class="n">2</span></a><a href="#">Değerlendirme</a><a href="#">Fotoğraflar<span class="n">3</span></a><a href="#">Teklif</a><a href="#">Randevular</a><a href="#">İşlem &amp; Bakım</a><a href="#">Geçmiş</a><a href="#">Dosyalar</a>
+  </nav>
+
+  <div class="se-grid se-grid-8-4">
+    <section class="se-stack">
+      <div class="se-card">
+        <h2>Geçmiş <span class="se-count">son 24 saat</span></h2>
+        <ul class="se-tl">
+          <li><span class="dot pt"></span><div><div class="h">3 fotoğraf alındı — inceleme için hazır</div><div class="m">42 dk önce · hasta · WhatsApp</div></div></li>
+          <li><span class="dot sys"></span><div><div class="h">Fotoğraf isteği gönderildi</div><div class="m">2 sa önce · otomatik mesaj · okundu</div><div class="b">Teşekkür ederiz. Ön değerlendirmenin tamamlanabilmesi için lütfen makyajsız, filtresiz…</div></div></li>
+          <li><span class="dot pt"></span><div><div class="h">Değerlendirme formu tamamlandı</div><div class="m">2 sa önce · hasta · WhatsApp formu · işaret yok</div></div></li>
+          <li><span class="dot pt"></span><div><div class="h">Sağlık verisi rızası verildi</div><div class="m">2 sa önce · kvkk-2026-09-v2</div></div></li>
+          <li><span class="dot sys"></span><div><div class="h">Karşılama mesajı gönderildi</div><div class="m">3 sa önce · otomatik mesaj · okundu</div></div></li>
+          <li><span class="dot pt"></span><div><div class="h">Yeni talep — Instagram reklamı</div><div class="m">3 sa önce · "Merhaba bilgi almak istiyorum"</div></div></li>
+        </ul>
+      </div>
+    </section>
+    <aside class="se-stack">
+      <div class="se-card">
+        <h2>Değerlendirme özeti</h2>
+        <ul class="se-checks">
+          <li><span class="ok">✓</span> Form tamamlandı (v2) · 2 sa önce</li>
+          <li><span class="ok">✓</span> Fotoğraflar 3/3 — sınıflandırılmadı</li>
+          <li><span class="todo">○</span> Uzman incelemesi</li>
+          <li><span class="todo">○</span> Teklif</li>
+        </ul>
+        <p class="se-help" style="margin:8px 0 0">Yaş 29 · daha önce işlem yok · ilaç yok · alerji yok</p>
+      </div>
+      <div class="se-card">
+        <h2>Uyarılar</h2>
+        <div class="se-alert se-alert-info">ℹ️ Fotoğraf yayın izni verilmedi — önce/sonra paylaşımı yapılamaz</div>
+      </div>
+      <div class="se-card">
+        <h2>Notlar</h2>
+        <textarea class="se-input" style="height:80px;padding:10px" placeholder="İç not ekle… (hastaya gönderilmez)"></textarea>
+        <button class="se-btn se-btn-secondary se-btn-sm" style="margin-top:8px">Kaydet</button>
+      </div>
+    </aside>
+  </div>
+</main>
+</div></body></html>

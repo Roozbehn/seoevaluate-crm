@@ -1,0 +1,31 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Randevular — Azin CRM mockup</title><link rel="stylesheet" href="azin-ds.css"><style>@media(max-width:767px){.se-page-head .se-actions{display:none}.se-legend{display:none}.se-agenda div[style*="display:flex"]{flex-wrap:wrap}}</style></head>
+<body><div class="se-shell">
+{{SHELL appointments}}
+<main class="se-main">
+  <div class="se-page-head"><h1>Randevular</h1><span class="se-sub">Eylül 2026</span>
+    <div class="se-actions"><button class="se-chip on">Ay</button><button class="se-chip">Hafta</button><button class="se-chip">Gün</button><button class="se-chip">Liste</button><button class="se-btn se-btn-secondary">‹ Bugün ›</button><button class="se-btn se-btn-primary">＋ Randevu</button></div>
+  </div>
+  <div class="se-legend" style="margin-bottom:12px"><span class="ev-consult">Ön görüşme</span><span class="ev-proc">Kaş ekimi</span><span class="ev-check">Kontrol</span><span class="ev-follow">Takip</span></div>
+  <div class="se-cal" role="grid" aria-label="Eylül 2026">
+    <div class="dh">Pzt</div><div class="dh">Sal</div><div class="dh">Çar</div><div class="dh">Per</div><div class="dh">Cum</div><div class="dh">Cmt</div><div class="dh">Paz</div>
+    <div class="d other">31</div><div class="d">1</div><div class="d">2<span class="ev ev-consult">13:00 Ön görüşme · Nur Ç.</span></div><div class="d">3</div><div class="d today"><span class="dn">4</span><span class="ev ev-consult">12:30 Ön görüşme · Derya B.</span><span class="ev ev-proc">14:00 Kaş ekimi · Ayşe Y.</span></div><div class="d">5</div><div class="d">6</div>
+    <div class="d">7</div><div class="d">8<span class="ev ev-consult">12:30 Ön görüşme · Zeynep D.</span><span class="ev ev-consult">13:30 Ön görüşme · Merve A.</span></div><div class="d">9</div><div class="d">10</div><div class="d">11<span class="ev ev-check">10:00 Kontrol · Ayşe Y.</span></div><div class="d">12</div><div class="d">13</div>
+    <div class="d">14</div><div class="d">15</div><div class="d">16</div><div class="d">17</div><div class="d">18<span class="ev ev-follow">Takip · Nur Ç. (14. gün)</span></div><div class="d">19</div><div class="d">20<span class="ev ev-check">11:00 Kontrol · Nur Ç.</span></div>
+    <div class="d">21</div><div class="d">22</div><div class="d">23</div><div class="d">24</div><div class="d">25</div><div class="d">26</div><div class="d">27</div>
+    <div class="d">28</div><div class="d">29</div><div class="d">30</div><div class="d other">1</div><div class="d other">2</div><div class="d other">3</div><div class="d other">4</div>
+  </div>
+  <!-- mobile agenda -->
+  <div class="se-agenda-m">
+    <div class="se-toolbar" style="overflow-x:auto;flex-wrap:nowrap"><button class="se-chip">‹</button><button class="se-chip">Çar 3</button><button class="se-chip on">Per 4</button><button class="se-chip">Cum 5</button><button class="se-chip">Cmt 6</button><button class="se-chip">›</button></div>
+    <div class="se-card">
+      <h2>Perşembe, 4 Eylül <span class="se-count">2 randevu</span></h2>
+      <ul class="se-agenda">
+        <li><span class="t">12:30</span><span class="bar" style="background:#93c5fd"></span><div><div class="n">Derya B.</div><div class="m">Ön görüşme · Klinik · Azin · 30 dk</div><div style="margin-top:8px;display:flex;gap:8px"><button class="se-btn se-btn-primary se-btn-sm">Görüşme yapıldı</button><button class="se-btn se-btn-secondary se-btn-sm">Bugün işlem planla</button></div></div></li>
+        <li><span class="t">14:00</span><span class="bar" style="background:#fdba74"></span><div><div class="n">Ayşe Y.</div><div class="m">Kaş ekimi · Klinik · Azin · 4 sa</div></div></li>
+      </ul>
+    </div>
+    <div class="se-card" style="margin-top:12px"><h2>Cuma, 5 Eylül <span class="se-count">boş</span></h2><p class="se-help" style="margin:0">Randevu yok.</p></div>
+  </div>
+  <a href="#" class="se-fab" aria-label="Yeni randevu">＋</a>
+</main>
+</div></body></html>

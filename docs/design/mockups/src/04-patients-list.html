@@ -1,0 +1,28 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hastalar — Azin CRM mockup</title><link rel="stylesheet" href="azin-ds.css"></head>
+<body><div class="se-shell">
+{{SHELL patients}}
+<main class="se-main">
+  <div class="se-page-head"><h1>Hastalar</h1><span class="se-sub">16 aktif · 2 kapalı</span><div class="se-actions"><button class="se-btn se-btn-secondary">Dışa aktar</button><button class="se-btn se-btn-primary">＋ Hasta</button></div></div>
+  <div class="se-toolbar">
+    <div class="se-search" style="flex:1 1 320px;height:40px">🔍 <span>Ad veya telefon…</span></div>
+    <button class="se-chip on">Aktif</button><button class="se-chip">İşlem bekleyen <b>6</b></button><button class="se-chip">Bana atanan</button><button class="se-chip">Bakımda</button><button class="se-chip">Kapalı</button>
+    <select class="se-input" style="width:auto;height:36px;padding:0 10px" aria-label="Aşama"><option>Aşama: Tümü</option><option>Talep</option><option>Değerlendirme</option><option>İnceleme</option><option>Teklif</option><option>Ön görüşme</option><option>Kaş ekimi</option><option>Bakım</option></select>
+    <select class="se-input" style="width:auto;height:36px;padding:0 10px" aria-label="Kaynak"><option>Kaynak: Tümü</option><option>Instagram</option><option>Meta Lead Ads</option><option>Web sitesi</option><option>WhatsApp</option></select>
+  </div>
+  <div class="se-card" style="padding:0">
+    <div class="se-tablewrap"><table class="se-table">
+      <thead><tr><th>Hasta</th><th>Aşama</th><th>Sonraki adım</th><th class="hide-m">Son temas</th><th class="hide-m">Randevu</th><th class="hide-m">Sorumlu</th><th class="hide-m">Kaynak</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><span class="se-name">Ayşe Y. <span class="se-badge se-badge-danger se-badge-plain" style="height:18px;font-size:11px">Acil</span></span><span class="se-meta">+90 5•• ••• 12 90 · TR</span></td><td><span class="se-badge se-badge-positive">Bakım · 2. gün</span></td><td>Ağrı bildirimi — yanıtla</td><td class="hide-m num">18 dk · 💬 1</td><td class="hide-m num">Kontrol 11 Eyl 10:00</td><td class="hide-m">Azin</td><td class="hide-m">Instagram</td><td><button class="se-btn se-btn-primary se-btn-sm">Yanıtla</button></td></tr>
+        <tr><td><span class="se-name">Elif K.</span><span class="se-meta">+90 5•• ••• 27 41 · TR</span></td><td><span class="se-badge se-badge-action">İnceleme</span></td><td>Fotoğrafları incele</td><td class="hide-m num">42 dk · 💬 2</td><td class="hide-m">—</td><td class="hide-m">Azin</td><td class="hide-m">Instagram</td><td><button class="se-btn se-btn-primary se-btn-sm">İncele</button></td></tr>
+        <tr><td><span class="se-name">Zeynep D.</span><span class="se-meta">+90 5•• ••• 08 33 · TR</span></td><td><span class="se-badge se-badge-action">Teklif · onay bekliyor</span></td><td>Teklif v2'yi onayla</td><td class="hide-m num">3 sa</td><td class="hide-m">—</td><td class="hide-m">Roozbeh</td><td class="hide-m">Web sitesi</td><td><button class="se-btn se-btn-primary se-btn-sm">Onayla</button></td></tr>
+        <tr><td><span class="se-name">Merve A.</span><span class="se-meta">+90 5•• ••• 55 02 · TR</span></td><td><span class="se-badge se-badge-warning">Teklif · yanıt bekleniyor</span></td><td>3 gündür yanıt yok — hatırlat</td><td class="hide-m num">3 g</td><td class="hide-m">—</td><td class="hide-m">Azin</td><td class="hide-m">Meta Lead Ads</td><td><button class="se-btn se-btn-secondary se-btn-sm">Hatırlat</button></td></tr>
+        <tr><td><span class="se-name">Derya B.</span><span class="se-meta">+90 5•• ••• 71 16 · TR</span></td><td><span class="se-badge se-badge-info">Ön görüşme</span></td><td>Bugün 12:30 · sonucu kaydet</td><td class="hide-m num">1 g</td><td class="hide-m num">Bugün 12:30</td><td class="hide-m">Azin</td><td class="hide-m">WhatsApp</td><td><button class="se-btn se-btn-secondary se-btn-sm">Aç</button></td></tr>
+        <tr><td><span class="se-name">Selin T.</span><span class="se-meta">+90 5•• ••• 40 07 · TR</span></td><td><span class="se-badge se-badge-inactive">Değerlendirme · duraklatıldı</span></td><td>Otomatik mesajları devam ettir</td><td class="hide-m num">2 g</td><td class="hide-m">—</td><td class="hide-m">Roozbeh</td><td class="hide-m">Instagram</td><td><button class="se-btn se-btn-secondary se-btn-sm">Devam</button></td></tr>
+        <tr><td><span class="se-name">+90 5•• ••• 34 19</span><span class="se-meta">ad bilinmiyor · TR</span></td><td><span class="se-badge se-badge-info">Yeni talep</span></td><td>Karşılama gönderildi — yanıt bekleniyor</td><td class="hide-m num">1 sa · 💬 1</td><td class="hide-m">—</td><td class="hide-m">—</td><td class="hide-m">WhatsApp</td><td><button class="se-btn se-btn-secondary se-btn-sm">Aç</button></td></tr>
+        <tr><td><span class="se-name">Nur Ç.</span><span class="se-meta">+90 5•• ••• 19 28 · FA</span></td><td><span class="se-badge se-badge-positive">Bakım · 14. gün</span></td><td>14. gün fotoğrafı istendi</td><td class="hide-m num">5 g</td><td class="hide-m num">Kontrol 20 Eyl</td><td class="hide-m">Azin</td><td class="hide-m">Instagram</td><td><button class="se-btn se-btn-secondary se-btn-sm">Aç</button></td></tr>
+      </tbody></table></div>
+    <div style="padding:12px 16px;display:flex;align-items:center;gap:12px;color:var(--se-text-2);font-size:13px">1–8 / 16 <span style="margin-inline-start:auto"></span><button class="se-btn se-btn-secondary se-btn-sm">Önceki</button><button class="se-btn se-btn-secondary se-btn-sm">Sonraki</button></div>
+  </div>
+</main>
+</div></body></html>

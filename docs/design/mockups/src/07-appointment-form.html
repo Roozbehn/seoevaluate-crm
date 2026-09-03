@@ -1,0 +1,29 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Randevu formu — Azin CRM mockup</title><link rel="stylesheet" href="azin-ds.css"></head>
+<body><div class="se-shell">
+{{SHELL appointments}}
+<main class="se-main">
+  <div class="se-page-head"><h1>Yeni randevu</h1><span class="se-sub">Derya B. için · ön görüşme bugün tamamlandı</span></div>
+  <div class="se-grid se-grid-8-4">
+    <form class="se-card se-stack" style="max-width:720px">
+      <div class="se-field"><label>Randevu türü</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="se-chip">Ön görüşme</button><button type="button" class="se-chip on">Kaş ekimi</button><button type="button" class="se-chip">Kontrol</button><button type="button" class="se-chip">Takip</button></div>
+        <span class="se-help">Kaş ekimi için varsayılan süre 4 saat.</span></div>
+      <div class="se-field"><label for="p">Hasta</label><input id="p" class="se-input" value="Derya B. · +90 5•• ••• 71 16"><span class="se-help">Ön görüşmeden otomatik dolduruldu.</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="se-field"><label for="d">Tarih</label><input id="d" class="se-input" type="date" value="2026-09-04"></div>
+        <div class="se-field"><label for="t">Saat</label><input id="t" class="se-input" type="time" value="14:00" aria-describedby="err" style="border-color:var(--se-danger)"><span class="se-error" id="err" role="alert">⚠ Bu saatte Azin Asgari için başka bir randevu var (14:00–18:00 Kaş ekimi · Ayşe Y.). İlk uygun saat: 18:30.</span></div>
+        <div class="se-field"><label for="s">Süre</label><select id="s" class="se-input"><option>4 saat</option><option>3 saat</option><option>5 saat</option></select></div>
+        <div class="se-field"><label for="st">Uygulayan</label><select id="st" class="se-input"><option>Azin Asgari — Kaş Ekimi Uzmanı</option></select></div>
+        <div class="se-field"><label for="l">Yer</label><select id="l" class="se-input"><option>Klinik · İstanbul</option><option>Çevrimiçi</option></select></div>
+        <div class="se-field"><label for="n">Not</label><input id="n" class="se-input" placeholder="İsteğe bağlı"></div>
+      </div>
+      <div class="se-field"><label>Hastaya bildirim</label><label class="se-help" style="display:flex;gap:8px;align-items:center;color:var(--se-text)"><input type="checkbox" checked> Onay mesajı ve takvim dosyası gönder (WhatsApp)</label><label class="se-help" style="display:flex;gap:8px;align-items:center;color:var(--se-text)"><input type="checkbox" checked> 24 saat önce hatırlatma gönder</label></div>
+      <div style="display:flex;gap:8px"><button type="button" class="se-btn se-btn-primary">Randevuyu kaydet</button><button type="button" class="se-btn se-btn-secondary">Vazgeç</button></div>
+    </form>
+    <aside class="se-stack">
+      <div class="se-card"><h2>Bugün · Azin</h2><ul class="se-mini"><li><span class="t">12:30</span><span class="n">Derya B.</span><span class="m">Ön görüşme ✓</span></li><li><span class="t">14:00</span><span class="n">Ayşe Y.</span><span class="m">Kaş ekimi · 4 sa</span></li><li><span class="t">18:30</span><span class="n" style="color:var(--se-positive)">uygun</span><span class="m">önerilen</span></li></ul></div>
+      <div class="se-card"><h2>Derya B.</h2><ul class="se-checks"><li><span class="ok">✓</span> Teklif kabul edildi · 45–50 bin</li><li><span class="ok">✓</span> Ön görüşme yapıldı · bugün</li><li><span class="ok">✓</span> Rıza tamam</li><li><span class="todo">○</span> İşlem öncesi bilgilendirme</li></ul></div>
+    </aside>
+  </div>
+</main>
+</div></body></html>
