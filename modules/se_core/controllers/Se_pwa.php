@@ -60,7 +60,15 @@ class Se_pwa extends App_Controller
         header('Service-Worker-Allowed: /');
         header('Cache-Control: no-cache');
 
-        $this->load->view('se_core/pwa/service_worker');
+        /*
+         * Rendered to a STRING and echoed, not loaded and exited.
+         * CodeIgniter's view loader appends to an output buffer that CI
+         * flushes at the end of the request — and `exit` never reaches that
+         * flush. The result is a 200 with the right Content-Type and a body of
+         * zero bytes: the browser registers the worker happily and it does
+         * nothing at all, forever. Found by curling the deployed route.
+         */
+        echo $this->load->view('se_core/pwa/service_worker', [], true);
         exit;
     }
 
