@@ -351,6 +351,7 @@ $lang['se_journey_start_evaluation'] = 'Değerlendirmeyi başlat';
 $lang['se_journey_open'] = 'Yolculuğu aç';
 $lang['se_journey_via_template'] = 'başlangıç şablonu olarak gönderildi — pencere kapalıydı';
 $lang['se_journey_already_started'] = 'Bu kişi için zaten bir yolculuk var';
+$lang['se_journey_lead_relinked'] = 'Bu numaranın mevcut yolculuğu artık bu fırsata bağlı';
 $lang['se_journey_sandbox_not_sent'] = 'Sandbox AÇIK ve bu kişi test alıcıları arasında değil — yolculuk ilerledi ama mesaj gönderilmedi (Yolculuklar → Ayarlar).';
 $lang['se_journey_welcome_queued'] = 'Karşılama kuyruğa alındı.';
 $lang['se_journeys'] = 'Hasta yolculukları';
