@@ -85,22 +85,28 @@ class Se_appointments_model extends App_Model
 
         // The posted brand_id was previously trusted verbatim, so a crafted POST
         // could create an appointment inside another tenant.
+        $this->last_reason = ''; $this->last_message = '';
         if (empty($opts['system']) && !se_can_access_brand((int) ($data['brand_id'] ?? 0))) {
+            $this->last_reason = 'brand';
             return false;
         }
         if (!empty($opts['system']) && (int) ($data['brand_id'] ?? 0) <= 0) {
+            $this->last_reason = 'brand';
             return false;   // a system booking is always for a known brand
         }
 
         if ($this->missing_required($data)) {
+            $this->last_reason = 'missing'; $this->last_message = _l('se_appt_missing_required');
             return false;
         }
 
         if ($this->invalid_window($data)) {
+            $this->last_reason = 'window'; $this->last_message = _l('se_appt_invalid_window');
             return false;
         }
 
         if ($this->invalid_links($data)) {
+            $this->last_reason = 'links';
             return false;
         }
 
@@ -110,6 +116,7 @@ class Se_appointments_model extends App_Model
         $lock = $this->acquire_slot_lock($data);
 
         if ($lock === false) {
+            $this->last_reason = 'lock';
             return false;   // could not take the lock: refuse, do not guess
         }
 
@@ -175,11 +182,14 @@ class Se_appointments_model extends App_Model
             'status'   => $before->status,
         ], $data);
 
+        $this->last_reason = ''; $this->last_message = '';
         if ($this->invalid_window($merged)) {
+            $this->last_reason = 'window'; $this->last_message = _l('se_appt_invalid_window');
             return false;
         }
 
         if ($this->invalid_links($merged)) {
+            $this->last_reason = 'links';
             return false;
         }
 
@@ -350,19 +360,35 @@ class Se_appointments_model extends App_Model
                  ]);
     }
 
+    /** Why the last add()/update() refused: 'conflict' | 'outside_hours' | 'window' | 'missing' | 'links' | 'brand' | 'lock' | ''. */
+    public $last_reason = '';
+    /** Human message for the last refusal (UX-COPY §5), '' when none. */
+    public $last_message = '';
+
     protected function has_availability_conflict($data, $ignore_id = 0)
     {
+        $this->last_reason = ''; $this->last_message = '';
         if (empty($data['start_at']) || empty($data['staff_id'])) {
             return false;
         }
         $end = !empty($data['end_at']) ? $data['end_at'] : $data['start_at'];
+        $brand = (int) ($data['brand_id'] ?? 0);
+        $staff = (int) $data['staff_id'];
 
-        if (function_exists('se_appt_has_overlap')
-            && se_appt_has_overlap((int) ($data['brand_id'] ?? 0), (int) $data['staff_id'], $data['start_at'], $end, $ignore_id)) {
+        if (function_exists('se_appt_has_overlap') && se_appt_has_overlap($brand, $staff, $data['start_at'], $end, $ignore_id)) {
+            $this->last_reason = 'conflict';
+            if (function_exists('se_appt_first_conflict') && function_exists('se_appt_conflict_message')) {
+                $clash = se_appt_first_conflict($brand, $staff, $data['start_at'], $end, $ignore_id);
+                $mins  = max(15, (int) round((strtotime($end) - strtotime($data['start_at'])) / 60));
+                $next  = function_exists('se_appt_next_free_slot') ? se_appt_next_free_slot($brand, $staff, $data['start_at'], $mins, $ignore_id) : '';
+                $who   = function_exists('get_staff_full_name') ? se_ui_short_name((string) get_staff_full_name($staff)) : '#' . $staff;
+                $this->last_message = $clash ? se_appt_conflict_message($clash, $who, $next) : _l('se_appt_conflict');
+            }
             return true;
         }
-        if (function_exists('se_appt_within_working_hours')
-            && !se_appt_within_working_hours((int) ($data['brand_id'] ?? 0), (int) $data['staff_id'], $data['start_at'], $end)) {
+        if (function_exists('se_appt_within_working_hours') && !se_appt_within_working_hours($brand, $staff, $data['start_at'], $end)) {
+            $this->last_reason = 'outside_hours';
+            $this->last_message = _l('se_appt_outside_hours');
             return true;
         }
 

@@ -140,3 +140,68 @@ function se_appt_selectable_staff($brand_id = 0)
     return $CI->db->get(db_prefix() . 'staff')->result_array();
 }
 
+
+/**
+ * The first existing appointment that clashes with [start,end) for the same
+ * staff+brand, with the patient's short name — for the human conflict
+ * message (CRM-M039 / UX-COPY §5). Null when free.
+ */
+function se_appt_first_conflict($brand_id, $staff_id, $start_at, $end_at, $ignore_id = 0)
+{
+    if (empty($start_at) || empty($end_at) || (int) $staff_id <= 0) {
+        return null;
+    }
+    $CI = &get_instance();
+    $p  = db_prefix();
+    $CI->db->where('brand_id', (int) $brand_id)->where('staff_id', (int) $staff_id)
+           ->where('status NOT IN ("cancelled","no_show")')
+           ->where('start_at <', $end_at)
+           ->group_start()->where('end_at >', $start_at)->or_where('end_at IS NULL', null, false)->group_end();
+    if ((int) $ignore_id > 0) { $CI->db->where('id !=', (int) $ignore_id); }
+    $CI->db->order_by('start_at', 'ASC')->limit(1);
+    $row = $CI->db->get($p . 'se_appointments')->row_array();
+    if (!$row) {
+        return null;
+    }
+    $row['patient'] = '';
+    if ((string) $row['rel_type'] === 'lead' && (int) $row['rel_id'] > 0) {
+        $CI->db->select('name')->where('id', (int) $row['rel_id']);
+        $l = $CI->db->get($p . 'leads')->row_array();
+        $row['patient'] = $l && function_exists('se_ui_short_name') ? se_ui_short_name($l['name']) : '';
+    }
+
+    return $row;
+}
+
+/**
+ * Next free start (H:i) on the same day for the staff member, scanning in
+ * 15-minute steps from the requested start; '' when the day is full. One
+ * query: that day's appointments, then arithmetic.
+ */
+function se_appt_next_free_slot($brand_id, $staff_id, $start_at, $minutes, $ignore_id = 0, $day_end = '20:00')
+{
+    if (empty($start_at) || (int) $staff_id <= 0 || (int) $minutes <= 0) {
+        return '';
+    }
+    $CI  = &get_instance();
+    $day = date('Y-m-d', strtotime($start_at));
+    $CI->db->select('id, start_at, end_at')->where('brand_id', (int) $brand_id)->where('staff_id', (int) $staff_id)
+           ->where('status NOT IN ("cancelled","no_show")')->where('start_at >=', $day . ' 00:00:00')->where('start_at <=', $day . ' 23:59:59')->limit(200);
+    $busy = [];
+    foreach ($CI->db->get(db_prefix() . 'se_appointments')->result_array() as $r) {
+        if ((int) $ignore_id > 0 && (int) $r['id'] === (int) $ignore_id) { continue; }
+        $s = strtotime($r['start_at']); $e = !empty($r['end_at']) ? strtotime($r['end_at']) : $s + 1800;
+        $busy[] = [$s, $e];
+    }
+    $t   = strtotime($start_at);
+    $t   = $t - ($t % 900) + (($t % 900) ? 900 : 0);   // round up to :00/:15/:30/:45
+    $end = strtotime($day . ' ' . $day_end . ':00');
+    $len = (int) $minutes * 60;
+    for ($i = 0; $i < 64 && $t + $len <= $end; $i++, $t += 900) {
+        $free = true;
+        foreach ($busy as [$s, $e]) { if ($s < $t + $len && $e > $t) { $free = false; break; } }
+        if ($free) { return date('H:i', $t); }
+    }
+
+    return '';
+}

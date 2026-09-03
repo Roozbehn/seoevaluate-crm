@@ -205,3 +205,28 @@ se_eq([20], $ids, 'Brand B staff can only assign Brand B staff');
 
 se_test_act_as(1, [], true);
 se_eq(4, count(se_appt_selectable_staff()), 'an admin may assign anyone active');
+
+/* ======================================================================== */
+se_group('Conflict message and next free slot (CRM-M039 / UX-COPY §5)');
+se_test_seed_appointments();
+$db = se_test_db();
+$db->seed('tblleads', [['id' => 101, 'brand_id' => 1, 'consent_ads' => 1, 'name' => 'Ayşe Yılmaz']]);
+$db->seed('tblse_appointments', [
+    ['id' => 801, 'brand_id' => 1, 'staff_id' => 10, 'rel_type' => 'lead', 'rel_id' => 101, 'status' => 'scheduled', 'title' => 'A', 'start_at' => '2026-06-01 10:00:00', 'end_at' => '2026-06-01 11:00:00', 'appointment_type' => 'consultation'],
+    ['id' => 803, 'brand_id' => 1, 'staff_id' => 10, 'rel_type' => 'lead', 'rel_id' => 101, 'status' => 'scheduled', 'title' => 'C', 'start_at' => '2026-06-01 11:00:00', 'end_at' => '2026-06-01 11:30:00', 'appointment_type' => 'check'],
+    ['id' => 804, 'brand_id' => 1, 'staff_id' => 10, 'rel_type' => 'lead', 'rel_id' => 101, 'status' => 'cancelled', 'title' => 'X', 'start_at' => '2026-06-01 11:30:00', 'end_at' => '2026-06-01 12:00:00', 'appointment_type' => 'check'],
+    ['id' => 802, 'brand_id' => 2, 'staff_id' => 20, 'rel_type' => 'lead', 'rel_id' => 202, 'status' => 'scheduled', 'title' => 'B', 'start_at' => '2026-06-01 10:00:00', 'end_at' => '2026-06-01 11:00:00', 'appointment_type' => 'consultation'],
+]);
+$c = se_appt_first_conflict(1, 10, '2026-06-01 10:30:00', '2026-06-01 11:00:00');
+se_eq(801, (int) $c['id'], 'the clashing appointment is found');
+se_eq('Ayşe Y.', $c['patient'], 'with the patient short name');
+se_eq(null, se_appt_first_conflict(1, 11, '2026-06-01 10:30:00', '2026-06-01 11:00:00'), 'another staff member is free');
+se_eq(null, se_appt_first_conflict(1, 10, '2026-06-01 10:30:00', '2026-06-01 11:00:00', 801), 'ignoring the row being edited');
+se_eq('11:30', se_appt_next_free_slot(1, 10, '2026-06-01 10:30:00', 30), 'next free 30-min slot skips 10–11 and 11–11:30; the cancelled 11:30 one does not block');
+se_eq('11:30', se_appt_next_free_slot(1, 10, '2026-06-01 10:37:00', 30), 'requested time is rounded up to the quarter hour');
+se_eq('', se_appt_next_free_slot(1, 10, '2026-06-01 19:50:00', 30), 'no slot fits before the end of the day');
+se_eq('10:30', se_appt_next_free_slot(1, 11, '2026-06-01 10:30:00', 30), 'a free staff member gets the requested time');
+$msg = se_appt_conflict_message($c, 'Azin A.', '11:30');
+se_ok(strpos($msg, 'Azin A.') !== false && strpos($msg, '10:00') !== false && strpos($msg, '11:00') !== false && strpos($msg, 'Ayşe Y.') !== false && strpos($msg, '11:30') !== false, 'message: who, when, what, next free — ' . $msg);
+se_eq(240, se_appt_type_minutes('procedure'), 'procedure default duration 4 h');
+se_eq(30, se_appt_type_minutes('bogus'), 'unknown type → consultation 30 min');

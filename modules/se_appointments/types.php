@@ -62,9 +62,9 @@ function se_appt_conflict_message($clash, $staff, $nextFree = '')
     $to   = date('H:i', strtotime((string) $clash['end_at']));
     $what = se_appt_type_label($clash['appointment_type'] ?? '');
     $who  = trim((string) ($clash['patient'] ?? ''));
-    $msg  = sprintf(_l('se_appt_conflict_human'), $staff, $from, $to, $what . ($who !== '' ? ' · ' . $who : ''));
+    $msg  = se_tr('se_appt_conflict_human', '%s already has an appointment at this time (%s–%s %s).', $staff, $from, $to, $what . ($who !== '' ? ' · ' . $who : ''));
     if ($nextFree !== '') {
-        $msg .= ' ' . sprintf(_l('se_appt_conflict_next_free'), $nextFree);
+        $msg .= ' ' . se_tr('se_appt_conflict_next_free', 'First free slot: %s.', $nextFree);
     }
 
     return $msg;

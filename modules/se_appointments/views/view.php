@@ -10,7 +10,11 @@ if (staff_can('edit', 'se_appointments')) {
                   'label' => _l('edit'), 'icon' => 'fa-pencil', 'class' => 'btn-primary'];
 }
 
-se_ui_header($a->title, $actions, _l('se_appt_detail'));
+$pname = isset($patient) && $patient !== '' ? se_ui_short_name($patient) : '';
+$journeyLink = '';
+if (function_exists('se_journey_find_by_lead') && $a->rel_type === 'lead' && (int) $a->rel_id > 0) { $jj = se_journey_find_by_lead((int) $a->brand_id, (int) $a->rel_id); if ($jj) { $journeyLink = admin_url('se_journey/se_journey/view/' . (int) $jj->id); } }
+if ($journeyLink !== '') { $actions[] = ['href' => $journeyLink, 'label' => _l('se_journey_patient'), 'icon' => 'fa-user']; }
+se_ui_header(($pname !== '' ? $pname . ' · ' : '') . se_appt_type_label($a->appointment_type ?? ''), $actions, se_ui_when($a->start_at) . ' · ' . $a->title);
 ?>
 
 <div class="row">
@@ -18,11 +22,12 @@ se_ui_header($a->title, $actions, _l('se_appt_detail'));
     <?php se_ui_kv([
         _l('se_appt_brand')    => se_ui_brand_badge((int) $a->brand_id),
         _l('se_appt_status')   => se_ui_badge($a->status, _l('se_appt_status_' . $a->status)),
-        _l('se_appt_start')    => html_escape($a->start_at),
-        _l('se_appt_end')      => html_escape((string) ($a->end_at ?: '—')),
+        _l('se_appt_type')     => html_escape(se_appt_type_label($a->appointment_type ?? '')),
+        _l('se_appt_start')    => html_escape(se_ui_when($a->start_at)),
+        _l('se_appt_end')      => html_escape($a->end_at ? se_ui_when($a->end_at) : '—'),
         _l('se_appt_staff')    => html_escape((string) ($a->staff_name ?: '—')),
         _l('se_appt_relation') => (!empty($a->rel_id) && $a->rel_type === 'lead')
-            ? '<a href="' . admin_url('leads/index/' . (int) $a->rel_id) . '">' . html_escape(_l('se_appt_lead')) . ' #' . (int) $a->rel_id . '</a>'
+            ? '<a href="' . ($journeyLink !== '' ? $journeyLink : admin_url('leads/index/' . (int) $a->rel_id)) . '">' . html_escape($pname !== '' ? $pname : _l('se_appt_lead') . ' #' . (int) $a->rel_id) . '</a>'
             : (!empty($a->rel_id)
                 ? '<a href="' . admin_url('clients/client/' . (int) $a->rel_id) . '">' . html_escape(_l('se_appt_customer')) . ' #' . (int) $a->rel_id . '</a>'
                 : '<span class="text-muted">&mdash;</span>'),
@@ -45,16 +50,21 @@ se_ui_header($a->title, $actions, _l('se_appt_detail'));
       <h5><?php echo html_escape(_l('se_appt_status')); ?></h5>
       <?php /* Each action is its own CSRF-protected POST. A status change is a
                mutation and must never be reachable by a GET link. */ ?>
+      <?php $heldAsk = $this->input->get('held') === '1' && in_array($a->status, ['scheduled', 'confirmed'], true);
+      if ($heldAsk) { echo se_ui_alert('info', _l('se_appt_mark_held_ask')); } ?>
       <?php foreach (['held', 'completed', 'no_show', 'cancelled'] as $target) {
-          if ($a->status === $target) { continue; } ?>
+          if ($a->status === $target) { continue; }
+          $primary = $heldAsk && $target === 'held'; ?>
         <?php echo form_open(admin_url('se_appointments/se_appointments/status/' . (int) $a->id), ['style' => 'display:inline']); ?>
           <input type="hidden" name="status" value="<?php echo html_escape($target); ?>" />
-          <button type="submit" class="btn btn-default btn-sm mbot10"
-                  onclick="return confirm('<?php echo html_escape(_l('se_appt_status_confirm')); ?>');">
-            <?php echo html_escape(_l('se_appt_status_' . $target)); ?>
+          <button type="submit" class="se-btn <?php echo $primary ? 'se-btn-primary' : 'se-btn-secondary'; ?> se-btn-sm mbot10"
+                  <?php echo $primary ? '' : 'onclick="return confirm(\'' . html_escape(_l('se_appt_status_confirm')) . '\');"'; ?>>
+            <?php echo html_escape($target === 'held' ? _l('se_appt_mark_held') : _l('se_appt_status_' . $target)); ?>
           </button>
         <?php echo form_close(); ?>
       <?php } ?>
+      <?php if ((string) ($a->appointment_type ?? '') === 'consultation' && in_array($a->status, ['scheduled', 'confirmed', 'held', 'completed'], true) && staff_can('create', 'se_appointments')) {
+          echo '<p style="margin-top:8px">' . se_ui_btn(_l('se_appt_same_day_procedure'), admin_url('se_appointments/create?type=procedure&from=' . (int) $a->id), 'secondary', ['sm' => true, 'icon' => '＋']) . '</p>'; } ?>
     </div></div>
     <?php } ?>
 

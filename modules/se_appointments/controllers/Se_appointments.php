@@ -60,6 +60,7 @@ class Se_appointments extends AdminController
         }
 
         $data['appointments'] = $data['has_brand'] ? $this->se_appointments_model->get('', $filters) : [];
+        $data['names']        = $data['appointments'] ? $this->se_appointments_model->patient_names($data['appointments']) : [];
         $data['brands']       = se_all_brands(true, true);
         $data['staff']        = se_appt_selectable_staff();
         $data['statuses']     = Se_appointments_model::STATUSES;
@@ -81,9 +82,54 @@ class Se_appointments extends AdminController
 
         $data['title']       = _l('se_appt_new');
         $data['appointment'] = null;
-        $this->form_data($data);
+        $data['prefill']     = $this->prefill((array) $this->input->get());
+        $this->form_data($data, (int) ($data['prefill']['brand_id'] ?? 0));
 
         $this->load->view('se_appointments/form', $data);
+    }
+
+    /**
+     * Prefill for the create form (CRM-M039/M041): ?lead=, ?journey=, ?type=,
+     * ?start=, and ?from=<appointment id> for the same-day procedure shortcut
+     * (copies patient, staff, brand, location; starts when the source ends).
+     */
+    private function prefill(array $g)
+    {
+        $pf = ['appointment_type' => se_appt_type_key((string) ($g['type'] ?? 'consultation'))];
+        if (!empty($g['from'])) {
+            $src = $this->se_appointments_model->get((int) $g['from']);   // brand-scoped
+            if ($src) {
+                $pf['rel_type'] = $src->rel_type; $pf['rel_id'] = (int) $src->rel_id; $pf['staff_id'] = (int) $src->staff_id;
+                $pf['brand_id'] = (int) $src->brand_id; $pf['location'] = (string) $src->location; $pf['consultation_format'] = (string) ($src->consultation_format ?? 'in_person');
+                $pf['appointment_type'] = se_appt_type_key((string) ($g['type'] ?? 'procedure'));
+                $pf['start_at'] = $src->end_at ?: $src->start_at;
+                $pf['from_id'] = (int) $src->id;
+            }
+        }
+        if (!empty($g['lead'])) { $pf['rel_type'] = 'lead'; $pf['rel_id'] = (int) $g['lead']; }
+        if (!empty($g['journey'])) { $pf['journey_id'] = (int) $g['journey']; }
+        if (!empty($g['start']) && strtotime((string) $g['start'])) { $pf['start_at'] = date('Y-m-d H:i:s', strtotime((string) $g['start'])); }
+        if (!empty($g['staff'])) { $pf['staff_id'] = (int) $g['staff']; }
+        $pf['duration'] = se_appt_type_minutes($pf['appointment_type']);
+
+        return $pf;
+    }
+
+    /** end_at from date + time + duration when the form did not post an explicit end. */
+    private function normalise_post(array $data)
+    {
+        if (!empty($data['date']) && !empty($data['time'])) {
+            $data['start_at'] = trim($data['date']) . ' ' . trim($data['time']) . (strlen(trim($data['time'])) === 5 ? ':00' : '');
+        }
+        if (empty($data['end_at']) && !empty($data['start_at']) && !empty($data['duration']) && strtotime($data['start_at'])) {
+            $data['end_at'] = date('Y-m-d H:i:s', strtotime($data['start_at']) + max(5, (int) $data['duration']) * 60);
+        }
+        if (empty($data['title'])) {
+            $data['title'] = se_appt_type_label($data['appointment_type'] ?? '');
+        }
+        unset($data['date'], $data['time'], $data['duration']);
+
+        return $data;
     }
 
     /** Edit form. Brand-guarded: a foreign id resolves to null and is denied. */
@@ -101,6 +147,7 @@ class Se_appointments extends AdminController
 
         $data['title']       = _l('edit');
         $data['appointment'] = $appointment;
+        $data['prefill']     = [];
         $this->form_data($data, (int) $appointment->brand_id);
 
         $this->load->view('se_appointments/form', $data);
@@ -167,6 +214,8 @@ class Se_appointments extends AdminController
         $data['title']       = $appointment->title;
         $data['appointment'] = $appointment;
         $data['history']     = $this->se_appointments_model->status_history((int) $id);
+        $names = $this->se_appointments_model->patient_names([(array) $appointment]);
+        $data['patient']     = $names[$appointment->rel_type . ':' . (int) $appointment->rel_id] ?? '';
         $data['statuses']    = Se_appointments_model::STATUSES;
         $this->load->view('se_appointments/view', $data);
     }
@@ -179,7 +228,9 @@ class Se_appointments extends AdminController
             redirect(admin_url('se_appointments/manage'));
         }
 
-        $data = $this->input->post();
+        $data = $this->normalise_post($this->input->post());
+        $journey = (int) $this->input->post('journey_id');
+        $back = (string) $this->input->post('back');
 
         if (!$id) {
             if (staff_cant('create', 'se_appointments')) {
@@ -188,25 +239,52 @@ class Se_appointments extends AdminController
             $new = $this->se_appointments_model->add($data);
             if ($new) {
                 set_alert('success', _l('se_appt_added'));
-            } else {
-                set_alert('warning', _l('se_appt_invalid_window'));
+                if ($journey > 0 && function_exists('se_journey_get') && function_exists('se_journey_link_appointment')) {
+                    $j = se_journey_get($journey);
+                    if ($j) { se_journey_link_appointment($j, (int) $new, (int) get_staff_user_id()); }
+                }
+                redirect($this->after_save($back, (int) $new));
             }
-        } else {
-            if (staff_cant('edit', 'se_appointments')) {
-                access_denied('se_appointments');
-            }
-            // Re-verify the id is in the staff member's scope before writing.
-            if (!$this->se_appointments_model->get($id)) {
-                access_denied('se_appointments');
-            }
-            if ($this->se_appointments_model->update($id, $data)) {
-                set_alert('success', _l('se_appt_updated'));
-            } else {
-                set_alert('warning', _l('se_appt_invalid_window'));
-            }
+            $this->form_error($data, null);
+            return;
         }
 
-        redirect(admin_url('se_appointments/se_appointments/manage'));
+        if (staff_cant('edit', 'se_appointments')) {
+            access_denied('se_appointments');
+        }
+        // Re-verify the id is in the staff member's scope before writing.
+        $before = $this->se_appointments_model->get($id);
+        if (!$before) {
+            access_denied('se_appointments');
+        }
+        if ($this->se_appointments_model->update($id, $data)) {
+            set_alert('success', _l('se_appt_updated'));
+            redirect($this->after_save($back, (int) $id));
+        }
+        $this->form_error($data, $before);
+    }
+
+    /** Same-site return target after a save (patient page, calendar…), else the appointment. */
+    private function after_save($back, $id)
+    {
+        if ($back !== '' && strpos($back, admin_url()) === 0 && strpos($back, "\n") === false) {
+            return $back;
+        }
+
+        return admin_url('se_appointments/se_appointments/view/' . (int) $id);
+    }
+
+    /** Re-render the form with the exact refusal (UX-COPY §5) and the posted values kept. */
+    private function form_error(array $posted, $appointment)
+    {
+        $msg = $this->se_appointments_model->last_message !== '' ? $this->se_appointments_model->last_message : _l('se_appt_invalid_window');
+        $data['title']       = $appointment ? _l('edit') : _l('se_appt_new');
+        $data['appointment'] = $appointment;
+        $data['prefill']     = $posted;
+        $data['error']       = $msg;
+        $data['error_kind']  = $this->se_appointments_model->last_reason;
+        $this->form_data($data, (int) ($appointment ? $appointment->brand_id : ($posted['brand_id'] ?? 0)));
+        $this->load->view('se_appointments/form', $data);
     }
 
     /** Delete an appointment. POST-only + CSRF (this was a GET route). */

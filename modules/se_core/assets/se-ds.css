@@ -112,6 +112,8 @@ body.se-theme-light,html[data-theme=light] body,body.light-mode{
 .se-field label{font-size:var(--se-fs-sm);font-weight:600;color:var(--se-text-2)}
 .se-help{font-size:var(--se-fs-meta);color:var(--se-text-3)}
 .se-error{font-size:var(--se-fs-meta);color:var(--se-danger)}
+.se-input.se-invalid{border-color:var(--se-danger)}
+.se-chip input.se-sr+*{pointer-events:none}.se-chip:has(input:focus-visible){outline:2px solid var(--se-focus,#8ab4f8);outline-offset:2px}
 /* patient header */
 .se-ph{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--se-sp-4);align-items:start}
 .se-avatar{width:48px;height:48px;border-radius:50%;background:var(--se-primary-soft);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}

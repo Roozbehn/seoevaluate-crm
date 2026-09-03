@@ -76,3 +76,20 @@ $lang['se_appt_notify']               = 'Patient notifications';
 $lang['se_appt_prefilled_from']       = 'Pre-filled from the consultation.';
 $lang['se_appt_minutes']              = 'min';
 $lang['se_appt_hours']                = 'h';
+
+/* Form v2 (CRM-M039) */
+$lang['se_appt_type_default_duration'] = 'Default duration for %s is %s.';
+$lang['se_appt_ends_at']            = 'Ends: %s';
+$lang['se_appt_location_ph']        = 'Clinic · Istanbul';
+$lang['se_appt_notes_ph']           = 'Optional';
+$lang['se_appt_more_fields']        = 'Other fields (title, timezone)';
+$lang['se_appt_notify_confirm_auto'] = 'When a patient journey is linked, the confirmation and calendar file go out automatically on WhatsApp.';
+$lang['se_appt_notify_reminder_auto'] = 'The reminder is queued automatically before the appointment.';
+$lang['se_appt_save']               = 'Save appointment';
+$lang['se_appt_outside_hours']      = 'This time is outside the selected person’s working hours.';
+$lang['se_appt_missing_required']   = 'Date, time and brand are required.';
+$lang['se_appt_col_patient']        = 'Patient';
+$lang['se_appt_col_when']           = 'When';
+$lang['se_appt_col_type']           = 'Type';
+$lang['se_appt_open']               = 'Open';
+$lang['se_appt_mark_held_ask'] = 'Mark the consultation as held; the patient journey moves on automatically.';

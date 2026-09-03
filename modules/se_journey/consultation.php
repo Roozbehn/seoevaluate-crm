@@ -34,6 +34,77 @@ function se_journey_appointments_model()
 }
 
 /**
+ * Attach an appointment that already exists (booked here or in the calendar
+ * form with ?journey=) to the journey: link id, move the state, log the event
+ * and queue the patient confirmation. Idempotent per appointment+start (the
+ * dedup salt carries the start time, so a reschedule sends a fresh one —
+ * CRM-M044 / AZCRM-AP-003).
+ */
+function se_journey_link_appointment($j, $id, $staff_id, array $data = [])
+{
+    $CI = &get_instance();
+    $CI->db->where('id', (int) $id)->where('brand_id', (int) $j->brand_id);
+    $appt = $CI->db->get(db_prefix() . 'se_appointments')->row();
+    if (!$appt || (string) $appt->rel_type !== 'lead' || (int) $appt->rel_id !== (int) $j->lead_id) {
+        return false;
+    }
+    $type   = (string) ($appt->appointment_type ?? '') === 'procedure' ? 'procedure' : 'consultation';
+    $start  = (string) $appt->start_at;
+    $format = (string) ($appt->consultation_format ?? 'in_person') === 'online' ? 'online' : 'in_person';
+    $actor  = (int) $staff_id > 0 ? 'staff' : 'patient';
+    $salt   = 'a' . (int) $id . ':' . (int) strtotime($start);
+    $now = date('Y-m-d H:i:s');
+    if ($type === 'consultation') {
+        $CI->db->where('id', (int) $j->id)->update(db_prefix() . 'se_journeys', ['consultation_appointment_id' => (int) $id, 'last_updated' => $now]);
+        $j->consultation_appointment_id = (int) $id;
+        if (in_array((string) $j->state, ['consultation_recommended', 'quote_sent', 'quote_accepted', 'quote_revision_requested', 'consultation_booked'], true)) {
+            se_journey_transition($j, 'consultation_booked', 'consultation_booked', $actor, $staff_id ?: null, 'appointment:' . (int) $id);
+        }
+        se_journey_event($j, 'consultation_booked', $format . ' ' . $start . ($actor === 'patient' ? ' (patient self-booked)' : ''), [], $actor, $staff_id ?: null, 'appointment', (string) $id);
+        if (function_exists('se_journey_send_copy')) {
+            // The confirmation carries an "add to calendar" link (.ics). Outside the
+            // window the 4-variable template goes when Meta has approved it; else
+            // the original 3-variable one (the booking page still offers the file).
+            $when = date('d.m.Y H:i', strtotime($start));
+            $fmt  = $format === 'online' ? 'online' : 'klinikte';
+            $cal  = se_journey_calendar_link($j, (int) $staff_id);
+            $tpl  = se_journey_template_ready((int) $j->brand_id, 'eyebrow_consultation_calendar_tr');
+            $spec = ['purpose' => 'consultation_confirmation', 'bypass_pause' => true, 'dedup_salt' => $salt];
+            if ($tpl['ready'] && $cal !== '') {
+                $spec['template'] = 'eyebrow_consultation_calendar_tr';
+                $spec['template_vars'] = [se_journey_template_name($j), $when, $fmt, $cal];
+            } else {
+                $spec['template'] = 'eyebrow_consultation_confirmation_tr';
+                $spec['template_vars'] = [se_journey_template_name($j), $when, $fmt];
+            }
+            se_journey_send_copy($j, 'consultation_confirmation', ['when' => $when, 'format' => $fmt, 'link' => $cal], $spec);
+        }
+    } else {
+        $upd = ['procedure_appointment_id' => (int) $id, 'last_updated' => $now];
+        if (!empty($data['deposit_state']) && in_array((string) $data['deposit_state'], ['none', 'requested', 'received', 'refunded'], true)) {
+            $upd['deposit_state'] = (string) $data['deposit_state'];
+        }
+        if (isset($data['payment_ref'])) {
+            $upd['payment_ref'] = mb_substr(preg_replace('/\d{8,}/', '[ref]', (string) $data['payment_ref']), 0, 64);   // never a card number
+        }
+        $CI->db->where('id', (int) $j->id)->update(db_prefix() . 'se_journeys', $upd);
+        $j->procedure_appointment_id = (int) $id;
+        if (in_array((string) $j->state, ['consultation_completed', 'quote_sent', 'quote_accepted', 'procedure_booked'], true)) {
+            se_journey_transition($j, 'procedure_booked', 'procedure_booked', 'staff', $staff_id, 'appointment:' . (int) $id);
+        }
+        se_journey_event($j, 'procedure_booked', $start, [], 'staff', $staff_id, 'appointment', (string) $id);
+        if (function_exists('se_journey_send_copy')) {
+            se_journey_send_copy($j, 'procedure_confirmation', ['when' => date('d.m.Y H:i', strtotime($start))],
+                ['purpose' => 'procedure_confirmation', 'bypass_pause' => true, 'template' => 'eyebrow_procedure_confirmation_tr',
+                 'template_vars' => [se_journey_template_name($j), date('d.m.Y H:i', strtotime($start))], 'dedup_salt' => $salt]);
+        }
+    }
+
+
+    return true;
+}
+
+/**
  * Book a consultation or a procedure slot.
  *
  * @param array $data start_at, end_at, staff_id, consultation_format (online|in_person), location, notes
@@ -87,53 +158,7 @@ function se_journey_book_appointment($j, array $data, $staff_id, $type = 'consul
         return ['ok' => false, 'reason' => 'slot_unavailable', 'appointment_id' => 0];
     }
 
-    $CI  = &get_instance();
-    $now = date('Y-m-d H:i:s');
-    if ($type === 'consultation') {
-        $CI->db->where('id', (int) $j->id)->update(db_prefix() . 'se_journeys', ['consultation_appointment_id' => (int) $id, 'last_updated' => $now]);
-        $j->consultation_appointment_id = (int) $id;
-        if (in_array((string) $j->state, ['consultation_recommended', 'quote_sent', 'quote_accepted', 'quote_revision_requested', 'consultation_booked'], true)) {
-            se_journey_transition($j, 'consultation_booked', 'consultation_booked', $actor, $staff_id ?: null, 'appointment:' . (int) $id);
-        }
-        se_journey_event($j, 'consultation_booked', $format . ' ' . $start . ($actor === 'patient' ? ' (patient self-booked)' : ''), [], $actor, $staff_id ?: null, 'appointment', (string) $id);
-        if (function_exists('se_journey_send_copy')) {
-            // The confirmation carries an "add to calendar" link (.ics). Outside the
-            // window the 4-variable template goes when Meta has approved it; else
-            // the original 3-variable one (the booking page still offers the file).
-            $when = date('d.m.Y H:i', strtotime($start));
-            $fmt  = $format === 'online' ? 'online' : 'klinikte';
-            $cal  = se_journey_calendar_link($j, (int) $staff_id);
-            $tpl  = se_journey_template_ready((int) $j->brand_id, 'eyebrow_consultation_calendar_tr');
-            $spec = ['purpose' => 'consultation_confirmation', 'bypass_pause' => true, 'dedup_salt' => 'a' . (int) $id];
-            if ($tpl['ready'] && $cal !== '') {
-                $spec['template'] = 'eyebrow_consultation_calendar_tr';
-                $spec['template_vars'] = [se_journey_template_name($j), $when, $fmt, $cal];
-            } else {
-                $spec['template'] = 'eyebrow_consultation_confirmation_tr';
-                $spec['template_vars'] = [se_journey_template_name($j), $when, $fmt];
-            }
-            se_journey_send_copy($j, 'consultation_confirmation', ['when' => $when, 'format' => $fmt, 'link' => $cal], $spec);
-        }
-    } else {
-        $upd = ['procedure_appointment_id' => (int) $id, 'last_updated' => $now];
-        if (!empty($data['deposit_state']) && in_array((string) $data['deposit_state'], ['none', 'requested', 'received', 'refunded'], true)) {
-            $upd['deposit_state'] = (string) $data['deposit_state'];
-        }
-        if (isset($data['payment_ref'])) {
-            $upd['payment_ref'] = mb_substr(preg_replace('/\d{8,}/', '[ref]', (string) $data['payment_ref']), 0, 64);   // never a card number
-        }
-        $CI->db->where('id', (int) $j->id)->update(db_prefix() . 'se_journeys', $upd);
-        $j->procedure_appointment_id = (int) $id;
-        if (in_array((string) $j->state, ['consultation_completed', 'quote_sent', 'quote_accepted', 'procedure_booked'], true)) {
-            se_journey_transition($j, 'procedure_booked', 'procedure_booked', 'staff', $staff_id, 'appointment:' . (int) $id);
-        }
-        se_journey_event($j, 'procedure_booked', $start, [], 'staff', $staff_id, 'appointment', (string) $id);
-        if (function_exists('se_journey_send_copy')) {
-            se_journey_send_copy($j, 'procedure_confirmation', ['when' => date('d.m.Y H:i', strtotime($start))],
-                ['purpose' => 'procedure_confirmation', 'bypass_pause' => true, 'template' => 'eyebrow_procedure_confirmation_tr',
-                 'template_vars' => [se_journey_template_name($j), date('d.m.Y H:i', strtotime($start))], 'dedup_salt' => 'a' . (int) $id]);
-        }
-    }
+    se_journey_link_appointment($j, (int) $id, (int) $staff_id, $data);
 
     return ['ok' => true, 'reason' => '', 'appointment_id' => (int) $id];
 }
@@ -157,9 +182,21 @@ function se_journey_appointment_update($j, $appointment_id, array $data, $staff_
         return ['ok' => false, 'reason' => 'nothing_to_update'];
     }
     if (!$model->update((int) $appointment_id, $allowed)) {
-        return ['ok' => false, 'reason' => 'slot_unavailable'];
+        return ['ok' => false, 'reason' => 'slot_unavailable', 'message' => (string) ($model->last_message ?? '')];
     }
     se_journey_event($j, 'appointment_updated', implode(',', array_keys($allowed)), [], 'staff', $staff_id, 'appointment', (string) $appointment_id);
+    // A moved consultation gets a fresh confirmation (CRM-M044): the salt carries the new start.
+    $after = $model->get((int) $appointment_id);
+    if ($after && isset($allowed['start_at']) && strtotime((string) $after->start_at) !== strtotime((string) $appt->start_at)
+        && (string) ($after->appointment_type ?? '') !== 'procedure' && !in_array((string) $after->status, ['cancelled', 'no_show', 'completed', 'held'], true)
+        && function_exists('se_journey_send_copy')) {
+        $when = date('d.m.Y H:i', strtotime((string) $after->start_at));
+        $fmt  = (string) ($after->consultation_format ?? '') === 'online' ? 'online' : 'klinikte';
+        se_journey_send_copy($j, 'consultation_confirmation', ['when' => $when, 'format' => $fmt, 'link' => ''],
+            ['purpose' => 'consultation_confirmation', 'bypass_pause' => true, 'template' => 'eyebrow_consultation_confirmation_tr',
+             'template_vars' => [se_journey_template_name($j), $when, $fmt], 'dedup_salt' => 'a' . (int) $appointment_id . ':' . (int) strtotime((string) $after->start_at)]);
+        se_journey_event($j, 'consultation_rescheduled', $when, [], 'staff', $staff_id, 'appointment', (string) $appointment_id);
+    }
     se_journey_reflect_appointment($j, (int) $appointment_id, $staff_id, isset($data['outcome_note']) ? (string) $data['outcome_note'] : '');
     if (function_exists('se_journey_sync_lead')) { se_journey_sync_lead($j, 'appointment'); }   // a reschedule/confirm changes no state
 

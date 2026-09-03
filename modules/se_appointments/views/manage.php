@@ -36,29 +36,22 @@
   <div class="table-responsive">
     <table class="table table-striped">
       <thead><tr>
-        <th><?php echo html_escape(_l('se_appt_title')); ?></th>
-        <th><?php echo html_escape(_l('se_appt_brand')); ?></th>
-        <th><?php echo html_escape(_l('se_appt_start')); ?></th>
-        <th><?php echo html_escape(_l('se_appt_staff')); ?></th>
-        <th><?php echo html_escape(_l('se_appt_relation')); ?></th>
+        <th><?php echo html_escape(_l('se_appt_col_patient')); ?></th>
+        <th><?php echo html_escape(_l('se_appt_col_when')); ?></th>
+        <th><?php echo html_escape(_l('se_appt_col_type')); ?></th>
+        <th class="hidden-xs"><?php echo html_escape(_l('se_appt_staff')); ?></th>
         <th><?php echo html_escape(_l('se_appt_status')); ?></th>
         <th></th>
       </tr></thead>
       <tbody>
       <?php foreach ($appointments as $a) { ?>
         <tr>
-          <td><a href="<?php echo admin_url('se_appointments/se_appointments/view/' . (int) $a['id']); ?>"><?php echo html_escape($a['title']); ?></a></td>
-          <td><?php echo se_ui_brand_badge((int) $a['brand_id']); ?></td>
-          <td><?php echo html_escape($a['start_at']); ?></td>
-          <td><?php echo html_escape((string) ($a['staff_name'] ?? '')); ?></td>
-          <td>
-            <?php if (!empty($a['rel_id']) && $a['rel_type'] === 'lead') { ?>
-              <a href="<?php echo admin_url('leads/index/' . (int) $a['rel_id']); ?>"><?php echo html_escape(_l('se_appt_lead')); ?> #<?php echo (int) $a['rel_id']; ?></a>
-            <?php } elseif (!empty($a['rel_id'])) { ?>
-              <a href="<?php echo admin_url('clients/client/' . (int) $a['rel_id']); ?>"><?php echo html_escape(_l('se_appt_customer')); ?> #<?php echo (int) $a['rel_id']; ?></a>
-            <?php } else { echo '<span class="text-muted">&mdash;</span>'; } ?>
-          </td>
-          <td><?php echo se_ui_badge($a['status'], _l('se_appt_status_' . $a['status'])); ?></td>
+          <?php $pn = $names[$a['rel_type'] . ':' . (int) $a['rel_id']] ?? ''; ?>
+          <td><a href="<?php echo admin_url('se_appointments/se_appointments/view/' . (int) $a['id']); ?>"><strong><?php echo html_escape($pn !== '' ? se_ui_short_name($pn) : $a['title']); ?></strong></a><?php if (count($brands) > 1) { echo ' ', se_ui_brand_badge((int) $a['brand_id']); } ?></td>
+          <td><?php echo html_escape(se_ui_when($a['start_at'])); ?></td>
+          <td><span class="<?php echo se_appt_type_class($a['appointment_type'] ?? ''); ?>" style="padding:2px 8px;border-radius:4px;border-inline-start:3px solid;font-size:12px;font-weight:600"><?php echo html_escape(se_appt_type_label($a['appointment_type'] ?? '')); ?></span></td>
+          <td class="hidden-xs"><?php echo html_escape($a['staff_name'] !== '' ? se_ui_short_name((string) $a['staff_name']) : '—'); ?></td>
+          <td><?php echo se_ui_ds_badge(in_array($a['status'], ['cancelled', 'no_show'], true) ? 'danger' : (in_array($a['status'], ['held', 'completed'], true) ? 'positive' : 'info'), _l('se_appt_status_' . $a['status'])); ?></td>
           <td class="text-right">
             <a href="<?php echo admin_url('se_appointments/se_appointments/view/' . (int) $a['id']); ?>" class="btn btn-default btn-sm"><?php echo html_escape(_l('view')); ?></a>
             <?php if (staff_can('edit', 'se_appointments')) { ?>

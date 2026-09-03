@@ -75,3 +75,20 @@ $lang['se_appt_notify']               = 'Hastaya bildirim';
 $lang['se_appt_prefilled_from']       = 'Ön görüşmeden otomatik dolduruldu.';
 $lang['se_appt_minutes']              = 'dk';
 $lang['se_appt_hours']                = 'saat';
+
+/* Form v2 (CRM-M039) */
+$lang['se_appt_type_default_duration'] = '%s için varsayılan süre %s.';
+$lang['se_appt_ends_at']            = 'Bitiş: %s';
+$lang['se_appt_location_ph']        = 'Klinik · İstanbul';
+$lang['se_appt_notes_ph']           = 'İsteğe bağlı';
+$lang['se_appt_more_fields']        = 'Diğer alanlar (başlık, saat dilimi)';
+$lang['se_appt_notify_confirm_auto'] = 'Hasta süreci bağlıysa onay mesajı ve takvim dosyası WhatsApp’tan otomatik gönderilir.';
+$lang['se_appt_notify_reminder_auto'] = 'Hatırlatma randevudan önce otomatik kuyruğa alınır.';
+$lang['se_appt_save']               = 'Randevuyu kaydet';
+$lang['se_appt_outside_hours']      = 'Bu saat, seçilen kişinin çalışma saatleri dışında.';
+$lang['se_appt_missing_required']   = 'Tarih, saat ve marka zorunlu.';
+$lang['se_appt_col_patient']        = 'Hasta';
+$lang['se_appt_col_when']           = 'Ne zaman';
+$lang['se_appt_col_type']           = 'Tür';
+$lang['se_appt_open']               = 'Aç';
+$lang['se_appt_mark_held_ask'] = 'Görüşme yapıldıysa işaretleyin; hasta süreci otomatik ilerler.';

@@ -141,10 +141,32 @@ $j2 = se_test_journey_row();
 se_journey_transition($j2, 'consultation_recommended', 'test_fastforward', 'staff', 10, null, null, true);
 $r2 = se_journey_book_appointment(se_test_journey_row(), ['start_at' => date('Y-m-d', strtotime('+3 days')) . ' 14:15:00', 'end_at' => date('Y-m-d', strtotime('+3 days')) . ' 14:45:00', 'staff_id' => 10], 10, 'consultation');
 se_eq(['ok' => false, 'reason' => 'slot_unavailable', 'appointment_id' => 0], $r2, 'an overlapping slot for the same staff member is refused');
+$model = se_journey_appointments_model();
+se_eq('conflict', $model->last_reason, 'the model names the refusal');
+se_ok(strpos($model->last_message, '14:00') !== false && strpos($model->last_message, '14:30') !== false, 'the human message says when the clash is: ' . $model->last_message);
+se_ok(strpos($model->last_message, '14:30') !== false, 'and offers the first free slot after it (14:30)');
+
 se_eq(1, count($db->rows('tblse_appointments')), 'no second appointment row');
 se_eq('consultation_recommended', se_test_journey_row()->state, 'the second journey did not advance');
 $r3 = se_journey_book_appointment(se_test_journey_row(), ['start_at' => date('Y-m-d', strtotime('+3 days')) . ' 15:00:00', 'end_at' => date('Y-m-d', strtotime('+3 days')) . ' 15:30:00', 'staff_id' => 10], 10, 'consultation');
 se_eq(true, $r3['ok'], 'a non-overlapping slot is accepted');
+
+/* ---- CRM-M044: a rescheduled consultation sends a fresh confirmation (salt carries the start) ---- */
+se_wa_out_drain();
+$sentBefore = count(array_filter($GLOBALS['se_wa_sent'], function ($m) { return strpos($m['body'], 'görüşmeniz oluşturuldu') !== false; }));
+$jr = se_journey_get_raw(1);
+$u0 = se_journey_appointment_update($jr, (int) $jr->consultation_appointment_id, ['location' => 'Nişantaşı'], 10);
+se_wa_out_drain();
+se_eq($sentBefore, count(array_filter($GLOBALS['se_wa_sent'], function ($m) { return strpos($m['body'], 'görüşmeniz oluşturuldu') !== false; })), 'editing the location sends nothing');
+$u1 = se_journey_appointment_update($jr, (int) $jr->consultation_appointment_id, ['start_at' => date('Y-m-d', strtotime('+4 days')) . ' 11:00:00', 'end_at' => date('Y-m-d', strtotime('+4 days')) . ' 11:30:00'], 10);
+se_wa_out_drain();
+se_eq(true, $u1['ok'], 'reschedule accepted');
+se_eq($sentBefore + 1, count(array_filter($GLOBALS['se_wa_sent'], function ($m) { return strpos($m['body'], 'görüşmeniz oluşturuldu') !== false; })), 'a moved consultation sends a NEW confirmation (was blocked by the a{id} salt)');
+se_eq(1, count(array_filter($db->rows('tblse_journey_events'), function ($e) { return $e['kind'] === 'consultation_rescheduled'; })), 'and logs the reschedule');
+$u2 = se_journey_appointment_update($jr, (int) $jr->consultation_appointment_id, ['start_at' => date('Y-m-d', strtotime('+4 days')) . ' 11:00:00', 'end_at' => date('Y-m-d', strtotime('+4 days')) . ' 11:30:00'], 10);
+se_wa_out_drain();
+se_eq($sentBefore + 1, count(array_filter($GLOBALS['se_wa_sent'], function ($m) { return strpos($m['body'], 'görüşmeniz oluşturuldu') !== false; })), 'saving the same start again does not resend (dedup)');
+
 
 // Outcome: mark held → consultation_completed; cancellation → back to recommended with a task.
 $j = se_journey_get_raw((int) $j->id);
