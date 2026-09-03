@@ -476,6 +476,12 @@ function se_journey_auto_start_organic($brand_id)
     return (int) get_option('se_journey_auto_start_organic_' . (int) $brand_id) === 1;
 }
 
+/** Start the journey for every website lead the moment it arrives (default: staff press Start). */
+function se_journey_auto_start_website($brand_id)
+{
+    return (int) get_option('se_journey_auto_start_website_' . (int) $brand_id) === 1;
+}
+
 function se_journey_config($key, $default = null)
 {
     $v = get_option('se_journey_' . $key);
@@ -1353,7 +1359,11 @@ function se_journey_start_from_conversation($conv, $staff_id, array $opts = [])
         if (!$j) {
             return ['ok' => false, 'reason' => 'create_failed', 'mode' => '', 'journey' => null, 'created' => false];
         }
-        se_journey_event($j, 'staff_started', 'journey created from the WhatsApp thread', [], 'staff', (int) $staff_id, 'wa_conversation', (string) ($conv->id ?? ''), 'staff:' . (int) $staff_id);
+        if ((int) $staff_id > 0) {
+            se_journey_event($j, 'staff_started', 'journey created from the WhatsApp thread', [], 'staff', (int) $staff_id, 'wa_conversation', (string) ($conv->id ?? ''), 'staff:' . (int) $staff_id);
+        } else {
+            se_journey_event($j, 'auto_started', 'journey started automatically (' . (string) ($opts['detail'] ?? 'system') . ')', [], 'system', null, 'wa_conversation', (string) ($conv->id ?? ''), (string) ($opts['detail'] ?? 'system'));
+        }
     } elseif ((int) ($opts['lead_id'] ?? 0) > 0 && (int) $opts['lead_id'] !== (int) $j->lead_id && !se_journey_lead_exists($brand, (int) $j->lead_id)) {
         // The journey's CRM lead is gone (deleted in the CRM, or never set) and
         // the same number arrived as a new lead — one patient, one journey:
@@ -1384,13 +1394,15 @@ function se_journey_start_from_conversation($conv, $staff_id, array $opts = [])
  *
  * @return array{ok:bool,reason:string,mode:string,journey:object|null,created:bool}
  */
-function se_journey_start_from_lead($lead_id, $staff_id)
+function se_journey_start_from_lead($lead_id, $staff_id, array $opts = [])
 {
     $CI = &get_instance();
     $fail = function ($reason) { return ['ok' => false, 'reason' => $reason, 'mode' => '', 'journey' => null, 'created' => false]; };
 
     $CI->db->where('id', (int) $lead_id);
-    if (function_exists('se_apply_scope_in')) {
+    // A staff member sees their brands; the SYSTEM (auto-start from the
+    // website endpoint, no session) goes by id and checks the brand below.
+    if ((int) $staff_id > 0 && function_exists('se_apply_scope_in')) {
         se_apply_scope_in('brand_id');
     }
     $lead = $CI->db->get(db_prefix() . 'leads')->row();
@@ -1451,7 +1463,54 @@ function se_journey_start_from_lead($lead_id, $staff_id)
         $conv->lead_id = (int) $lead->id;
     }
 
-    return se_journey_start_from_conversation($conv, $staff_id, ['source' => 'website_form', 'detail' => 'staff_start_from_lead', 'lead_id' => (int) $lead->id]);
+    return se_journey_start_from_conversation($conv, $staff_id, ['source' => 'website_form', 'detail' => (string) ($opts['detail'] ?? 'staff_start_from_lead'), 'lead_id' => (int) $lead->id]);
+}
+
+/**
+ * Perfex `lead_created`: a WEBSITE lead (website_lead_id set — the form on
+ * azinasgari.com through se_core/website_lead) starts its journey at once
+ * when the brand switch is on: the approved start template goes out (the
+ * person has not written on WhatsApp yet, so there is no window). Leads
+ * created by staff, imports, or by the journey itself for an organic
+ * WhatsApp enquiry are not touched — staff press Start for those. Runs
+ * without a staff session; nothing here is staff-scoped.
+ */
+function se_journey_on_lead_created($arg)
+{
+    $lead_id = (int) (is_array($arg) ? ($arg['lead_id'] ?? 0) : $arg);
+    if ($lead_id <= 0) {
+        return ['ok' => false, 'reason' => 'no_lead'];
+    }
+    $CI = &get_instance();
+    $CI->db->select('id, brand_id, website_lead_id')->where('id', $lead_id);
+    $lead = $CI->db->get(db_prefix() . 'leads')->row();
+    if (!$lead || trim((string) ($lead->website_lead_id ?? '')) === '') {
+        return ['ok' => false, 'reason' => 'not_website_lead'];
+    }
+    $brand = (int) $lead->brand_id;
+    if ($brand <= 0 || !se_journey_enabled($brand) || !se_journey_auto_start_website($brand)) {
+        return ['ok' => false, 'reason' => 'auto_start_off'];
+    }
+    if (se_journey_find_by_lead($brand, $lead_id)) {
+        return ['ok' => false, 'reason' => 'already_started'];
+    }
+    try {
+        $r = se_journey_start_from_lead($lead_id, 0, ['detail' => 'auto_start_website']);
+    } catch (Throwable $e) {
+        se_journey_audit($brand, 0, 'auto_start_failed', 'lead', (string) $lead_id, mb_substr(basename($e->getFile()) . ':' . $e->getLine(), 0, 191));
+
+        return ['ok' => false, 'reason' => 'exception'];
+    }
+    $jid = !empty($r['journey']) ? (int) $r['journey']->id : 0;
+    se_journey_audit($brand, $jid, $r['ok'] ? 'auto_start' : 'auto_start_blocked', 'lead', (string) $lead_id, $r['ok'] ? (string) $r['mode'] : (string) $r['reason']);
+    if (function_exists('se_journey_lead_activity')) {
+        // The lead's own timeline says what happened, so staff on the lead page see it without opening the journey.
+        se_journey_lead_activity($lead_id, $r['ok']
+            ? ('Hasta yolculuğu otomatik başlatıldı (' . ($r['mode'] === 'sandbox' ? 'sandbox — gönderilmedi' : ($r['mode'] === 'template' ? 'başlangıç şablonu gönderildi' : 'karşılama gönderildi')) . ')')
+            : ('Hasta yolculuğu otomatik başlatılamadı: ' . (string) $r['reason'] . ' — fırsat sayfasından "Start WhatsApp evaluation" ile başlatın'));
+    }
+
+    return $r;
 }
 
 /* ===========================================================================
