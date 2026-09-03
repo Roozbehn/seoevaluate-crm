@@ -156,6 +156,26 @@ class Se_whatsapp extends AdminController
             }
         }
 
+        // A journey template that opens a WhatsApp Flow needs a per-patient
+        // flow token (and the patient's name) that only the journey issues:
+        // it goes through the journey step that owns it, never as a plain
+        // template — Meta refuses one without its parameters (#132000).
+        if ($kind === 'template' && function_exists('se_journey_compose_template')) {
+            $via = se_journey_compose_template($conversation, $template, (int) get_staff_user_id());
+            if ($via !== null) {
+                if (!empty($via['ok'])) {
+                    set_alert($via['mode'] === 'sandbox' ? 'warning' : 'success',
+                        _l($via['mode'] === 'sandbox' ? 'se_wa_reply_sandbox_not_sent' : 'se_wa_reply_queued_via_journey'));
+                } else {
+                    $key = 'se_wa_reply_blocked_' . $via['reason'];
+                    $txt = _l($key);
+                    set_alert('warning', $txt !== $key ? $txt : _l('se_wa_reply_blocked') . ': ' . $via['reason']);
+                }
+                redirect(admin_url('se_whatsapp/se_whatsapp/conversation/' . (int) $id));
+                return;
+            }
+        }
+
         $result = se_wa_queue_message((int) $id, [
             'kind'      => $kind,
             'body'      => (string) $this->input->post('body'),

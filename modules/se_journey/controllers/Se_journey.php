@@ -122,6 +122,8 @@ class Se_journey extends AdminController
             set_alert('success', _l('se_journey_welcome_queued') . ($r['mode'] === 'template' ? ' (' . _l('se_journey_via_template') . ')' : ''));
         } elseif ($r['reason'] === 'already_started' && $r['journey']) {
             set_alert('warning', _l('se_journey_already_started') . ': ' . _l('se_journey_state_' . $r['journey']->state));
+        } elseif ($r['reason'] === 'relinked' && $r['journey']) {
+            set_alert('success', _l('se_journey_lead_relinked') . ': ' . _l('se_journey_state_' . $r['journey']->state));
         } else {
             $key = 'se_journey_start_fail_' . $r['reason'];
             $txt = _l($key);

@@ -882,6 +882,86 @@ function se_journey_template_ready($brand_id, $logical)
     return ['ready' => true, 'reason' => '', 'meta_name' => (string) $row->meta_name];
 }
 
+/**
+ * What the WABA mirror may not know yet about a journey template: the body
+ * placeholders and the buttons the registry submitted. A status webhook
+ * inserts the mirror row with the approval only (no body, no variables) and
+ * the next full pull may be up to fifteen minutes away; in between, the
+ * composer would offer the template without its placeholders and Meta would
+ * refuse the send (#132000). The queue and the composer consult this first.
+ *
+ * @return array{logical:string,body:string,variables:array,flow_kind:string,quick_replies:array}|null
+ */
+function se_journey_template_hint($brand_id, $meta_name)
+{
+    $meta_name = trim((string) $meta_name);
+    if ((int) $brand_id <= 0 || $meta_name === '') {
+        return null;
+    }
+    $CI = &get_instance();
+    $CI->db->where('brand_id', (int) $brand_id)->where('meta_name', $meta_name);
+    $row = $CI->db->get(db_prefix() . 'se_journey_templates')->row();
+    if (!$row) {
+        return null;
+    }
+    $vars = [];
+    if (preg_match_all('/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/', (string) $row->body, $m)) {
+        $vars = array_values(array_unique($m[1]));
+    }
+    $flow = '';
+    $qr   = [];
+    foreach ((array) (json_decode((string) $row->buttons_json, true) ?: []) as $b) {
+        $type = strtoupper((string) ($b['type'] ?? ''));
+        if ($type === 'FLOW') {
+            $flow = (string) ($b['flow_kind'] ?? 'intake');
+        } elseif ($type === 'QUICK_REPLY' && (string) ($b['payload'] ?? '') !== '') {
+            $qr[] = (string) $b['payload'];
+        }
+    }
+
+    return ['logical' => (string) $row->logical_name, 'body' => (string) $row->body, 'variables' => $vars,
+            'flow_kind' => $flow, 'quick_replies' => $qr];
+}
+
+/**
+ * The conversation composer picked a journey template that opens a WhatsApp
+ * Flow. It cannot go as a plain template: the FLOW button carries a
+ * per-patient flow token that only the journey issues (and the {{1}} name).
+ * Route it through the journey step that owns it — intake → privacy notice +
+ * form, booking → the calendar — which also chooses the in-window Flow
+ * message over the template while the window is open, and honours the
+ * sandbox. Returns null for any other template so the composer proceeds.
+ *
+ * @return array{ok:bool,mode:string,reason:string,outbound_id:int}|null
+ */
+function se_journey_compose_template($conv, $meta_name, $staff_id)
+{
+    $brand = (int) ($conv->brand_id ?? 0);
+    $hint  = se_journey_template_hint($brand, $meta_name);
+    if (!$hint || $hint['flow_kind'] === '') {
+        return null;
+    }
+    if (!se_journey_can('edit_review', (int) $staff_id ?: '')) {
+        return ['ok' => false, 'mode' => 'blocked', 'reason' => 'journey_permission', 'outbound_id' => 0];
+    }
+    $j = se_journey_find_by_wa($brand, (string) ($conv->wa_user_id ?? ''));
+    if (!$j) {
+        return ['ok' => false, 'mode' => 'blocked', 'reason' => 'journey_required', 'outbound_id' => 0];
+    }
+    $corr = 'staff:' . (int) $staff_id;
+    if ($hint['flow_kind'] === 'booking') {
+        $r = function_exists('se_journey_send_booking_link')
+            ? se_journey_send_booking_link($j, (int) $staff_id, $corr, 'booking_link_repeat')
+            : ['ok' => false, 'mode' => 'blocked', 'reason' => 'booking_unavailable', 'outbound_id' => 0];
+    } else {
+        $r = se_journey_send_privacy_and_link($j, $corr, 'staff', (int) $staff_id);
+    }
+    se_journey_audit($brand, (int) $j->id, 'composer_flow_template', 'template', mb_substr((string) $meta_name, 0, 64),
+        $r['ok'] ? (string) $r['mode'] : (string) $r['reason']);
+
+    return $r;
+}
+
 /** Reconcile registry rows with the WABA mirror (after a template sync or status webhook). */
 function se_journey_sync_template_status($brand_id)
 {

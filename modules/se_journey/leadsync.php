@@ -232,7 +232,7 @@ function se_journey_lead_apply_identity($j, array $clean)
         $cid = se_journey_lead_country_id((string) $clean['country']);
         if ($cid > 0) { $upd['country'] = $cid; }
     }
-    if (!empty($clean['city']) && trim((string) $lead->city) === '') {
+    if (!empty($clean['city']) && trim((string) ($lead->city ?? '')) === '') {
         $upd['city'] = mb_substr(trim((string) $clean['city']), 0, 100);
     }
     if (!empty($clean['preferred_language']) && trim((string) $lead->default_language) === '') {
@@ -306,14 +306,14 @@ function se_journey_sync_lead($j, $reason = '')
     if (!empty($j->latest_touch_at) && (empty($lead->lastcontact) || strtotime((string) $lead->lastcontact) < strtotime((string) $j->latest_touch_at))) {
         $upd['lastcontact'] = (string) $j->latest_touch_at;
     }
-    if (trim((string) $lead->default_language) === '' && !empty($j->language)) {
+    if (trim((string) ($lead->default_language ?? '')) === '' && !empty($j->language)) {
         $folder = se_journey_lead_language_folder((string) $j->language);
         if ($folder !== '') { $upd['default_language'] = $folder; }
     }
 
     /* ---- pipeline status (forward only, never on converted/lost/junk) --- */
     $stage = se_journey_lead_stage_for_state((string) $j->state);
-    $convertedOrClosed = (int) $lead->lost === 1 || (int) $lead->junk === 1 || !empty($lead->date_converted);
+    $convertedOrClosed = (int) ($lead->lost ?? 0) === 1 || (int) ($lead->junk ?? 0) === 1 || !empty($lead->date_converted);
     if ($stage !== null && !$convertedOrClosed && se_journey_lead_sync_status_enabled((int) $j->brand_id)) {
         $CI->db->select('id, name, statusorder')->where('name', $stage);
         $target = $CI->db->get(db_prefix() . 'leads_status')->row();
