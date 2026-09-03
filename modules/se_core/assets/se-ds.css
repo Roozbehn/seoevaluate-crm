@@ -29,7 +29,7 @@ body.se-theme-light,html[data-theme=light] body,html[data-perfex-theme="light"] 
   --se-text:#1f2937; --se-text-2:#4b5563; --se-text-3:#5b6270;
   --se-on-soft:#2f37b8; --se-tabbar-bg:#ffffff; --se-tabbar-active:#3d46c9;
   --se-primary:#4650e0; --se-primary-hover:#3d46c9; --se-primary-soft:rgba(70,80,224,.10); --se-link:#3d46c9; --se-focus:#3d46c9;
-  --se-positive:#047857; --se-positive-soft:rgba(16,185,129,.14); --se-warning:#b45309; --se-warning-soft:rgba(245,158,11,.16);
+  --se-positive:#047857; --se-positive-soft:rgba(16,185,129,.14); --se-warning:#9a4207; --se-warning-soft:rgba(245,158,11,.16);
   --se-danger:#b91c1c; --se-danger-soft:rgba(239,68,68,.12); --se-info:#1d4ed8; --se-info-soft:rgba(59,130,246,.12);
   --se-action:#c2410c; --se-action-soft:rgba(249,115,22,.14); --se-inactive:#6b7280; --se-inactive-soft:rgba(107,114,128,.14);
 }
@@ -55,11 +55,18 @@ body.se-theme-light,html[data-theme=light] body,html[data-perfex-theme="light"] 
 .se-stack>*+*{margin-top:var(--se-sp-4)}
 /* buttons */
 .se-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:var(--se-ctrl);padding:0 16px;border-radius:var(--se-r-md);border:1px solid transparent;font:600 var(--se-fs-sm)/1 inherit;font-family:inherit;color:var(--se-text);background:var(--se-surface-2);cursor:pointer;white-space:nowrap}
-.se-btn-primary,.se-page a.se-btn-primary{background:var(--se-primary);color:#fff}
-.se-page a.se-btn-secondary{color:var(--se-text)}
+.se-btn-primary{background:var(--se-primary);color:#fff}
+/* perfex_dark_theme sets `body a{color:…!important}`; anchor buttons must keep their own text colour in both themes. */
+.se-page a.se-btn-primary,.se-page a.se-btn-primary:hover{color:#fff!important}
+.se-page a.se-btn-secondary,.se-page a.se-btn-secondary:hover{color:var(--se-text)!important}
+.se-page a.se-btn-ghost,.se-page a.se-btn-ghost:hover{color:var(--se-link)!important}
+.se-page a.se-chip,.se-page a.se-chip:hover{color:var(--se-text-2)!important}
+.se-page a.se-chip.on,.se-page a.se-chip.on:hover{color:var(--se-on-soft)!important}
+.se-page a.se-conv .n,.se-page .se-conv .n{color:var(--se-text)!important}
 .se-btn-secondary{background:transparent;border-color:var(--se-border-strong);color:var(--se-text)}
 .se-btn-ghost{background:transparent;color:var(--se-link)}
-.se-btn-danger,.se-page a.se-btn-danger{background:transparent;border-color:var(--se-danger);color:var(--se-danger)}
+.se-btn-danger{background:transparent;border-color:var(--se-danger);color:var(--se-danger)}
+.se-page a.se-btn-danger,.se-page a.se-btn-danger:hover{color:var(--se-danger)!important}
 .se-btn-sm{height:32px;padding:0 12px;font-size:13px}
 .se-btn-block{width:100%}
 /* badges */
@@ -373,3 +380,8 @@ body.se-clinic a:focus-visible,body.se-clinic button:focus-visible,body.se-clini
 }
 /* Our pages always paint their own text colour from the tokens (the theme plugin sets body colour for its own mode). */
 body.se-clinic .se-page,body.se-clinic .se-tabbar{color:var(--se-text)}
+/* Light theme: appointment-type colours are pastel text on dark; on white they need the dark variants (≥ 4.5:1). Bars/borders keep the legend colour. */
+body.se-theme-light .ev-consult,html[data-perfex-theme="light"] .ev-consult,html[data-perfex-theme="light"] .se-cal-host .fc .ev-consult{color:#1d4ed8}
+body.se-theme-light .ev-proc,html[data-perfex-theme="light"] .ev-proc,html[data-perfex-theme="light"] .se-cal-host .fc .ev-proc{color:#c2410c}
+body.se-theme-light .ev-check,html[data-perfex-theme="light"] .ev-check,html[data-perfex-theme="light"] .se-cal-host .fc .ev-check{color:#047857}
+body.se-theme-light .ev-follow,html[data-perfex-theme="light"] .ev-follow,html[data-perfex-theme="light"] .se-cal-host .fc .ev-follow{color:#6d28d9}
