@@ -33,3 +33,12 @@
 - Queue behaviour proven: brand scope fail-closed (unmapped staff → 0 rows), terminal states excluded, patient-owned steps only surface with an inbound unanswered >30 min, priority→age order, cap keeps `total`, every row has one button + accessible name, phone masked when no name.
 - Perf: the queue is 6 batched queries (journeys, quotes, appointments, failed sends, leads, unread) — no per-row query; `build_ms` is printed for admins on the page so the <600 ms target is measured live in the verification wave.
 - Deferred inside this wave: "+ Hasta" links to Perfex Leads until Hastalar (Wave 4) provides its own create path; the "Tümünü gör" link targets `se_core/se_hastalar?sort=attention` (Wave 4).
+
+## Wave 4 — Hastalar + patient workspace (+ quote read-only)
+- Start SHA: a4e44fd → End SHA: 5d983cc
+- Files: modules/se_core/{se_hastalar.php (new), controllers/Se_hastalar.php (new), views/se_hastalar.php (new), se_core.php (loader), se_chat_ui.php (`back`), assets/se-ds.css, language tr/en}, modules/se_journey/{health.php (se_journey_batch_context, se_journey_attention_row_from — shared by Bugün and Hastalar), ui.php (se_journey_timeline_human), controllers/Se_journey.php (view() rewrite, note, reopen), views/view.php (rewrite), language tr/en}, modules/se_whatsapp/controllers/Se_whatsapp.php (reply_back), tests/{test_hastalar.php (new), test_workspace.php (new), fake_db.php, bootstrap.php}
+- Tests: **4 178 pass / 0 fail** (+73 vs Wave 3). Copy gate OK. PHP lint clean.
+- Tickets: M024 M025 M026 M027 M028 M030 M049 (Sales read-only) — M048 partially (expiry alert in the header; the `quote_expired` state transition arrives with the timers in Wave 7) — M029 stays PLANNED (Flow JSON at Meta).
+- Proven: phone search in any formatting (spaces, dashes, parentheses, +90/0 prefixes); scope fail-closed; chips/sort/pagination; masked phones for staff without `view_health`; every row has one button; timeline shows no raw kinds, no "a → b" arrows, hides token/lead-sync/other-brand noise, truncates previews; automatic vs staff vs patient actors.
+- Reply from the Sohbet tab: the composer posts to the existing `se_whatsapp/reply/<id>` route (policy unchanged) with a same-site `back` field; the controller only follows a `back` that starts with admin_url().
+- Not testable in the harness (controllers are outside it): the view files were linted and read against the mockups; live check in the verification wave.
