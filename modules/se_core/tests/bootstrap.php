@@ -379,6 +379,7 @@ require_once $SE_MODULES . '/se_journey/media.php';
 require_once $SE_MODULES . '/se_journey/review.php';
 require_once $SE_MODULES . '/se_journey/consultation.php';
 require_once $SE_MODULES . '/se_journey/leadsync.php';
+require_once $SE_MODULES . '/se_journey/flows.php';
 require_once $SE_MODULES . '/se_journey/aftercare.php';
 require_once $SE_MODULES . '/se_journey/health.php';
 require_once $SE_MODULES . '/se_journey/ui.php';

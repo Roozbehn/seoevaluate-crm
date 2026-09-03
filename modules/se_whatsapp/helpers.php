@@ -501,7 +501,17 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
     // machine id is kept separately so automation matches on the id, never on
     // a translated label.
     $interactive_id = null;
-    if ($type === 'interactive') {
+    $flow_reply = null;
+    if ($type === 'interactive' && (string) ($msg['interactive']['type'] ?? '') === 'nfm_reply') {
+        // A completed WhatsApp Flow: the params the flow's final step returned
+        // (flow_token + whatever the endpoint put there). Never health data —
+        // the endpoint stored the answers itself; this is the receipt.
+        $nfm = (array) ($msg['interactive']['nfm_reply'] ?? []);
+        $rj  = $nfm['response_json'] ?? null;
+        $flow_reply = is_string($rj) ? (json_decode($rj, true) ?: []) : (is_array($rj) ? $rj : []);
+        $interactive_id = 'jr_flow';
+        $body = mb_substr((string) ($nfm['body'] ?? 'Form gönderildi'), 0, SE_WA_MAX_TEXT_LEN);
+    } elseif ($type === 'interactive') {
         $reply = $msg['interactive']['button_reply'] ?? ($msg['interactive']['list_reply'] ?? []);
         $interactive_id = isset($reply['id']) ? mb_substr((string) $reply['id'], 0, SE_WA_MAX_ID_LEN) : null;
         $body = mb_substr((string) ($reply['title'] ?? ''), 0, SE_WA_MAX_TEXT_LEN);
@@ -561,6 +571,7 @@ function se_wa_handle_inbound($brand_id, $phone_number_id, $msg, $contact)
         'type'            => $type,
         'body'            => (string) $body,
         'interactive_id'  => $interactive_id,
+        'flow_reply'      => $flow_reply,
         'media_ref'       => $media_ref,
         'media_mime'      => isset($msg[$type]['mime_type']) ? mb_substr((string) $msg[$type]['mime_type'], 0, 64) : null,
         'media_sha256'    => isset($msg[$type]['sha256']) ? mb_substr((string) $msg[$type]['sha256'], 0, 128) : null,

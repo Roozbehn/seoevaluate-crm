@@ -61,6 +61,9 @@ function se_secret_providers()
         // a secret but must stay STABLE — regenerating it silently kills every
         // existing subscription with nothing in any log.
         'webpush_vapid' => ['label' => 'Web push VAPID keypair (JSON {public, private})', 'per_brand' => false],
+        // WhatsApp Flows Data Endpoint: the business RSA private key (PEM). Meta
+        // encrypts every flow request to its public half; see se_journey/flows.php.
+        'flow_key'      => ['label' => 'WhatsApp Flows endpoint private key (RSA 2048, PEM)', 'per_brand' => false],
     ];
 }
 

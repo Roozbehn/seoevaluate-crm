@@ -320,6 +320,19 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
             }
             $payload_json = json_encode(['quick_replies' => $qr]);
         }
+        // A template FLOW button: the per-message flow_token (and optional
+        // flow_action_data) go with the send as a button component.
+        if (!empty($message['flow_button']) && is_array($message['flow_button'])) {
+            $fb = $message['flow_button'];
+            $token = trim((string) ($fb['flow_token'] ?? ''));
+            if ($token === '' || mb_strlen($token) > 256) {
+                return ['ok' => false, 'id' => 0, 'reason' => 'flow_button_invalid'];
+            }
+            $pj = json_decode((string) $payload_json, true) ?: [];
+            $pj['flow_button'] = ['index' => (int) ($fb['index'] ?? 0), 'flow_token' => $token,
+                                  'flow_action_data' => is_array($fb['flow_action_data'] ?? null) ? $fb['flow_action_data'] : new stdClass()];
+            $payload_json = json_encode($pj);
+        }
 
         $body      = null;
         $template  = $name;
@@ -421,6 +434,15 @@ function se_wa_template_send_payload(array $m)
         $components[] = ['type' => 'button', 'sub_type' => 'quick_reply', 'index' => (string) $i,
                          'parameters' => [['type' => 'payload', 'payload' => (string) $payloadId]]];
     }
+    $fb = (array) (($m['payload']['flow_button'] ?? null) ?: []);
+    if (!empty($fb['flow_token'])) {
+        $action = ['flow_token' => (string) $fb['flow_token']];
+        if (!empty($fb['flow_action_data']) && is_array($fb['flow_action_data'])) {
+            $action['flow_action_data'] = $fb['flow_action_data'];
+        }
+        $components[] = ['type' => 'button', 'sub_type' => 'flow', 'index' => (string) (int) ($fb['index'] ?? 0),
+                         'parameters' => [['type' => 'action', 'action' => $action]]];
+    }
 
     return [
         'messaging_product' => 'whatsapp',
@@ -433,6 +455,33 @@ function se_wa_template_send_payload(array $m)
             'components' => $components,
         ],
     ];
+}
+
+/** The "interactive" object for a queued row: reply buttons, or a Flow CTA. Pure. */
+function se_wa_interactive_payload($body, array $p)
+{
+    if (!empty($p['flow']) && is_array($p['flow'])) {
+        $f = $p['flow'];
+        $params = ['flow_message_version' => (string) ($f['flow_message_version'] ?? '3'), 'flow_token' => (string) $f['flow_token'],
+                   'flow_id' => (string) $f['flow_id'], 'flow_cta' => (string) $f['flow_cta'], 'flow_action' => (string) ($f['flow_action'] ?? 'navigate')];
+        if (!empty($f['flow_action_payload']) && is_array($f['flow_action_payload'])) {
+            $params['flow_action_payload'] = $f['flow_action_payload'];
+        }
+        $interactive = ['type' => 'flow', 'body' => ['text' => $body], 'action' => ['name' => 'flow', 'parameters' => $params]];
+    } else {
+        $interactive = [
+            'type'   => 'button',
+            'body'   => ['text' => $body],
+            'action' => ['buttons' => array_map(function ($b) {
+                return ['type' => 'reply', 'reply' => ['id' => (string) $b['id'], 'title' => (string) $b['title']]];
+            }, array_values((array) ($p['buttons'] ?? [])))],
+        ];
+    }
+    if (!empty($p['footer'])) {
+        $interactive['footer'] = ['text' => (string) $p['footer']];
+    }
+
+    return $interactive;
 }
 
 /**
@@ -448,6 +497,35 @@ function se_wa_shape_interactive(array $message)
     }
     if (mb_strlen($body) > 1024) {
         return ['ok' => false, 'reason' => 'interactive_body_too_long', 'body' => '', 'payload' => []];
+    }
+
+    /* A WhatsApp Flow message (interactive type "flow"): one CTA that opens
+     * the flow. Meta's limits: flow_cta ≤ 20 chars, flow_message_version 3. */
+    if ((string) ($message['interactive_type'] ?? '') === 'flow') {
+        $f = (array) ($message['flow'] ?? []);
+        $cta = trim((string) ($f['flow_cta'] ?? ''));
+        $flowId = trim((string) ($f['flow_id'] ?? ''));
+        $token  = trim((string) ($f['flow_token'] ?? ''));
+        if ($cta === '' || mb_strlen($cta) > 20 || $flowId === '' || $token === '' || mb_strlen($token) > 256) {
+            return ['ok' => false, 'reason' => 'flow_invalid', 'body' => '', 'payload' => []];
+        }
+        $payload = ['flow' => [
+            'flow_message_version' => (string) ($f['flow_message_version'] ?? '3'),
+            'flow_token' => $token, 'flow_id' => $flowId, 'flow_cta' => $cta,
+            'flow_action' => (string) ($f['flow_action'] ?? 'navigate') === 'data_exchange' ? 'data_exchange' : 'navigate',
+        ]];
+        if (!empty($f['flow_action_payload']) && is_array($f['flow_action_payload'])) {
+            $payload['flow']['flow_action_payload'] = $f['flow_action_payload'];
+        }
+        $footer = trim((string) ($message['footer'] ?? ''));
+        if ($footer !== '') {
+            if (mb_strlen($footer) > 60) {
+                return ['ok' => false, 'reason' => 'interactive_footer_too_long', 'body' => '', 'payload' => []];
+            }
+            $payload['footer'] = $footer;
+        }
+
+        return ['ok' => true, 'reason' => '', 'body' => $body, 'payload' => $payload];
     }
 
     $buttons = [];
