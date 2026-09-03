@@ -19,48 +19,8 @@ defined('BASEPATH') or exit('No direct script access allowed');
 /** CSS, once per page. */
 function se_ui_chat_styles()
 {
-    static $done = false;
-    if ($done) { return; }
-    $done = true;
-    echo '<style>
-.se-thread{max-height:560px;overflow-y:auto;padding:6px 4px 2px;scroll-behavior:smooth}
-.se-msg{display:flex;margin:0 0 10px}
-.se-msg.out{justify-content:flex-end}
-.se-bubble{max-width:78%;padding:9px 12px;border-radius:14px;border:1px solid rgba(128,128,128,.28);background:rgba(128,128,128,.07);word-wrap:break-word;overflow-wrap:anywhere}
-.se-msg.out .se-bubble{background:rgba(59,130,246,.14);border-color:rgba(59,130,246,.35);border-bottom-right-radius:4px}
-.se-msg.in .se-bubble{border-bottom-left-radius:4px}
-.se-bubble .se-meta{font-size:11px;opacity:.7;margin-top:4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.se-msg.out .se-meta{justify-content:flex-end}
-.se-bubble .label{font-size:10px;padding:2px 6px}
-.se-bubble img,.se-bubble video{max-width:100%}
-.se-daysep{text-align:center;font-size:11px;opacity:.6;margin:8px 0 12px}
-.se-composer{border-top:1px solid rgba(128,128,128,.25);padding-top:12px;margin-top:8px}
-.se-composer .se-policy{font-size:12px;margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.se-composer textarea{resize:none;min-height:44px;max-height:220px;overflow-y:auto;line-height:1.4}
-.se-composer .se-row{display:flex;gap:8px;align-items:flex-end}
-.se-composer .se-row textarea{flex:1}
-.se-composer .se-hint{font-size:11px;opacity:.65;margin-top:6px;display:flex;justify-content:space-between}
-.se-composer .se-tpl pre{white-space:pre-wrap;font-size:12px;margin:8px 0}
-.se-composer .se-tpl .form-group{margin-bottom:8px}
-.se-composer .btn-send{min-width:96px}
-.se-composer .se-tools{display:flex;gap:4px}
-.se-composer .se-tools .btn{padding:6px 9px;font-size:15px;line-height:1.4}
-.se-composer .se-attach{font-size:12px;margin-bottom:6px;padding:6px 10px;border:1px dashed rgba(128,128,128,.4);border-radius:6px}
-.se-composer .se-attach a{margin-left:6px;font-weight:700;text-decoration:none}
-.se-emoji{margin-top:8px;border:1px solid rgba(128,128,128,.3);border-radius:8px;padding:8px;background:rgba(128,128,128,.06)}
-.se-emoji .se-emoji-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
-.se-emoji .se-emoji-tabs button{border:0;background:transparent;font-size:16px;padding:2px 6px;border-radius:4px;cursor:pointer;opacity:.6}
-.se-emoji .se-emoji-tabs button.on{opacity:1;background:rgba(59,130,246,.2)}
-.se-emoji .se-emoji-grid{display:flex;flex-wrap:wrap;gap:2px;max-height:160px;overflow-y:auto}
-.se-emoji .se-emoji-grid button{border:0;background:transparent;font-size:20px;line-height:1;padding:4px;border-radius:4px;cursor:pointer}
-.se-emoji .se-emoji-grid button:hover{background:rgba(59,130,246,.2)}
-.se-rec{margin-top:8px;font-size:12px;padding:8px 10px;border:1px solid rgba(239,68,68,.45);border-radius:8px;background:rgba(239,68,68,.08);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.se-rec .se-rec-dot{width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block;animation:se-blink 1s infinite}
-.se-rec.done .se-rec-dot{animation:none;background:#10b981}
-.se-rec.done{border-color:rgba(16,185,129,.45);background:rgba(16,185,129,.08)}
-#se-rec-btn.on{background:#ef4444;color:#fff;border-color:#ef4444}
-@keyframes se-blink{50%{opacity:.2}}
-</style>';
+    // Styles moved to modules/se_core/assets/se-ds.css (design system, CRM-M015).
+    // Kept as a no-op so older call sites keep working.
 }
 
 /**
@@ -89,11 +49,15 @@ function se_ui_chat_thread(array $messages, array $media, array $opts)
         $ts  = (string) (($m['received_at'] ?? '') ?: (($m['sent_at'] ?? '') ?: ($m['date_created'] ?? '')));
         $day = substr($ts, 0, 10);
         if ($day !== '' && $day !== $lastDay) {
-            echo '<div class="se-daysep">' . html_escape($day) . '</div>';
+            echo '<div class="se-daysep"><span>' . html_escape(function_exists('se_ui_when') ? preg_replace('/ \d{2}:\d{2}$/', '', se_ui_when($day . ' 00:00:00')) : $day) . '</span></div>';
             $lastDay = $day;
         }
 
-        echo '<div class="se-msg ' . ($out ? 'out' : 'in') . '"><div class="se-bubble">';
+        // Automatic (journey/system) sends are dashed and tagged so staff can
+        // tell the bot from a human at a glance (DS §2.14).
+        $origin = (string) ($m['origin'] ?? '');
+        $auto   = $out && $origin !== '' && $origin !== 'staff';
+        echo '<div class="se-msg ' . ($out ? 'out' : 'in') . ($auto ? ' auto' : '') . '"><div class="se-bubble">';
 
         $hasMedia = !empty($m['media_ref']);
         $mediaRow = $hasMedia && isset($media[(int) $m['id']]) ? $media[(int) $m['id']] : null;
@@ -114,7 +78,9 @@ function se_ui_chat_thread(array $messages, array $media, array $opts)
         }
 
         echo '<div class="se-meta">';
-        if ($out && !empty($m['source'])) {
+        if ($auto) {
+            echo '<span class="auto-tag">' . html_escape(_l('se_chat_auto_tag')) . '</span>';
+        } elseif ($out && !empty($m['source']) && $m['source'] !== 'cloud_api') {
             echo '<span>' . html_escape(_l('se_' . $ch . '_source_' . $m['source'])) . '</span>';
         }
         if (($m['type'] ?? 'text') !== 'text') {
@@ -173,16 +139,24 @@ function se_ui_chat_composer(array $cfg)
         echo '<div class="se-attach" id="se-attach" style="display:none"><i class="fa fa-paperclip"></i> <span id="se-attach-name"></span>'
            . ' <a href="#" id="se-attach-clear" title="' . html_escape(_l('se_chat_remove_attachment')) . '">&times;</a>'
            . ' <small class="text-muted" id="se-attach-note">' . html_escape($cfg['attach_note'] ?? '') . '</small></div>';
-        echo '<div class="se-row">'
+        echo '<textarea class="form-control" id="se-body" name="body" rows="1" required maxlength="'
+           . (int) ($cfg['maxlength'] ?? 4096) . '" placeholder="' . html_escape($cfg['placeholder'] ?? _l('se_chat_placeholder')) . '" aria-label="' . html_escape(_l('se_chat_message')) . '"></textarea>';
+        // Tool row: 3 × 44 px tools, the explicit pause toggle, Send. Never wraps
+        // (3×44 + 44 + 96 + gaps < 358 px at 390 px) — the old flex row squeezed
+        // the textarea to 78 px on phones (audit T3).
+        echo '<div class="se-comp-row">'
            . '<div class="se-tools">'
-           . '<button type="button" class="btn btn-default" id="se-emoji-btn" title="' . html_escape(_l('se_chat_emoji')) . '">&#128578;</button>'
-           . '<label class="btn btn-default" for="se-file" title="' . html_escape(_l('se_chat_attach')) . '"><i class="fa fa-paperclip"></i></label>'
+           . '<button type="button" class="btn btn-default" id="se-emoji-btn" aria-label="' . html_escape(_l('se_chat_emoji')) . '" title="' . html_escape(_l('se_chat_emoji')) . '">&#128578;</button>'
+           . '<label class="btn btn-default" for="se-file" aria-label="' . html_escape(_l('se_chat_attach')) . '" title="' . html_escape(_l('se_chat_attach')) . '"><i class="fa fa-paperclip" aria-hidden="true"></i></label>'
            . '<input type="file" id="se-file" name="attachment" accept="' . html_escape($accept) . '" style="display:none" />'
-           . '<button type="button" class="btn btn-default" id="se-rec-btn" title="' . html_escape(_l('se_chat_record')) . '"><i class="fa fa-microphone"></i></button>'
-           . '</div>'
-           . '<textarea class="form-control" id="se-body" name="body" rows="1" required maxlength="'
-           . (int) ($cfg['maxlength'] ?? 4096) . '" placeholder="' . html_escape($cfg['placeholder'] ?? _l('se_chat_placeholder')) . '"></textarea>'
-           . '<button type="submit" class="btn btn-primary btn-send" id="se-send"><i class="fa fa-paper-plane"></i> '
+           . '<button type="button" class="btn btn-default" id="se-rec-btn" aria-label="' . html_escape(_l('se_chat_record')) . '" title="' . html_escape(_l('se_chat_record')) . '"><i class="fa fa-microphone" aria-hidden="true"></i></button>'
+           . '</div>';
+        if (!empty($cfg['journey_active'])) {
+            // Opt-in pause (CRM-M006 / UX-W05): default off; ⏸ icon on phones.
+            echo '<label class="se-pause" title="' . html_escape(_l('se_chat_pause_hint')) . '">'
+               . '<input type="checkbox" name="pause_automation" value="1" /> <span class="lbl">' . html_escape(_l('se_chat_pause')) . '</span><span class="ico" aria-hidden="true">&#9208;</span></label>';
+        }
+        echo '<button type="submit" class="btn btn-primary btn-send" id="se-send"><i class="fa fa-paper-plane" aria-hidden="true"></i> '
            . html_escape($cfg['label_send'] ?? _l('se_chat_send')) . '</button></div>';
         echo '<div class="se-emoji" id="se-emoji" style="display:none"></div>';
         echo '<div class="se-rec" id="se-rec" style="display:none"><span class="se-rec-dot"></span> '

@@ -611,3 +611,16 @@ function se_push_endpoint_hosts()
     return ['fcm.googleapis.com', 'android.googleapis.com', 'push.apple.com', 'notify.windows.com', 'push.services.mozilla.com', 'updates.push.services.mozilla.com', 'web.push.apple.com'];
 }
 
+
+/**
+ * Translate with an English fallback: _l() returns its key when no language
+ * file defines it (and in the test harness). Used by pure explainers whose
+ * English wording is part of their tests while the staff UI reads Turkish.
+ */
+function se_tr($key, $default, ...$args)
+{
+    $t = _l($key);
+    $t = ($t === $key || $t === '') ? $default : $t;
+
+    return $args ? vsprintf($t, $args) : $t;
+}

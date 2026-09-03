@@ -809,6 +809,7 @@ function se_wa_record_outbound($row, $conv, $wamid)
         'body'            => $row['body'],
         'media_ref'       => $media ? 'out:' . (int) $media['id'] : null,
         'template_name'   => $row['template_name'],
+        'origin'          => (string) ($row['origin'] ?? ''),
         'delivery_state'  => 'sent',
         // DISPLAY timestamps use the PHP application clock (business timezone,
         // Europe/Istanbul), matching how inbound messages are stamped from

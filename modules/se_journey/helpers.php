@@ -55,6 +55,7 @@ function se_journey_schema_statements($p)
     /* Existing se_whatsapp tables gain the columns the journey needs. */
     $s[] = "ALTER TABLE `{$p}se_wa_messages` ADD COLUMN IF NOT EXISTS `interactive_id` varchar(191) DEFAULT NULL";
     $s[] = "ALTER TABLE `{$p}se_wa_messages` ADD COLUMN IF NOT EXISTS `status_error` varchar(191) DEFAULT NULL";
+    $s[] = "ALTER TABLE `{$p}se_wa_messages` ADD COLUMN IF NOT EXISTS `origin` varchar(48) DEFAULT NULL";   // staff | system | journey:<purpose> — the thread tags automatic messages
     $s[] = "ALTER TABLE `{$p}se_wa_outbound` ADD COLUMN IF NOT EXISTS `payload_json` text DEFAULT NULL";
     $s[] = "ALTER TABLE `{$p}se_wa_outbound` ADD COLUMN IF NOT EXISTS `origin` varchar(48) DEFAULT NULL";
     $s[] = "ALTER TABLE `{$p}se_wa_outbound` ADD INDEX IF NOT EXISTS `origin` (`origin`)";

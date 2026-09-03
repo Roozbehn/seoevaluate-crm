@@ -9,6 +9,7 @@ Version: 1.0.0
 Requires at least: 3.4.1
 */
 
+define('SE_DS_VERSION', '1.0.0');
 define('SE_CORE_MODULE_NAME', 'se_core');
 
 $CI = &get_instance();
@@ -282,6 +283,28 @@ function se_pwa_admin_head()
     echo '<script>window.SE_PWA={base:' . json_encode($base) . '};</script>' . "\n";
     echo '<script defer src="' . $base . '/modules/se_core/assets/pwa.js"></script>' . "\n";
     echo '<link rel="stylesheet" href="' . $base . '/modules/se_core/assets/pwa.css">' . "\n";
+    // Azin CRM design system (docs/design/AZIN-CRM-DESIGN-SYSTEM-v1.md). One
+    // stylesheet for every SE screen; option se_clinic_ds=0 disables it.
+    if ((string) get_option('se_clinic_ds') !== '0') {
+        echo '<link rel="stylesheet" href="' . $base . '/modules/se_core/assets/se-ds.css?v=' . SE_DS_VERSION . '">' . "\n";
+        echo '<script>window.SE_CLINIC_L=' . json_encode([
+            'menu' => _l('se_ui_a11y_menu'), 'timers' => _l('se_ui_a11y_timers'), 'notifications' => _l('se_ui_a11y_notifications'),
+            'todo' => _l('se_ui_a11y_todo'), 'theme' => _l('se_ui_a11y_theme'), 'quick' => _l('se_ui_a11y_quick'),
+            'search' => _l('se_ui_a11y_search'), 'skip' => _l('se_ui_skip_to_content'),
+        ]) . ';</script>' . "\n";
+        echo '<script defer src="' . $base . '/modules/se_core/assets/se-clinic.js?v=' . SE_DS_VERSION . '"></script>' . "\n";
+    }
 }
 
 hooks()->add_action('app_admin_head', 'se_pwa_admin_head');
+
+/** Body class that scopes the design-system overrides (DS §4). */
+function se_clinic_body_class($classes)
+{
+    if ((string) get_option('se_clinic_ds') !== '0') {
+        $classes[] = 'se-clinic';
+    }
+
+    return $classes;
+}
+hooks()->add_filter('admin_body_class', 'se_clinic_body_class');

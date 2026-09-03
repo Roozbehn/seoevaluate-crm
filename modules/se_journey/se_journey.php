@@ -23,6 +23,7 @@ require_once __DIR__ . '/leadsync.php';
 require_once __DIR__ . '/flows.php';
 require_once __DIR__ . '/aftercare.php';
 require_once __DIR__ . '/health.php';
+require_once __DIR__ . '/next_action.php';
 require_once __DIR__ . '/ui.php';
 
 register_activation_hook(SE_JOURNEY_MODULE, 'se_journey_activation');

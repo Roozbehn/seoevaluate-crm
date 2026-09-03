@@ -38,6 +38,8 @@ $contact_label = $evidence_redacted ? se_wa_redacted_contact($c->wa_user_id) : $
             'label_send'   => _l('se_chat_send'),
             'templates'    => $templates,   // approved templates may go inside the window too
             'label_send_template' => _l('se_chat_send_template'),
+            // Pause toggle only when a journey with active automation exists (CRM-M006).
+            'journey_active' => function_exists('se_journey_find_by_wa') && ($jj = se_journey_find_by_wa((int) $c->brand_id, $c->wa_user_id)) && (string) $jj->automation_state === 'active',
         ]);
     } else {
         $can_sync = function_exists('se_staff_can_configure_brands') && se_staff_can_configure_brands()

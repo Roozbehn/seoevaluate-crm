@@ -85,8 +85,8 @@ function se_outbound_dispatch_eta($now = null)
 function se_outbound_cadence_text(array $eta)
 {
     $s = (int) ($eta['interval'] ?? 900);
-    if ($s < 120) { return 'every minute'; }
-    return 'every ' . (int) round($s / 60) . ' minutes';
+    if ($s < 120) { return se_tr('se_tr_every_minute', 'every minute'); }
+    return se_tr('se_tr_every_n_minutes', 'every %d minutes', (int) round($s / 60));
 }
 
 /**
@@ -130,88 +130,94 @@ function se_outbound_rows($table, $conversation_id, $id_col = 'wamid', $limit = 
 function se_outbound_explain(array $row, array $eta, $now = null)
 {
     $now = $now ?? time();
-    $mins = function ($s) { return $s < 60 ? 'under a minute' : ('≈' . (int) ceil($s / 60) . ' min'); };
+    $mins = function ($s) { return $s < 60 ? se_tr('se_tr_under_minute', 'under a minute') : se_tr('se_tr_approx_min', '≈%d min', (int) ceil($s / 60)); };
 
     switch ($row['status']) {
         case 'sent':
-            return ['state' => 'sent', 'text' => 'Sent ' . $row['sent_at']
-                . ($row['provider_id'] !== '' ? ' · provider id ' . mb_substr($row['provider_id'], 0, 18) . '…' : '')];
+            return ['state' => 'sent', 'text' => se_tr('se_tr_sent', 'Sent %s', $row['sent_at'])
+                . ($row['provider_id'] !== '' ? se_tr('se_tr_provider_id', ' · provider id %s…', mb_substr($row['provider_id'], 0, 18)) : '')];
 
         case 'processing':
-            return ['state' => 'processing', 'text' => 'Sending now (claimed by the dispatcher)'];
+            return ['state' => 'processing', 'text' => se_tr('se_tr_processing', 'Sending now (claimed by the dispatcher)')];
 
         case 'failed':
-            return ['state' => 'failed', 'text' => 'Failed after ' . $row['attempts'] . ' attempt'
-                . ($row['attempts'] === 1 ? '' : 's') . ($row['last_error'] !== '' ? ': ' . $row['last_error'] : '')];
+            return ['state' => 'failed', 'text' => se_tr('se_tr_failed', 'Failed after %d attempt%s', $row['attempts'], $row['attempts'] === 1 ? '' : 's')
+                . ($row['last_error'] !== '' ? ': ' . $row['last_error'] : '')];
 
         case 'skipped':
-            return ['state' => 'skipped', 'text' => 'Skipped' . ($row['last_error'] !== '' ? ': ' . $row['last_error'] : '')
-                . ' — not sent and will not be retried'];
+            return ['state' => 'skipped', 'text' => se_tr('se_tr_skipped', 'Skipped') . ($row['last_error'] !== '' ? ': ' . $row['last_error'] : '')
+                . se_tr('se_tr_skipped_final', ' — not sent and will not be retried')];
     }
 
     // pending
     if ($row['failure_class'] === 'gated') {
-        return ['state' => 'gated', 'text' => 'Held — ' . ($row['last_error'] ?: 'sending gated')
-            . '. Retried automatically once the gate clears (next check ' . $row['next_attempt_at'] . ')'];
+        return ['state' => 'gated', 'text' => se_tr('se_tr_held', 'Held — %s. Retried automatically once the gate clears (next check %s)',
+            $row['last_error'] ?: se_tr('se_tr_sending_gated', 'sending gated'), $row['next_attempt_at'])];
     }
 
     $due = $row['next_attempt_at'] === '' || strtotime($row['next_attempt_at']) <= $now;
 
     if (!$due) {
         $wait = strtotime($row['next_attempt_at']) - $now;
-        return ['state' => 'retryable', 'text' => 'Retry scheduled ' . $row['next_attempt_at'] . ' (' . $mins($wait) . ')'
-            . ($row['last_error'] !== '' ? ' — last error: ' . $row['last_error'] : '')
-            . ' · attempt ' . ($row['attempts'] + 1)];
+        return ['state' => 'retryable', 'text' => se_tr('se_tr_retry', 'Retry scheduled %s (%s)', $row['next_attempt_at'], $mins($wait))
+            . ($row['last_error'] !== '' ? se_tr('se_tr_last_error', ' — last error: %s', $row['last_error']) : '')
+            . se_tr('se_tr_attempt', ' · attempt %d', $row['attempts'] + 1)];
     }
 
     if ($eta['next_run_at'] === null) {
-        return ['state' => 'pending', 'text' => 'Queued — waiting for the dispatcher (cron has not run yet)'];
+        return ['state' => 'pending', 'text' => se_tr('se_tr_queued_no_cron', 'Queued — waiting for the dispatcher (cron has not run yet)')];
     }
     if ($eta['overdue']) {
-        return ['state' => 'warning', 'text' => 'Queued — dispatcher run overdue (last run ' . $eta['last_run_at']
-            . '; expected ' . se_outbound_cadence_text($eta) . '). Check System / Cron on Integration Health'];
+        return ['state' => 'warning', 'text' => se_tr('se_tr_queued_overdue', 'Queued — dispatcher run overdue (last run %s; expected %s). Check System / Cron on Integration Health',
+            $eta['last_run_at'], se_outbound_cadence_text($eta))];
     }
 
     if ($eta['interval'] < 120) {
-        return ['state' => 'pending', 'text' => 'Queued — goes out within the next minute (dispatcher runs every minute)'];
+        return ['state' => 'pending', 'text' => se_tr('se_tr_queued_minute', 'Queued — goes out within the next minute (dispatcher runs every minute)')];
     }
 
-    return ['state' => 'pending', 'text' => 'Queued — goes out on the next dispatcher run at '
-        . substr($eta['next_run_at'], 11, 5) . ' (' . $mins($eta['seconds']) . ')'];
+    return ['state' => 'pending', 'text' => se_tr('se_tr_queued_next', 'Queued — goes out on the next dispatcher run at %s (%s)',
+        substr($eta['next_run_at'], 11, 5), $mins($eta['seconds']))];
 }
 
 /** Render the tracker panel body. $rows from se_outbound_rows(). */
 function se_ui_outbound_tracker(array $rows, array $eta, $now = null)
 {
     $now = $now ?? time();
+    $pendingCount = count(array_filter($rows, function ($r) { return in_array($r['status'], ['pending', 'processing'], true); }));
 
-    echo '<p class="text-muted" style="font-size:12px">'
-       . 'Replies are queued here and sent by the dispatcher, which runs ' . html_escape(se_outbound_cadence_text($eta))
+    // One line by default; the table only when something is queued or failed (UX-W08).
+    echo '<p class="se-help">'
+       . html_escape(se_tr('se_tr_intro', 'Replies are queued here and sent by the dispatcher, which runs %s', se_outbound_cadence_text($eta)))
        . ($eta['next_run_at'] !== null && !$eta['overdue']
-            ? ' — next run ' . html_escape(substr($eta['next_run_at'], 11, ($eta['interval'] < 120 ? 8 : 5)))
+            ? html_escape(se_tr('se_tr_next_run', ' — next run %s', substr($eta['next_run_at'], 11, ($eta['interval'] < 120 ? 8 : 5))))
             : '')
-       . '. Delivery receipts update the thread on the run after that.</p>';
+       . '. ' . html_escape(se_tr('se_tr_receipts', 'Delivery receipts update the thread on the run after that.')) . '</p>';
 
     if (empty($rows)) {
-        echo '<p class="text-muted no-margin">No messages queued from this thread yet.</p>';
+        echo '<p class="se-help no-margin">' . html_escape(se_tr('se_tr_empty', 'No messages queued from this thread yet.')) . '</p>';
         return;
     }
+    $failed = count(array_filter($rows, function ($r) { return $r['status'] === 'failed'; }));
+    $open = $pendingCount > 0 || $failed > 0;
+    echo '<details class="se-tracker"' . ($open ? ' open' : '') . '><summary class="se-help">'
+       . html_escape(se_tr('se_tr_summary', '%d message(s) · %d queued · %d failed', count($rows), $pendingCount, $failed)) . '</summary>';
 
-    echo '<div class="table-responsive"><table class="table table-condensed" style="font-size:12px"><thead><tr>'
-       . '<th>Message</th><th>Status</th><th>Queued</th></tr></thead><tbody>';
+    echo '<div class="se-tablewrap"><table class="se-table"><thead><tr>'
+       . '<th>' . html_escape(se_tr('se_tr_h_message', 'Message')) . '</th><th>' . html_escape(se_tr('se_tr_h_status', 'Status')) . '</th><th>' . html_escape(se_tr('se_tr_h_queued', 'Queued')) . '</th></tr></thead><tbody>';
 
     foreach ($rows as $r) {
         $ex    = se_outbound_explain($r, $eta, $now);
         $label = $r['kind'] === 'template'
-            ? 'Template ' . $r['template_name']
+            ? se_tr('se_tr_template', 'Template %s', $r['template_name'])
             : mb_substr($r['body'], 0, 60) . (mb_strlen($r['body']) > 60 ? '…' : '');
 
         echo '<tr>'
-           . '<td>' . html_escape($label) . '<br /><small class="text-muted">#' . (int) $r['id'] . '</small></td>'
-           . '<td>' . se_ui_badge($ex['state'], $r['status']) . '<br /><small>' . html_escape($ex['text']) . '</small></td>'
+           . '<td>' . html_escape($label) . '<br /><small class="se-help">#' . (int) $r['id'] . '</small></td>'
+           . '<td>' . se_ui_badge($ex['state'], se_tr('se_tr_status_' . $r['status'], $r['status'])) . '<br /><small>' . html_escape($ex['text']) . '</small></td>'
            . '<td><small>' . html_escape($r['queued_at']) . '</small></td>'
            . '</tr>';
     }
 
-    echo '</tbody></table></div>';
+    echo '</tbody></table></div></details>';
 }
