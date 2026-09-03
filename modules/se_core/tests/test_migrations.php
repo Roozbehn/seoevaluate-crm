@@ -8,7 +8,7 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 se_group('Schema version and statement shape');
 
-se_eq(19, SE_CORE_SCHEMA_VERSION, 'se_core schema version is 19 (v17 = patient journey, v18 = quote answers + template buttons, v19 = web push subscriptions)');
+se_eq(20, SE_CORE_SCHEMA_VERSION, 'se_core schema version is 20 (v18 = quote answers, v19 = web push subscriptions, v20 = WhatsApp call log)');
 
 $stmts = se_core_migration_statements();
 se_ok(count($stmts) > 40, 'the statement list is populated (' . count($stmts) . ' statements)');

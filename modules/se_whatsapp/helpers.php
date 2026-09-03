@@ -397,6 +397,14 @@ function se_wa_process_event($ev)
     foreach (($value['statuses'] ?? []) as $st) {
         se_wa_handle_status($brand_id, $st);
     }
+    /* Calling webhooks arrive on the same subscription under field 'calls'.
+     * The CRM records them and never answers: see modules/se_whatsapp/calls.php
+     * for why accepting a call we cannot carry is worse than not accepting. */
+    foreach (($value['calls'] ?? []) as $call) {
+        if (function_exists('se_wa_handle_call') && is_array($call)) {
+            se_wa_handle_call($brand_id, $routing['phone_number_id'], $call);
+        }
+    }
 }
 
 /** Upsert conversation + message for one inbound message. Deduplicated on wamid. */

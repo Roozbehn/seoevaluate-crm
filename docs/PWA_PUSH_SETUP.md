@@ -92,3 +92,52 @@ Tests: `modules/se_core/tests/test_push.php`. The encryption tests round-trip
 against an independently generated subscription keypair rather than a fixture,
 because every failure mode in RFC 8291 is silent — a swapped key order produces
 a well-formed request the push service accepts and the browser cannot decrypt.
+
+---
+
+# WhatsApp call logging
+
+The CRM records WhatsApp calls. It does not carry them.
+
+## Why not answer in the browser
+
+Meta's Calling API hands the business an SDP offer and expects it to answer and
+then carry DTLS-SRTP media itself. That needs a WebRTC or SIP stack; the
+cPanel/LiteSpeed host cannot run one. Accepting a call we would then drop is
+worse for a patient than a phone ringing in the WhatsApp Business app, which is
+where staff answer today.
+
+What the CRM adds is the record — who called, when, how long, whether anyone
+picked up — and a notification when a call is missed. That is the half that
+produces the clinic value: the expensive failure is a missed call nobody rings
+back, and today that fact exists only inside someone's phone. It reaches no
+screen and no report.
+
+Answering inside the CRM stays possible later without touching
+`modules/se_whatsapp/calls.php`: it is a media plane behind the same two
+webhooks. That needs either a Cloudflare Realtime SFU spike (its interop with
+Meta's SDP offer is plausible but undocumented, so it must be proven before it
+is promised) or a CPaaS with a monthly bill. Cloudflare covers the signalling
+and TURN cleanly; it has no SIP at all.
+
+## Enabling it
+
+1. Turn on calling for the business number in WhatsApp Manager.
+2. Subscribe the app to the `calls` webhook field. It arrives on the same
+   subscription as messages, so no new endpoint is needed — `se_wa_process_event`
+   already routes it.
+
+Nothing else. There is no token to install and nothing to switch on in the CRM:
+with the field unsubscribed, no call webhook arrives and the table stays empty.
+
+## The lifecycle
+
+One call is two webhooks — `connect` then `terminate` — and Meta redelivers
+both. `call_id` is the unique key: connect inserts, terminate updates, and a
+redelivered connect neither duplicates the row nor rings the phone twice. A
+terminate that arrives with no preceding connect still records the call, because
+Meta can drop the first webhook.
+
+"Answered" is not a field Meta sends. It is derived: a `COMPLETED` status **with
+a non-zero duration**. `COMPLETED` with zero duration is a missed call, and a
+test plants the version that gets this wrong.

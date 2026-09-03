@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * / ADD INDEX / CREATE TABLE, which keeps the guards declarative.
  */
 
-define('SE_CORE_SCHEMA_VERSION', 19);
+define('SE_CORE_SCHEMA_VERSION', 20);
 
 /**
  * Ordered, idempotent DDL that brings a fresh install.php schema up to
@@ -368,6 +368,37 @@ function se_core_migration_statements()
         PRIMARY KEY (`id`),
         UNIQUE KEY `endpoint_hash` (`endpoint_hash`),
         KEY `staff_id` (`staff_id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    /* --- v20: WhatsApp call log -------------------------------------------
+     * The CRM records calls; it does not carry them. Answering a WhatsApp call
+     * in the browser needs a WebRTC or SIP media stack the host cannot run, so
+     * staff answer in the WhatsApp Business app and this table is the record:
+     * who called, when, how long, and whether anyone picked up.
+     *
+     * That is the half that produces the actual clinic value — a missed call
+     * nobody follows up is the expensive failure, and it is invisible today.
+     *
+     * `call_id` is Meta's and is the dedup key: connect and terminate arrive
+     * as two webhooks for one call, and Meta redelivers both.
+     */
+    $stmts[] = "CREATE TABLE IF NOT EXISTS `{$p}se_wa_calls` (
+        `id` bigint(20) NOT NULL AUTO_INCREMENT,
+        `brand_id` int(11) NOT NULL DEFAULT 0,
+        `conversation_id` bigint(20) NOT NULL DEFAULT 0,
+        `call_id` varchar(191) NOT NULL,
+        `wa_user_id` varchar(32) NOT NULL,
+        `direction` varchar(20) NOT NULL DEFAULT 'USER_INITIATED',
+        `state` varchar(16) NOT NULL DEFAULT 'ringing',
+        `status` varchar(16) DEFAULT NULL,
+        `duration` int(11) NOT NULL DEFAULT 0,
+        `started_at` datetime DEFAULT NULL,
+        `ended_at` datetime DEFAULT NULL,
+        `date_created` datetime NOT NULL,
+        PRIMARY KEY (`id`),
+        UNIQUE KEY `call_id` (`call_id`),
+        KEY `conversation_id` (`conversation_id`),
+        KEY `brand_id` (`brand_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     /* --- v8.8: brand-scoping index coverage for tenant queries ------------- */

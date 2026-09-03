@@ -145,3 +145,48 @@ function se_push_notify_journey($brand_id, $journey_id, $to_state, $assigned_sta
         ]
     );
 }
+
+/**
+ * A WhatsApp call is ringing.
+ *
+ * The CRM cannot answer it — staff pick up in the WhatsApp Business app — so
+ * this notification's only job is to make sure someone knows the phone is
+ * ringing when it is not in their hand.
+ */
+function se_push_notify_call($brand_id, $conversation_id, $assigned_staff = 0)
+{
+    return se_push_safe_notify(
+        se_push_conversation_recipients($brand_id, $assigned_staff),
+        [
+            't'     => 'call',
+            'title' => 'WhatsApp araması',
+            'body'  => 'Bir hasta arıyor.',
+            'tag'   => 'call-' . (int) $conversation_id,
+            'url'   => admin_url('se_whatsapp/conversation/' . (int) $conversation_id),
+        ]
+    );
+}
+
+/**
+ * A WhatsApp call ended without being answered.
+ *
+ * The expensive failure in a clinic is not a dropped call, it is a missed one
+ * nobody rings back. This is the only notification here that is about
+ * something that already went wrong.
+ */
+function se_push_notify_missed_call($brand_id, $conversation_id, $assigned_staff = 0)
+{
+    return se_push_safe_notify(
+        se_push_conversation_recipients($brand_id, $assigned_staff),
+        [
+            't'     => 'call_missed',
+            'title' => 'Cevapsız WhatsApp araması',
+            'body'  => 'Geri aranması gerekiyor.',
+            // A distinct tag from the ringing one: the missed-call notice must
+            // NOT be replaced by, or replace, the "ringing" one — they say
+            // different things and the second is the one that needs acting on.
+            'tag'   => 'call-missed-' . (int) $conversation_id,
+            'url'   => admin_url('se_whatsapp/conversation/' . (int) $conversation_id),
+        ]
+    );
+}
