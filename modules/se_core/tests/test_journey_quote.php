@@ -56,7 +56,7 @@ se_eq(['Teklifi Kabul Et', 'Fiyat Revizyonu', 'Danışmana Bağlan'], array_colu
 se_ok(strpos($last['body'], '/quote') !== false && strpos($last['body'], 'garantisi değildir') !== false, 'the body still carries the secure link and the disclaimer');
 se_ok(strpos($last['body'], 'yüz yüze') !== false, 'and says a face-to-face slot follows an acceptance');
 se_ok(mb_strlen($last['body']) <= 1024, 'interactive body within the limit');
-se_eq(null, $sent['quote']['patient_response'], 'no answer yet');
+se_eq(null, $sent['quote']['patient_response'] ?? null, 'no answer yet');
 
 // A typed question after the quote: staff task + the options repeated once, not on every message.
 se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, 'Depozito ne kadar?', se_test_wamid()));
@@ -346,3 +346,66 @@ se_eq(false, $model->add(['brand_id' => 0, 'title' => 't', 'rel_type' => 'lead',
 se_eq(false, $model->add(['brand_id' => 1, 'title' => 't', 'rel_type' => 'lead', 'rel_id' => 1, 'staff_id' => 10, 'start_at' => $slot, 'end_at' => date('Y-m-d', strtotime('+4 days')) . ' 10:30:00', 'status' => 'scheduled']), 'no staff session and no system flag → refused');
 se_journey_transition(se_test_journey_row(), 'closed_lost', 'test', 'staff', 10);
 se_eq('state', se_journey_booking_pick(se_test_journey_row(), $slot, 'page')['reason'], 'a still-valid calendar link cannot book once the journey is closed');
+
+/* ======================================================================== */
+se_group('Journey quote: sent straight from ready_for_review (no "open review") — the journey still enters the quote phase');
+
+// Production 2026-09-03: staff drafted, approved and sent the quote from the
+// review tab without pressing "open review". The journey stayed at
+// ready_for_review, so the patient's "Fiyat Revizyonu" tap was filed as a
+// message during the photo/review phase and the review tab kept saying
+// "no answer yet".
+se_test_journey_reviewed();
+$db = se_test_db();
+se_test_act_as(10, [], true);
+se_eq('ready_for_review', se_test_journey_row()->state, 'photos in, review not opened');
+$j = se_test_journey_row();
+se_journey_quote_draft($j, ['currency' => 'EUR', 'amount_min' => '1500', 'amount_max' => '2200', 'show_amount' => 1, 'valid_until' => '+30 days',
+    'included' => "Ön görüşme\nİşlem", 'recommendation' => 'procedure_after_consultation'], 10);
+$rows = $db->rows('tblse_journey_quotes'); $q = end($rows);
+se_journey_quote_approve((int) $q['id'], 10);
+$r = se_journey_quote_send((int) $q['id'], 10);
+se_wa_out_drain();
+se_eq(true, $r['ok'], 'sent');
+se_eq('quote_sent', se_test_journey_row()->state, 'state: quote_sent — the approved quote IS the review decision');
+$trig = array_column(array_filter($db->rows('tblse_journey_transitions'), function ($t) { return in_array($t['to_state'], ['under_review', 'quote_pending_staff_approval', 'quote_sent'], true); }), 'trigger_key');
+se_eq(['quote_prepared', 'quote_prepared', 'quote_sent'], $trig, 'walked ready_for_review → under_review → pending approval → quote_sent, each logged');
+se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, '', se_test_wamid(), ['interactive' => ['type' => 'button_reply', 'button_reply' => ['id' => 'jr_quote_revise', 'title' => 'Fiyat Revizyonu']]]));
+$rows = $db->rows('tblse_journey_quotes'); $q = end($rows);
+se_eq('revision_requested', $q['patient_response'], 'the tap is the patient\'s answer');
+se_eq('quote_revision_requested', se_test_journey_row()->state, 'state follows');
+
+/* ======================================================================== */
+se_group('Journey quote: a quote sent before the fix (state left at ready_for_review) — the answer still lands');
+
+se_test_journey_reviewed();
+$db = se_test_db();
+se_test_act_as(10, [], true);
+$j = se_test_journey_row();
+se_journey_quote_draft($j, ['currency' => 'EUR', 'amount_min' => '1500', 'amount_max' => '2200', 'show_amount' => 1, 'valid_until' => '+30 days',
+    'included' => "Ön görüşme", 'recommendation' => 'procedure_after_consultation'], 10);
+$rows = $db->rows('tblse_journey_quotes'); $q = end($rows);
+se_journey_quote_approve((int) $q['id'], 10);
+se_journey_quote_send((int) $q['id'], 10);
+se_wa_out_drain();
+// What production looked like: quote row "sent", journey state never moved.
+foreach ($db->tables['tblse_journeys'] as &$jr) { $jr['state'] = 'ready_for_review'; }
+unset($jr);
+$rows = $db->rows('tblse_journey_quotes'); $q = end($rows);
+se_eq(['sent', null], [$q['status'], $q['patient_response'] ?? null], 'sent quote, no answer, stale state');
+$sentBefore = count($GLOBALS['se_wa_sent']);
+se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, '', se_test_wamid(), ['interactive' => ['type' => 'button_reply', 'button_reply' => ['id' => 'jr_quote_revise', 'title' => 'Fiyat Revizyonu']]]));
+se_wa_out_drain();
+$rows = $db->rows('tblse_journey_quotes'); $q = end($rows);
+se_eq('revision_requested', $q['patient_response'], 'the answer is recorded although the state was stale');
+se_eq('quote_revision_requested', se_test_journey_row()->state, 'and the state is repaired into the quote phase');
+se_ok(in_array('quote_phase_repair', array_column($db->rows('tblse_journey_transitions'), 'trigger_key'), true), 'the repair is an explicit, logged transition');
+se_eq(1, count(array_filter($db->rows('tblse_journey_tasks'), function ($t) { return $t['kind'] === 'quote_revision'; })), 'staff task for the revision');
+se_ok(count($GLOBALS['se_wa_sent']) > $sentBefore, 'the patient got the acknowledgement');
+// A plain question in a stale state is still an ordinary staff message (no repair without an answer).
+foreach ($db->tables['tblse_journeys'] as &$jr) { $jr['state'] = 'ready_for_review'; }
+unset($jr);
+foreach ($db->tables['tblse_journey_quotes'] as &$qr) { $qr['patient_response'] = null; }
+unset($qr);
+se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, 'Merhaba, bir sorum var', se_test_wamid()));
+se_eq('ready_for_review', se_test_journey_row()->state, 'a question does not move the state');
