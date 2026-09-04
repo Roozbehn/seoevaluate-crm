@@ -15,6 +15,7 @@ register_language_files(SE_INSTAGRAM_MODULE_NAME, [SE_INSTAGRAM_MODULE_NAME]);
 
 require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/outbound.php';
+require_once __DIR__ . '/inbox.php';      // Mesajlar · Instagram rows and thread paging
 require_once __DIR__ . '/transport.php';   // registers the live Send API transport when a token exists
 
 register_activation_hook(SE_INSTAGRAM_MODULE_NAME, 'se_instagram_activation');

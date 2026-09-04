@@ -408,6 +408,7 @@ require_once $SE_MODULES . '/se_journey/next_action.php';
 require_once $SE_MODULES . '/se_journey/timers.php';
 require_once $SE_MODULES . '/se_journey/ui.php';
 require_once $SE_MODULES . '/se_instagram/helpers.php';
+require_once $SE_MODULES . '/se_instagram/inbox.php';
 require_once $SE_MODULES . '/se_instagram/outbound.php';
 require_once $SE_MODULES . '/se_core/se_integration_ui.php';
 require_once $SE_MODULES . '/se_core/se_reporting.php';

@@ -282,14 +282,19 @@ function se_journey_conversation_context($conv, array $opts = [])
         return '';
     }
     $brand = (int) ($conv->brand_id ?? 0);
-    $j = $brand > 0 ? se_journey_find_by_wa($brand, (string) ($conv->wa_user_id ?? '')) : null;
+    $ig    = (($opts['channel'] ?? '') === 'ig') || !empty($conv->igsid);
+    if (array_key_exists('journey', $opts)) {
+        $j = $opts['journey'];                                              // Instagram: found through the lead by the caller
+    } else {
+        $j = $brand > 0 ? se_journey_find_by_wa($brand, (string) ($conv->wa_user_id ?? '')) : null;
+    }
     $can = [];
     foreach (array_keys(se_journey_capabilities()) as $cap) { $can[$cap] = se_journey_can($cap); }
     $h = '';
     if (!$j) {
         $enabled = $brand > 0 && se_journey_enabled($brand);
         $h .= '<div><h3>' . html_escape(_l('se_na_new_thread')) . '</h3><p class="se-help">' . html_escape($enabled ? _l('se_journey_panel_none') : _l('se_journey_panel_disabled')) . '</p></div>';
-        if ($enabled && $can['edit_review']) {
+        if ($enabled && $can['edit_review'] && !$ig) {   // the WhatsApp start action needs a WhatsApp thread
             $h .= '<div class="se-ctx-actions">' . se_ui_post_btn(_l('se_journey_start_evaluation'), admin_url('se_journey/se_journey/start_conversation/' . (int) ($conv->id ?? 0)), 'primary', [], ['class' => 'se-btn-block']) . '</div>';
         }
         return $h;
