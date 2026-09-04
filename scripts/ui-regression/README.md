@@ -19,3 +19,8 @@ SE_BASE_URL=https://crm.roozbeh.com.tr SE_STORAGE_STATE=scripts/ui-regression/st
 `state.json` and `out/` are git-ignored (session cookie; screenshots may show
 patient names). Only the calendar and the empty appointment form are
 screenshotted by default.
+
+
+## Closure note (2026-09-04)
+
+The suite was **not** run by the automation program: the session cookie is HttpOnly + Secure and the program never types credentials, so it cannot mint a storage state itself. Export one yourself (DevTools → Application → Cookies → save as `scripts/ui-regression/state.json`, which is git-ignored) and run `node scripts/ui-regression/responsive.mjs`. The same assertions were executed live through the owner's authenticated Chrome (same-origin iframes at 390/768/1024/1440/1920 on Bugün, Hastalar, patient workspace, Mesajlar list + thread, Instagram inbox + thread, Randevular, appointment form, Integration Health) — see `docs/verification/CRM-PRODUCTION-SIGNOFF-2026-09-04.md` §4. Delete `state.json` after a run.

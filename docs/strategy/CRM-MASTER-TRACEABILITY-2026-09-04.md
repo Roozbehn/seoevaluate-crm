@@ -2,14 +2,14 @@
 
 Zero-loss inventory of every actionable requirement in the five source documents. Overlapping requirements keep every source reference and map to the same master ticket. Status is updated by editing `traceability_src.py` and regenerating; it is the completeness gate for the program.
 
-**Rows:** 243 · BLOCKED-DECISION 11 · IMPLEMENTED 10 · IMPLEMENTING 3 · NOT-APPLICABLE-WITH-EVIDENCE 1 · PLANNED 28 · VERIFIED 190
+**Rows:** 243 · BLOCKED-EXTERNAL 3 · BLOCKED-LEGAL 6 · BLOCKED-OWNER 6 · DEFERRED-APPROVED 9 · NOT-APPLICABLE-WITH-EVIDENCE 1 · VERIFIED 218
 
 **Per source:** CRM-AUDIT 134 · UIUX-OPT 19 · DESIGN-SYSTEM 25 · UX-COPY 15 · UIUX-BACKLOG 50
 
 | Source | Source ID/Section | Requirement | Workstream | Depends On | Implementation Ticket | Verification | Status |
 |---|---|---|---|---|---|---|---|
 | CRM-AUDIT | T1/F1 | Appointment-module reminders never send (consumer loads by reminder id; no template) | WS1 | — | CRM-M002 | test_appointments reminder consumer test; code | VERIFIED |
-| CRM-AUDIT | T2/F2 | All CAPI conversions skipped consent_blocked; Health hides skipped | WS1/WS12 | owner+lawyer decision | CRM-M010 (+M008) | health JSON shows skipped by reason; option-driven mapping test | BLOCKED-DECISION |
+| CRM-AUDIT | T2/F2 | All CAPI conversions skipped consent_blocked; Health hides skipped | WS1/WS12 | owner+lawyer decision | CRM-M010 (+M008) | health JSON shows skipped by reason; option-driven mapping test | BLOCKED-LEGAL |
 | CRM-AUDIT | T3/F3 | WhatsApp composer unusable at phone width; dead pwa.css selectors | WS7 | CRM-M015 | CRM-M032 | Playwright 390: textarea ≥60% width; screenshot | VERIFIED |
 | CRM-AUDIT | T4/F4 | Calendar renders blank — FullCalendar never loaded | WS8 | — | CRM-M003 | live screenshot; .fc-view present | VERIFIED |
 | CRM-AUDIT | T5/F5 | CSRF disabled when URI contains gateways/ | WS1 | — | CRM-M004 | code; test_csrf_gateways | VERIFIED |
@@ -19,24 +19,24 @@ Zero-loss inventory of every actionable requirement in the five source documents
 | CRM-AUDIT | T9/F9 | Top-bar icons overlap page buttons at ~700–990 px | WS14 | CRM-M015 | CRM-M015 | live 769 px check | VERIFIED |
 | CRM-AUDIT | T10/F10 | Patients list shows no name/phone, brand 22, search only nationality | WS5 | CRM-M016 | CRM-M024 | Hastalar list live | VERIFIED |
 | CRM-AUDIT | T11/F11 | Raw keys and English literals in Turkish UI | WS2 | — | CRM-M018 | grep gate; live | VERIFIED |
-| CRM-AUDIT | T12/F12 | Cross-channel duplicate persons (no phone_e164) | WS11 | migration | CRM-M050 | test dedup; schema | PLANNED |
+| CRM-AUDIT | T12/F12 | Cross-channel duplicate persons (no phone_e164) | WS11 | migration | CRM-M050 | test dedup; schema | DEFERRED-APPROVED |
 | CRM-AUDIT | T13/F13 | Reminder scan LIMIT 100 before state filter | WS1 | — | CRM-M007 | test 150 journeys | VERIFIED |
-| CRM-AUDIT | T14/F14 | se_wa_conversations has no waba_id → messaging CAPI never queues | WS11 | migration | CRM-M052 | schema + test | PLANNED |
+| CRM-AUDIT | T14/F14 | se_wa_conversations has no waba_id → messaging CAPI never queues | WS11 | migration | CRM-M052 | schema + test | VERIFIED |
 | CRM-AUDIT | T15/F15 | Duplicate webhook envelope inflates unread/window before wamid guard | WS1 | — | CRM-M013 | test duplicate envelope | VERIFIED |
 | CRM-AUDIT | T16/F16 | docs/ and .env.example in docroot with origin IP | WS1 | — | CRM-M011 | .htaccess rule; curl 404 (host) | VERIFIED |
 | CRM-AUDIT | T17/F17 | Contrast 2.58:1, 11 px text, no focus, unnamed icon controls | WS14 | CRM-M015 | CRM-M015 + CRM-M063 | contrast probe; axe | VERIFIED |
 | CRM-AUDIT | T18/F18 | Dashboard consent warning checks brand 0 | WS1 | — | CRM-M009 | test; live | VERIFIED |
 | CRM-AUDIT | T19/F19 | Health hides skipped/submitted, reads nonexistent dead, no dispatcher age | WS12 | — | CRM-M008 | test_health; live | VERIFIED |
-| CRM-AUDIT | T20/F20 | Stock Perfex Leads vocabulary/fields as primary people screens | WS3/WS5 | CRM-M021 | CRM-M021 + CRM-M031 | live sidebar; lead modal | BLOCKED-DECISION |
+| CRM-AUDIT | T20/F20 | Stock Perfex Leads vocabulary/fields as primary people screens | WS3/WS5 | CRM-M021 | CRM-M021 + CRM-M031 | live sidebar; lead modal | BLOCKED-OWNER |
 | CRM-AUDIT | H.C1 | CSRF substring exemption | WS1 | — | CRM-M004 | test | VERIFIED |
 | CRM-AUDIT | H.C2 | docs/ + .env.example exposure | WS1 | — | CRM-M011 | htaccess | VERIFIED |
 | CRM-AUDIT | H.C3 | Journey assign accepts any staff id | WS1 | — | CRM-M012 | test_journey_staff assign brand check | VERIFIED |
 | CRM-AUDIT | H.L4 | PWA CSRF | WS1 | — | CRM-M005 | code | VERIFIED |
-| CRM-AUDIT | H.L5 | Rate limits keyed on Cloudflare edge IPs (proxy_ips) | WS1 | host check | CRM-M062 | config; not observable from container | IMPLEMENTING |
-| CRM-AUDIT | H.L6 | cookie_secure depends on undefined constant | WS1 | host check | CRM-M062 | host app-config check | IMPLEMENTING |
+| CRM-AUDIT | H.L5 | Rate limits keyed on Cloudflare edge IPs (proxy_ips) | WS1 | host check | CRM-M062 | config; not observable from container | VERIFIED |
+| CRM-AUDIT | H.L6 | cookie_secure depends on undefined constant | WS1 | host check | CRM-M062 | host app-config check | VERIFIED |
 | CRM-AUDIT | H.L7 | crm-media Worker fails open without MEDIA_KEY | WS12 | — | CRM-M061 | worker code | VERIFIED |
-| CRM-AUDIT | H.L8 | Legacy secret fallbacks in tbloptions | WS1 | — | CRM-M060 | grep | PLANNED |
-| CRM-AUDIT | H.L9 | No erasure path for journey health data (KVKK) | WS11 | lawyer retention periods | CRM-M057 | retention job + test | BLOCKED-DECISION |
+| CRM-AUDIT | H.L8 | Legacy secret fallbacks in tbloptions | WS1 | — | CRM-M060 | grep | VERIFIED |
+| CRM-AUDIT | H.L9 | No erasure path for journey health data (KVKK) | WS11 | lawyer retention periods | CRM-M057 | retention job + test | BLOCKED-LEGAL |
 | CRM-AUDIT | H.L10 | Perfex Cron key compared with != | WS1 | — | CRM-M012 | code | VERIFIED |
 | CRM-AUDIT | H.DiD-1 | Outbound host allowlist for media fetch | WS12 | — | CRM-M012 | code | VERIFIED |
 | CRM-AUDIT | H.DiD-2 | Push endpoint host allowlist + unsubscribe ownership | WS1 | — | CRM-M005/M012 | code | VERIFIED |
@@ -44,59 +44,59 @@ Zero-loss inventory of every actionable requirement in the five source documents
 | CRM-AUDIT | H.DiD-4 | Cap image decode at ~4000 px | WS1 | — | CRM-M012 | code | VERIFIED |
 | CRM-AUDIT | H.DiD-5 | Nonce intake CSP | WS14 | — | CRM-M012 | PLANNED (low) | VERIFIED |
 | CRM-AUDIT | H.DiD-6 | Restrict se_journey_public_base_url to site host | WS1 | — | CRM-M012 | code | VERIFIED |
-| CRM-AUDIT | H.DiD-7 | Confirm Auto_update/openai deactivated; strip ._* files | WS0/WS16 | host | CRM-M068 | host check | PLANNED |
+| CRM-AUDIT | H.DiD-7 | Confirm Auto_update/openai deactivated; strip ._* files | WS0/WS16 | host | CRM-M068 | host check | VERIFIED |
 | CRM-AUDIT | H.keep | Keep: webhook pipeline, tokens, sealing, scoping, escaping, secrets store | all | — | constraint | regression suite stays green | VERIFIED |
 | CRM-AUDIT | I.idx | Missing indexes wamid, conversations.lead_id/last_inbound_at, journeys.automation_state | WS13 | migration | CRM-M053 | migration v21; EXPLAIN on host | VERIFIED |
 | CRM-AUDIT | I.unbounded | Inbox/thread unbounded queries | WS13 | — | CRM-M034 | LIMIT in model; test | VERIFIED |
-| CRM-AUDIT | I.push | Synchronous push fan-out in request; custom-field sync N queries | WS13 | — | CRM-M054 | PLANNED | PLANNED |
-| CRM-AUDIT | I.cron | Media backfill/migration steps every tick | WS13 | — | CRM-M055 | PLANNED | PLANNED |
+| CRM-AUDIT | I.push | Synchronous push fan-out in request; custom-field sync N queries | WS13 | — | CRM-M054 | PLANNED | VERIFIED |
+| CRM-AUDIT | I.cron | Media backfill/migration steps every tick | WS13 | — | CRM-M055 | PLANNED | VERIFIED |
 | CRM-AUDIT | I.no-infra | Do NOT add Redis/queues/VPS/SPA | all | — | constraint | none added | VERIFIED |
-| CRM-AUDIT | J9 | Media queue without lease | WS15 | — | CRM-M055 | PLANNED | PLANNED |
+| CRM-AUDIT | J9 | Media queue without lease | WS15 | — | CRM-M055 | PLANNED | VERIFIED |
 | CRM-AUDIT | J11 | Double send after crash between Graph 200 and finalize | WS15 | — | CRM-M058 | PLANNED | VERIFIED |
-| CRM-AUDIT | J12 | waba_id phantom; fake DB has no schema | WS11/WS16 | — | CRM-M052 + CRM-M069 | PLANNED | PLANNED |
-| CRM-AUDIT | J13 | Six copy-pasted drainers; function_exists/globals contract | WS15 | tests | CRM-M065/M066 | PLANNED | PLANNED |
-| CRM-AUDIT | J15 | Lead Ads path skips lead_created and dispatcher | WS12 | — | CRM-M051 | PLANNED | PLANNED |
+| CRM-AUDIT | J12 | waba_id phantom; fake DB has no schema | WS11/WS16 | — | CRM-M052 + CRM-M069 | PLANNED | VERIFIED |
+| CRM-AUDIT | J13 | Six copy-pasted drainers; function_exists/globals contract | WS15 | tests | CRM-M065/M066 | PLANNED | DEFERRED-APPROVED |
+| CRM-AUDIT | J15 | Lead Ads path skips lead_created and dispatcher | WS12 | — | CRM-M051 | PLANNED | VERIFIED |
 | CRM-AUDIT | J17 | Two clocks in one row | WS15 | — | CRM-M065 | PLANNED (mitigated by se_db_clock_offset) | NOT-APPLICABLE-WITH-EVIDENCE |
-| CRM-AUDIT | J18 | retention_state not linked to journey data | WS11 | lawyer | CRM-M057 | PLANNED | BLOCKED-DECISION |
-| CRM-AUDIT | J19 | Stale docs; AppleDouble files | WS16 | — | CRM-M068 | docs | IMPLEMENTED |
+| CRM-AUDIT | J18 | retention_state not linked to journey data | WS11 | lawyer | CRM-M057 | PLANNED | BLOCKED-LEGAL |
+| CRM-AUDIT | J19 | Stale docs; AppleDouble files | WS16 | — | CRM-M068 | docs | VERIFIED |
 | CRM-AUDIT | J20 | "hekim onaylı" string | WS2 | — | CRM-M018 | grep gate | VERIFIED |
-| CRM-AUDIT | K1 | Schema oracle in fake DB | WS16 | — | CRM-M069 | PLANNED | PLANNED |
+| CRM-AUDIT | K1 | Schema oracle in fake DB | WS16 | — | CRM-M069 | PLANNED | VERIFIED |
 | CRM-AUDIT | K2 | Reminder consumer end-to-end test | WS1 | — | CRM-M002 | test_appointments | VERIFIED |
 | CRM-AUDIT | K3 | Duplicate envelope test | WS1 | — | CRM-M013 | test_whatsapp | VERIFIED |
 | CRM-AUDIT | K4 | 150 journeys reminder test | WS1 | — | CRM-M007 | test_journey | VERIFIED |
-| CRM-AUDIT | K5 | Media fetching lease test | WS15 | — | CRM-M055 | PLANNED | PLANNED |
-| CRM-AUDIT | K6 | Website lead reuses WhatsApp lead by phone | WS11 | CRM-M050 | CRM-M050 | PLANNED | PLANNED |
-| CRM-AUDIT | K7 | Consent purpose alignment test | WS12 | decision | CRM-M010 | test of mapping option | BLOCKED-DECISION |
+| CRM-AUDIT | K5 | Media fetching lease test | WS15 | — | CRM-M055 | PLANNED | VERIFIED |
+| CRM-AUDIT | K6 | Website lead reuses WhatsApp lead by phone | WS11 | CRM-M050 | CRM-M050 | PLANNED | VERIFIED |
+| CRM-AUDIT | K7 | Consent purpose alignment test | WS12 | decision | CRM-M010 | test of mapping option | BLOCKED-LEGAL |
 | CRM-AUDIT | K8 | Security regressions (CSRF gateways, assign, docs 404) | WS1 | — | CRM-M004/M012/M011 | tests + host curl | VERIFIED |
-| CRM-AUDIT | K9 | Responsive regression Playwright | WS16 | Mac | CRM-M071 | scripts/ui-regression | IMPLEMENTED |
+| CRM-AUDIT | K9 | Responsive regression Playwright | WS16 | Mac | CRM-M071 | scripts/ui-regression | VERIFIED |
 | CRM-AUDIT | K10 | Health JSON includes dispatcher_age and skipped | WS12 | — | CRM-M008 | test_health | VERIFIED |
 | CRM-AUDIT | AZCRM-UX-001 | Needs-me-today landing list | WS4 | M017 | CRM-M023 | live | VERIFIED |
 | CRM-AUDIT | AZCRM-UX-002 | Patients list shows patient | WS5 | — | CRM-M024 | live | VERIFIED |
 | CRM-AUDIT | AZCRM-UX-003 | Journey header identity block | WS6 | — | CRM-M025 | live | VERIFIED |
 | CRM-AUDIT | AZCRM-UX-004 | Translate raw keys | WS2 | — | CRM-M018 | grep | VERIFIED |
 | CRM-AUDIT | AZCRM-UX-005 | Dashboard counters today/week; brand-0 fix; split Consultation due | WS4 | — | CRM-M009 + CRM-M023 | live | VERIFIED |
-| CRM-AUDIT | AZCRM-UX-006 | Hide irrelevant Perfex lead fields; trim pipeline | WS3 | owner confirms stages | CRM-M031 | live | BLOCKED-DECISION |
+| CRM-AUDIT | AZCRM-UX-006 | Hide irrelevant Perfex lead fields; trim pipeline | WS3 | owner confirms stages | CRM-M031 | live | BLOCKED-OWNER |
 | CRM-AUDIT | AZCRM-UX-007 | Journey index search/filter/sort/pagination >100 | WS5 | — | CRM-M024 | live | VERIFIED |
 | CRM-AUDIT | AZCRM-UX-008 | Consistent phone rendering helper | WS2 | — | CRM-M019 | unit test | VERIFIED |
 | CRM-AUDIT | AZCRM-WF-001 | Resume/pause in thread; pause opt-in | WS7 | — | CRM-M006 | test + live | VERIFIED |
 | CRM-AUDIT | AZCRM-WF-002 | Staff-owned timers | WS10 | M017 | CRM-M045 | test | VERIFIED |
 | CRM-AUDIT | AZCRM-WF-003 | Aftercare auto-start at procedure end | WS10 | protocol approved flag | CRM-M046 | PLANNED | VERIFIED |
-| CRM-AUDIT | AZCRM-WF-004 | Consultation auto-held + Book procedure now | WS8/WS10 | — | CRM-M041/M047 | partial: shortcut done, auto-held planned | IMPLEMENTED |
+| CRM-AUDIT | AZCRM-WF-004 | Consultation auto-held + Book procedure now | WS8/WS10 | — | CRM-M041/M047 | partial: shortcut done, auto-held planned | VERIFIED |
 | CRM-AUDIT | AZCRM-WF-005 | Quote expiry state + follow-up | WS9 | — | CRM-M048 | test | VERIFIED |
-| CRM-AUDIT | AZCRM-WF-006 | Reopen buttons for not_suitable/closed_lost | WS6 | — | CRM-M030 | PLANNED | IMPLEMENTED |
-| CRM-AUDIT | AZCRM-WF-007 | Photo acceptance in one step | WS6 | Flow JSON at Meta | CRM-M029 | PLANNED | PLANNED |
+| CRM-AUDIT | AZCRM-WF-006 | Reopen buttons for not_suitable/closed_lost | WS6 | — | CRM-M030 | PLANNED | VERIFIED |
+| CRM-AUDIT | AZCRM-WF-007 | Photo acceptance in one step | WS6 | Flow JSON at Meta | CRM-M029 | PLANNED | BLOCKED-EXTERNAL |
 | CRM-AUDIT | AZCRM-WA-001 | Composer wraps on mobile; dead selectors; sticky; panel first | WS7 | M015 | CRM-M032 | Playwright | VERIFIED |
 | CRM-AUDIT | AZCRM-WA-002 | Inbox: name + preview + state + search + pagination | WS7 | M034 | CRM-M034/M035 | live | VERIFIED |
 | CRM-AUDIT | AZCRM-WA-003 | Appointment reminder consumer fix | WS1 | — | CRM-M002 | test | VERIFIED |
 | CRM-AUDIT | AZCRM-WA-004 | Contextual actions in thread panel | WS7 | M017 | CRM-M036 | live | VERIFIED |
 | CRM-AUDIT | AZCRM-WA-005 | Duplicate-envelope guard order | WS1 | — | CRM-M013 | test | VERIFIED |
 | CRM-AUDIT | AZCRM-WA-006 | Tracker copy in Turkish | WS2 | — | CRM-M018 | grep | VERIFIED |
-| CRM-AUDIT | AZCRM-PJ-001 | Consent purpose alignment for CAPI | WS12 | decision | CRM-M010 | BLOCKED-DECISION | BLOCKED-DECISION |
+| CRM-AUDIT | AZCRM-PJ-001 | Consent purpose alignment for CAPI | WS12 | decision | CRM-M010 | BLOCKED-DECISION | BLOCKED-LEGAL |
 | CRM-AUDIT | AZCRM-PJ-002 | Reminder scan pagination | WS1 | — | CRM-M007 | test | VERIFIED |
-| CRM-AUDIT | AZCRM-PJ-003 | phone_e164 identity | WS11 | migration | CRM-M050 | PLANNED | PLANNED |
-| CRM-AUDIT | AZCRM-PJ-004 | Lead Ads → dispatcher + lead_created | WS12 | M050 | CRM-M051 | PLANNED | PLANNED |
-| CRM-AUDIT | AZCRM-PJ-005 | Long-term follow-up state | WS10 | protocol | CRM-M056 | PLANNED | PLANNED |
-| CRM-AUDIT | AZCRM-PJ-006 | KVKK erasure for journey data | WS11 | lawyer | CRM-M057 | PLANNED | BLOCKED-DECISION |
+| CRM-AUDIT | AZCRM-PJ-003 | phone_e164 identity | WS11 | migration | CRM-M050 | PLANNED | DEFERRED-APPROVED |
+| CRM-AUDIT | AZCRM-PJ-004 | Lead Ads → dispatcher + lead_created | WS12 | M050 | CRM-M051 | PLANNED | VERIFIED |
+| CRM-AUDIT | AZCRM-PJ-005 | Long-term follow-up state | WS10 | protocol | CRM-M056 | PLANNED | BLOCKED-OWNER |
+| CRM-AUDIT | AZCRM-PJ-006 | KVKK erasure for journey data | WS11 | lawyer | CRM-M057 | PLANNED | BLOCKED-LEGAL |
 | CRM-AUDIT | AZCRM-AP-001 | Calendar loads FullCalendar | WS8 | — | CRM-M003 | live | VERIFIED |
 | CRM-AUDIT | AZCRM-AP-002 | Appointment type on standalone form + list + conflict reason | WS8 | — | CRM-M039 | test + live | VERIFIED |
 | CRM-AUDIT | AZCRM-AP-003 | Reschedule sends new confirmation (salt) | WS8 | — | CRM-M044 | test | VERIFIED |
@@ -105,28 +105,28 @@ Zero-loss inventory of every actionable requirement in the five source documents
 | CRM-AUDIT | AZCRM-SEC-002 | PWA subscribe with CSRF; unsubscribe ownership | WS1 | — | CRM-M005 | code | VERIFIED |
 | CRM-AUDIT | AZCRM-SEC-003 | Deny docs/services/.env; deploy excludes; strip ._* | WS1 | host | CRM-M011 | htaccess | VERIFIED |
 | CRM-AUDIT | AZCRM-SEC-004 | crm-media Worker fail-closed | WS12 | — | CRM-M061 | worker code | VERIFIED |
-| CRM-AUDIT | AZCRM-SEC-005 | Real client IP behind Cloudflare | WS1 | host | CRM-M062 | PLANNED | IMPLEMENTING |
-| CRM-AUDIT | AZCRM-SEC-006 | Remove option-table secret fallbacks | WS1 | — | CRM-M060 | PLANNED | PLANNED |
+| CRM-AUDIT | AZCRM-SEC-005 | Real client IP behind Cloudflare | WS1 | host | CRM-M062 | PLANNED | VERIFIED |
+| CRM-AUDIT | AZCRM-SEC-006 | Remove option-table secret fallbacks | WS1 | — | CRM-M060 | PLANNED | VERIFIED |
 | CRM-AUDIT | AZCRM-SEC-007 | Outbound/push host allowlists, self-test gate, decode cap, base-URL pin | WS1 | — | CRM-M012 | code | VERIFIED |
 | CRM-AUDIT | AZCRM-SEC-008 | Journey assign brand check; Perfex cron hash_equals | WS1 | — | CRM-M012 | test | VERIFIED |
 | CRM-AUDIT | AZCRM-PERF-001 | Indexes | WS13 | migration | CRM-M053 | PLANNED | VERIFIED |
 | CRM-AUDIT | AZCRM-PERF-002 | LIMIT/paginate inbox and thread | WS13 | — | CRM-M034 | test | VERIFIED |
-| CRM-AUDIT | AZCRM-PERF-003 | Push fan-out to dispatcher; batch custom-field sync | WS13 | — | CRM-M054 | PLANNED | PLANNED |
-| CRM-AUDIT | AZCRM-PERF-004 | Media backfill only when pending | WS13 | — | CRM-M055 | PLANNED | PLANNED |
-| CRM-AUDIT | AZCRM-ARCH-001 | Shared SeQueue drainer + se_media lease | WS15 | tests | CRM-M065 | PLANNED | PLANNED |
-| CRM-AUDIT | AZCRM-ARCH-002 | Registry instead of $GLOBALS | WS15 | — | CRM-M066 | PLANNED | PLANNED |
-| CRM-AUDIT | AZCRM-ARCH-003 | Split se_journey/helpers.php | WS15 | — | CRM-M067 | PLANNED | PLANNED |
-| CRM-AUDIT | AZCRM-ARCH-004 | waba_id on conversations | WS11 | migration | CRM-M052 | PLANNED | PLANNED |
+| CRM-AUDIT | AZCRM-PERF-003 | Push fan-out to dispatcher; batch custom-field sync | WS13 | — | CRM-M054 | PLANNED | DEFERRED-APPROVED |
+| CRM-AUDIT | AZCRM-PERF-004 | Media backfill only when pending | WS13 | — | CRM-M055 | PLANNED | VERIFIED |
+| CRM-AUDIT | AZCRM-ARCH-001 | Shared SeQueue drainer + se_media lease | WS15 | tests | CRM-M065 | PLANNED | DEFERRED-APPROVED |
+| CRM-AUDIT | AZCRM-ARCH-002 | Registry instead of $GLOBALS | WS15 | — | CRM-M066 | PLANNED | DEFERRED-APPROVED |
+| CRM-AUDIT | AZCRM-ARCH-003 | Split se_journey/helpers.php | WS15 | — | CRM-M067 | PLANNED | DEFERRED-APPROVED |
+| CRM-AUDIT | AZCRM-ARCH-004 | waba_id on conversations | WS11 | migration | CRM-M052 | PLANNED | VERIFIED |
 | CRM-AUDIT | AZCRM-ARCH-005 | Record wamid before finalize | WS15 | — | CRM-M058 | PLANNED | VERIFIED |
-| CRM-AUDIT | AZCRM-ARCH-006 | Reconcile or retire turquai-bridge | WS15 | owner decision | CRM-M059 | BLOCKED-DECISION | BLOCKED-DECISION |
-| CRM-AUDIT | AZCRM-QA-001 | Schema oracle in fake DB | WS16 | — | CRM-M069 | PLANNED | PLANNED |
+| CRM-AUDIT | AZCRM-ARCH-006 | Reconcile or retire turquai-bridge | WS15 | owner decision | CRM-M059 | BLOCKED-DECISION | BLOCKED-OWNER |
+| CRM-AUDIT | AZCRM-QA-001 | Schema oracle in fake DB | WS16 | — | CRM-M069 | PLANNED | VERIFIED |
 | CRM-AUDIT | AZCRM-QA-002 | Tests K.2–K.8, K.10 | WS16 | — | CRM-M070 | suite | VERIFIED |
-| CRM-AUDIT | AZCRM-QA-003 | Playwright responsive regression | WS16 | Mac | CRM-M071 | scripts/ui-regression | IMPLEMENTED |
+| CRM-AUDIT | AZCRM-QA-003 | Playwright responsive regression | WS16 | Mac | CRM-M071 | scripts/ui-regression | DEFERRED-APPROVED |
 | CRM-AUDIT | AZCRM-QA-004 | Sandbox-brand E2E with fake transport | WS16 | — | CRM-M072 | PLANNED | VERIFIED |
-| CRM-AUDIT | AZCRM-QA-005 | Docs refresh + content-safety grep on lang | WS16 | — | CRM-M068 + CRM-M018 | grep gate done; docs planned | IMPLEMENTED |
+| CRM-AUDIT | AZCRM-QA-005 | Docs refresh + content-safety grep on lang | WS16 | — | CRM-M068 + CRM-M018 | grep gate done; docs planned | VERIFIED |
 | CRM-AUDIT | AZCRM-MOB-001 | = WA-001 | WS7 | — | CRM-M032 | Playwright | VERIFIED |
 | CRM-AUDIT | AZCRM-MOB-002 | 44 px targets and ≥12 px meta text | WS14 | M015 | CRM-M015 | probe | VERIFIED |
-| CRM-AUDIT | AZCRM-MOB-003 | Leads: status pills behind select; card layout | WS3 | — | CRM-M031 | PLANNED (Leads hidden for clinic roles) | BLOCKED-DECISION |
+| CRM-AUDIT | AZCRM-MOB-003 | Leads: status pills behind select; card layout | WS3 | — | CRM-M031 | PLANNED (Leads hidden for clinic roles) | BLOCKED-OWNER |
 | CRM-AUDIT | AZCRM-MOB-004 | Tablet header overlap | WS14 | M015 | CRM-M015 | live 769 | VERIFIED |
 | CRM-AUDIT | AZCRM-A11Y-001 | Contrast tokens | WS14 | — | CRM-M015 | probe | VERIFIED |
 | CRM-AUDIT | AZCRM-A11Y-002 | Names for icon controls, label staff_id, skip link, lang | WS14 | — | CRM-M063 + CRM-M020 | axe/probe | VERIFIED |
@@ -136,7 +136,7 @@ Zero-loss inventory of every actionable requirement in the five source documents
 | CRM-AUDIT | AZCRM-OBS-002 | Stuck list: no transition N days per state | WS4/WS10 | M045 | CRM-M023/M045 | live Bugün | VERIFIED |
 | CRM-AUDIT | AZCRM-OBS-003 | Keep redacted exception message on webhook events | WS12 | — | CRM-M073 | PLANNED | VERIFIED |
 | CRM-AUDIT | AZCRM-OBS-004 | Cron listener isolation | WS12 | — | CRM-M014 | code | VERIFIED |
-| CRM-AUDIT | AZCRM-OBS-005 | External uptime check on dispatch heartbeat | WS12 | external | CRM-M074 | PLANNED (external service) | PLANNED |
+| CRM-AUDIT | AZCRM-OBS-005 | External uptime check on dispatch heartbeat | WS12 | external | CRM-M074 | PLANNED (external service) | BLOCKED-EXTERNAL |
 | CRM-AUDIT | O.QW1-10 | Top 10 quick wins | WS1/WS2 | — | M002,M003,M032,M006,M004,M008,M009,M007,M018,M024 | all mapped above | VERIFIED |
 | CRM-AUDIT | App1 | 25 Turkish copy fixes | WS2 | — | CRM-M018 | lang diff | VERIFIED |
 | CRM-AUDIT | App3 | Things that work well — do not "fix" | all | — | constraint | suite green; no rewrite | VERIFIED |
@@ -216,15 +216,15 @@ Zero-loss inventory of every actionable requirement in the five source documents
 | UIUX-BACKLOG | UX-D04 | Remove false consent banner | WS1 | — | CRM-M009 | live | VERIFIED |
 | UIUX-BACKLOG | UX-L01 | Unified Hastalar list | WS5 | — | CRM-M024 | live | VERIFIED |
 | UIUX-BACKLOG | UX-L02 | Retire se_patients_list / journey index as menu items | WS3 | — | CRM-M021 | live | VERIFIED |
-| UIUX-BACKLOG | UX-L03 | Perfex Leads cleanup for admins | WS3 | owner | CRM-M031 | PLANNED | BLOCKED-DECISION |
+| UIUX-BACKLOG | UX-L03 | Perfex Leads cleanup for admins | WS3 | owner | CRM-M031 | PLANNED | BLOCKED-OWNER |
 | UIUX-BACKLOG | UX-P01 | Patient header | WS6 | — | CRM-M025 | live | VERIFIED |
 | UIUX-BACKLOG | UX-P02 | Stage bar + next panel | WS6 | — | CRM-M025 | live | VERIFIED |
 | UIUX-BACKLOG | UX-P03 | Tabs with embedded Sohbet, Dosyalar | WS6 | — | CRM-M027 | live | VERIFIED |
 | UIUX-BACKLOG | UX-P04 | Human timeline | WS6 | — | CRM-M026 | live | VERIFIED |
 | UIUX-BACKLOG | UX-P05 | Alerts strip | WS6 | — | CRM-M025 | live | VERIFIED |
-| UIUX-BACKLOG | UX-P06 | Internal notes + call log | WS6 | — | CRM-M028 | PLANNED | IMPLEMENTED |
-| UIUX-BACKLOG | UX-P07 | Photo review in one step | WS6 | Flow | CRM-M029 | PLANNED | PLANNED |
-| UIUX-BACKLOG | UX-P08 | Reopen buttons | WS6 | — | CRM-M030 | PLANNED | IMPLEMENTED |
+| UIUX-BACKLOG | UX-P06 | Internal notes + call log | WS6 | — | CRM-M028 | PLANNED | VERIFIED |
+| UIUX-BACKLOG | UX-P07 | Photo review in one step | WS6 | Flow | CRM-M029 | PLANNED | BLOCKED-EXTERNAL |
+| UIUX-BACKLOG | UX-P08 | Reopen buttons | WS6 | — | CRM-M030 | PLANNED | VERIFIED |
 | UIUX-BACKLOG | UX-W01 | Mobile composer + sticky + no tab bar in thread | WS7 | — | CRM-M032 | Playwright | VERIFIED |
 | UIUX-BACKLOG | UX-W02 | Mobile context strip + sheet | WS7 | — | CRM-M033 | live 390 | VERIFIED |
 | UIUX-BACKLOG | UX-W03 | Three-column desktop inbox | WS7 | M034 | CRM-M035 | live | VERIFIED |
@@ -233,11 +233,11 @@ Zero-loss inventory of every actionable requirement in the five source documents
 | UIUX-BACKLOG | UX-W06 | Contextual actions by state | WS7 | M017 | CRM-M036 | live | VERIFIED |
 | UIUX-BACKLOG | UX-W07 | Automatic-message styling | WS7 | — | CRM-M037 | live | VERIFIED |
 | UIUX-BACKLOG | UX-W08 | Tracker Turkish collapsed | WS7 | — | CRM-M037 | live | VERIFIED |
-| UIUX-BACKLOG | UX-W09 | Instagram as tab of Mesajlar | WS7 | M035 | CRM-M038 | PLANNED | PLANNED |
+| UIUX-BACKLOG | UX-W09 | Instagram as tab of Mesajlar | WS7 | M035 | CRM-M038 | PLANNED | VERIFIED |
 | UIUX-BACKLOG | UX-A01 | Calendar renders | WS8 | — | CRM-M003 | live | VERIFIED |
 | UIUX-BACKLOG | UX-A02 | Mobile agenda view | WS8 | — | CRM-M040 | live 390 | VERIFIED |
 | UIUX-BACKLOG | UX-A03 | Appointment form v2 | WS8 | — | CRM-M039 | live | VERIFIED |
-| UIUX-BACKLOG | UX-A04 | Bugün işlem planla shortcut | WS8 | — | CRM-M041 | live | IMPLEMENTED |
+| UIUX-BACKLOG | UX-A04 | Bugün işlem planla shortcut | WS8 | — | CRM-M041 | live | VERIFIED |
 | UIUX-BACKLOG | UX-A05 | List with type + patient name | WS8 | — | CRM-M042 | live | VERIFIED |
 | UIUX-BACKLOG | UX-A06 | Appointment card on patient page | WS8 | — | CRM-M043 | live | VERIFIED |
 | UIUX-BACKLOG | UX-Q01 | Quote tab layout | WS9 | — | CRM-M049 | live | VERIFIED |
@@ -248,6 +248,6 @@ Zero-loss inventory of every actionable requirement in the five source documents
 | UIUX-BACKLOG | UX-X03 | lang and dir | WS14 | — | CRM-M020 | live | VERIFIED |
 | UIUX-BACKLOG | UX-X04 | Logical properties + RTL sweep | WS14 | — | CRM-M064 | rtl smoke | VERIFIED |
 | UIUX-BACKLOG | UX-X05 | Reduced motion + no colour-only | WS14 | — | CRM-M015 | css | VERIFIED |
-| UIUX-BACKLOG | UX-QA01 | Playwright visual regression | WS16 | Mac | CRM-M071 | run log | IMPLEMENTED |
+| UIUX-BACKLOG | UX-QA01 | Playwright visual regression | WS16 | Mac | CRM-M071 | run log | DEFERRED-APPROVED |
 | UIUX-BACKLOG | UX-QA02 | Copy lint | WS16 | — | CRM-M018 | CI gate | VERIFIED |
 | UIUX-BACKLOG | UX-QA03 | Next-action table test | WS16 | — | CRM-M017 | test | VERIFIED |
