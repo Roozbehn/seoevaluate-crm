@@ -133,7 +133,7 @@ function se_wa_inbox_rows(array $f, $now = null)
         $row = [
             'id' => $cid, 'brand_id' => (int) $c['brand_id'], 'lead_id' => (int) $c['lead_id'], 'wa_user_id' => (string) $c['wa_user_id'],
             'name' => $name, 'initials' => se_ui_initials($name), 'preview' => $preview, 'unread' => (int) $c['unread_count'],
-            'last_at' => (string) ($c['last_inbound_at'] ?: ($m['date_created'] ?? '')), 'assigned_staff' => (int) $c['assigned_staff'],
+            'last_at' => (string) ($c['last_inbound_at'] ?: ($m['date_created'] ?? '')), 'assigned_staff' => (int) ($c['assigned_staff'] ?? 0),
             'window_open' => !empty($c['window_expires_at']) && strtotime($c['window_expires_at']) > $now,
             'journey_id' => $it ? (int) $it['j']->id : 0, 'state' => $it ? (string) $it['j']->state : '',
             'state_label' => $it ? se_ui_state_label($it['j']->state) : _l('se_na_new_thread'), 'tone' => $it ? se_ui_state_tone($it['j']->state) : 'info',

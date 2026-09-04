@@ -1,6 +1,6 @@
 # CRM Final Closure Inventory — 2026-09-04
 
-Every row of the master traceability that was not VERIFIED at the start of the closure (190 VERIFIED / 10 IMPLEMENTED / 3 IMPLEMENTING / 1 N/A / 11 BLOCKED-DECISION / 28 PLANNED = 53 rows), grouped by master ticket where several source rows share one. Baseline verified before any change: Mac `main` == `origin/main` == host == `81df601`, clean trees, schema v21, no schema error, cron/dispatcher fresh. Final dispositions use only: VERIFIED, DEFERRED-APPROVED, BLOCKED-OWNER, BLOCKED-LEGAL, BLOCKED-EXTERNAL, NOT-APPLICABLE-WITH-EVIDENCE, FAILED.
+Every row of the master traceability that was not VERIFIED at the start of the closure (190 VERIFIED / 10 IMPLEMENTED / 3 IMPLEMENTING / 1 N/A / 11 BLOCKED-DECISION / 28 PLANNED = 53 rows), grouped by master ticket where several source rows share one. Final tree: suite 4 515 / 0 (container), copy gate OK, schema oracle 0 violations. Baseline verified before any change: Mac `main` == `origin/main` == host == `81df601`, clean trees, schema v21, no schema error, cron/dispatcher fresh. Final dispositions use only: VERIFIED, DEFERRED-APPROVED, BLOCKED-OWNER, BLOCKED-LEGAL, BLOCKED-EXTERNAL, NOT-APPLICABLE-WITH-EVIDENCE, FAILED.
 
 | ID | Source | Current status | Why not VERIFIED | Required action | Can close now? | Final disposition |
 |---|---|---|---|---|---|---|

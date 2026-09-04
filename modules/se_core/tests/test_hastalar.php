@@ -142,3 +142,27 @@ se_hastalar_query(se_hastalar_filters(['page' => 2]), $now);
 $n19 = array_sum($db->selects);
 se_ok($n25 <= 20, "a 25-row page runs a bounded number of SELECTs ({$n25} ≤ 20)");
 se_ok(abs($n25 - $n19) <= 2, "and the count does not grow with the row count (25 rows: {$n25}, 19 rows: {$n19})");
+
+/* ======================================================================== */
+se_group('Next action: one engine for Bugün, Hastalar, Mesajlar context and the workspace (no duplicates)');
+se_hastalar_seed($ago, $now);
+se_test_act_as(10, ['se_journey.view']);
+$j1 = se_journey_get_raw(1);
+$direct   = se_journey_next_action_for($j1, $now);                                                     // workspace + Mesajlar thread context
+$hastalar = null; foreach (se_hastalar_query(se_hastalar_filters([]), $now)['rows'] as $r) { if ((int) $r['journey_id'] === 1) { $hastalar = $r; } }
+$bugun    = null; foreach (se_journey_attention_queue(25, $now)['rows'] as $r) { if ((int) $r['journey_id'] === 1) { $bugun = $r; } }
+$batch    = se_journey_batch_context([(array) $j1], $now);
+$viaBatch = $batch['items'][1]['na'];
+se_ok($direct['sentence'] !== '' && $direct['key'] !== '', 'the engine yields a sentence and a key for journey 1 (' . $direct['key'] . ')');
+se_eq($direct['key'], $viaBatch['key'], 'batch context (Hastalar/Mesajlar/Bugün feed) resolves the same key as the direct call');
+se_eq($direct['sentence'], $viaBatch['sentence'], 'and the same sentence');
+se_eq($direct['sentence'], $hastalar['next'], 'Hastalar shows the same sentence');
+se_eq($direct['url'], $hastalar['next_url'] ?? $hastalar['action_url'] ?? $direct['url'], 'and links to the same action');
+se_ok($bugun !== null, 'a staff-owned step appears once on Bugün');
+se_eq($direct['key'], $bugun['key'], 'Bugün carries the same key');
+se_eq($direct['action_label'], $bugun['action_label'], 'and the same button label');
+$dupes = array_count_values(array_map(function ($r) { return (int) $r['journey_id']; }, se_journey_attention_queue(25, $now)['rows']));
+se_eq([], array_filter($dupes, function ($n) { return $n > 1; }), 'no journey is listed twice on Bugün');
+$inboxNext = null; foreach (se_wa_inbox_rows(se_wa_inbox_filters([]), $now)['rows'] as $r) { if ((int) $r['journey_id'] === 3) { $inboxNext = $r; } }
+$j3 = se_journey_get_raw(3);
+se_eq(se_ui_state_label($j3->state), $inboxNext['state_label'], 'Mesajlar row state chip uses the shared state map');
