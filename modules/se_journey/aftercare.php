@@ -61,7 +61,7 @@ function se_journey_aftercare_guide_url($j)
     $lang = strtolower(substr((string) ($j->language ?? 'tr'), 0, 2));
     if (!in_array($lang, ['tr', 'en', 'fa', 'ar'], true)) { $lang = 'tr'; }
 
-    return 'https://azinasgari.com/' . $lang . '/recovery';
+    return 'https://azinasgari.com/' . $lang . '/aftercare';
 }
 
 /** Protocols for a brand (validated); the default is always present. */

@@ -731,4 +731,4 @@ $lang['se_journey_flag_auto_ads']      = 'Meta Lead Ads başvurularında süreci
 $lang['se_journey_flag_auto_ads_hint'] = 'Reklam formundan gelen hasta, telefon numarası varsa başlangıç şablonuyla karşılanır. Kapalıyken Bugün listesinde personel başlatır.';
 $lang['se_journey_protocol_approved']      = 'Standart bakım takvimi (v2) onaylandı — işlem tamamlandığında bakım mesajları otomatik gönderilir';
 $lang['se_journey_protocol_approved_note'] = 'Onay verilmeden hiçbir bakım talimatı hastaya gönderilmez; her adım için personele görev açılır. Onay, Kaş Ekimi Uzmanı’nın metinleri okuyup kabul ettiği anlamına gelir.';
-$lang['se_journey_aftercare_guide_url']    = 'Bakım takvimi sayfası (mesajlara eklenir; boş bırakılırsa azinasgari.com/{dil}/recovery)';
+$lang['se_journey_aftercare_guide_url']    = 'Bakım takvimi sayfası (mesajlara eklenir; boş bırakılırsa azinasgari.com/{dil}/aftercare)';

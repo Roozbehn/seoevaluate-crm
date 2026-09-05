@@ -145,10 +145,10 @@ foreach ($std['steps'] as $s) {
 se_eq(['day0', 'day1', 'day2', 'day3', 'day7', 'day10', 'day14', 'day21', 'month1', 'month3', 'month3p', 'month6t', 'month6', 'month12t', 'month12'], array_column($std['steps'], 'key'), '15 steps: 24-48 h, first wash, crusts, suture/control decision, 14-day photo, shedding, 1/3/6/12-month photos + control tasks');
 foreach ($defs as $name => $d) { if (strpos($name, 'eyebrow_aftercare_') === 0) { se_ok(!preg_match('/\{\{\d\}\}\s*$/', $d['body']), $name . ': body does not end with a variable (Meta rule)'); } }
 $GLOBALS['se_test']['options'] = [];
-se_eq('https://azinasgari.com/tr/recovery', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'tr']), 'Turkish guide link');
-se_eq('https://azinasgari.com/fa/recovery', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'fa']), 'Persian guide link');
-se_eq('https://azinasgari.com/tr/recovery', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'xx']), 'unknown language falls back to Turkish');
+se_eq('https://azinasgari.com/tr/aftercare', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'tr']), 'Turkish guide link');
+se_eq('https://azinasgari.com/fa/aftercare', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'fa']), 'Persian guide link');
+se_eq('https://azinasgari.com/tr/aftercare', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'xx']), 'unknown language falls back to Turkish');
 $GLOBALS['se_test']['options']['se_journey_aftercare_guide_url_1'] = 'https://example.com/bakim';
 se_eq('https://example.com/bakim', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'tr']), 'brand override wins');
 $GLOBALS['se_test']['options']['se_journey_aftercare_guide_url_1'] = 'http://insecure.example';
-se_eq('https://azinasgari.com/tr/recovery', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'tr']), 'a non-https override is ignored');
+se_eq('https://azinasgari.com/tr/aftercare', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'tr']), 'a non-https override is ignored');
