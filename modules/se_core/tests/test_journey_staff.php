@@ -259,8 +259,8 @@ se_eq(true, $a['ok'], 'aftercare plan created from the standard protocol');
 $j = se_journey_get_raw(1);
 se_eq('aftercare_active', $j->state, 'state: aftercare_active');
 $events = se_journey_aftercare_events($j);
-se_eq(9, count($events), 'nine scheduled steps (day0…month12)');
-se_eq(['day0', 'day1', 'day3', 'day7', 'day14', 'month1', 'month3', 'month6', 'month12'], array_column($events, 'step_key'), 'in the configured order');
+se_eq(15, count($events), 'fifteen scheduled steps (day0…month12, protocol v2)');
+se_eq(['day0', 'day1', 'day2', 'day3', 'day7', 'day10', 'day14', 'day21', 'month1', 'month3', 'month3p', 'month6t', 'month6', 'month12t', 'month12'], array_column($events, 'step_key'), 'in the configured order');
 se_eq(1, count(array_filter($db->rows('tblse_journey_tasks'), function ($t) { return $t['kind'] === 'protocol_unapproved'; })), 'the unapproved default protocol is flagged');
 
 $anchor = strtotime($db->rows('tblse_journey_aftercare_plans')[0]['anchor_at']);
@@ -270,28 +270,38 @@ se_eq(1, $fired, 'the 6h instruction step fires');
 se_eq('skipped', $db->rows('tblse_journey_aftercare_events')[0]['state'], 'an instruction on an UNAPPROVED protocol is skipped (staff task), never sent');
 se_eq(1, count(array_filter($db->rows('tblse_journey_tasks'), function ($t) { return $t['kind'] === 'aftercare_instruction'; })), 'with a staff task');
 $fired = se_journey_run_aftercare($anchor + 25 * 3600);
+se_eq('skipped', $db->rows('tblse_journey_aftercare_events')[1]['state'], 'the day-1 instruction is skipped too (unapproved) — no patient message');
+$fired = se_journey_run_aftercare($anchor + 49 * 3600);
 se_wa_out_drain();
-se_eq(1, $fired, 'the day-1 check-in fires');
-se_eq('sent', $db->rows('tblse_journey_aftercare_events')[1]['state'], 'check-in sent');
+se_eq(1, $fired, 'the day-2 check-in fires');
+se_eq('sent', $db->rows('tblse_journey_aftercare_events')[2]['state'], 'check-in sent');
 $ci = end($GLOBALS['se_wa_sent'])['body'];
-se_ok(strpos($ci, '1. günündeyiz') !== false && strpos($ci, '112') !== false, 'check-in copy names the day and the emergency path');
+se_ok(strpos($ci, '2. günündeyiz') !== false && strpos($ci, '112') !== false, 'check-in copy names the day and the emergency path');
 
 // Patient answers the check-in → sealed, answered, thanked once.
 $db->tables['tblse_wa_conversations'][0]['window_expires_at'] = date('Y-m-d H:i:s', time() + 3600);
 se_test_wa_deliver(se_test_wa_body(SE_TEST_PATIENT, 'Hafif şişlik var, ağrı yok', se_test_wamid()));
-$e = $db->rows('tblse_journey_aftercare_events')[1];
+$e = $db->rows('tblse_journey_aftercare_events')[2];
 se_eq('answered', $e['state'], 'the reply closes the check-in');
 se_ok(strpos((string) $e['reply_enc'], 'v1:') === 0 && strpos((string) $e['reply_enc'], 'şişlik') === false, 'the reply is sealed at rest');
 se_eq('Hafif şişlik var, ağrı yok', se_journey_aftercare_reply_text($e), 'and decrypts for authorised staff');
 se_ok(strpos(end($GLOBALS['se_wa_sent'])['body'], 'Teşekkürler') !== false, 'a thank-you was sent');
 
-// Unanswered check-in after 48h → followup_due + task; an answer brings it back.
-$fired = se_journey_run_aftercare($anchor + 73 * 3600);
+// Day 10: the suture/control decision is a STAFF task (technique-dependent), never a patient message.
+$sentBefore = count($GLOBALS['se_wa_sent']);
+se_journey_run_aftercare($anchor + 241 * 3600);
 se_wa_out_drain();
-se_eq('sent', $db->rows('tblse_journey_aftercare_events')[2]['state'], 'day-3 check-in sent');
-$db->tables['tblse_journey_aftercare_events'][2]['sent_at'] = date('Y-m-d H:i:s', time() - 49 * 3600);
+se_eq('answered', $db->rows('tblse_journey_aftercare_events')[5]['state'], 'day-10 staff task step is closed as answered');
+se_ok(count(array_filter($db->rows('tblse_journey_tasks'), function ($t) { return $t['kind'] === 'aftercare_step' && strpos($t['title'], 'FUT') !== false; })) === 1, 'the task names the suture (FUT) decision');
+se_eq($sentBefore, count($GLOBALS['se_wa_sent']), 'and no patient message went out for it');
+
+// Unanswered photo request after 48h → followup_due + task; an answer brings it back.
+se_journey_run_aftercare($anchor + 337 * 3600);
+se_wa_out_drain();
+se_eq('sent', $db->rows('tblse_journey_aftercare_events')[6]['state'], 'day-14 photo request sent');
+$db->tables['tblse_journey_aftercare_events'][6]['sent_at'] = date('Y-m-d H:i:s', time() - 49 * 3600);
 se_journey_run_aftercare(time());
-se_eq('unanswered', $db->rows('tblse_journey_aftercare_events')[2]['state'], 'after 48h without a reply the check-in is unanswered');
+se_eq('unanswered', $db->rows('tblse_journey_aftercare_events')[6]['state'], 'after 48h without a reply the request is unanswered');
 se_eq('followup_due', se_journey_get_raw(1)->state, 'state: followup_due');
 se_eq(1, count(array_filter($db->rows('tblse_journey_tasks'), function ($t) { return $t['kind'] === 'followup_unanswered'; })), 'staff task to call the patient');
 

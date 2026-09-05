@@ -19,20 +19,49 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 function se_journey_aftercare_default_protocol()
 {
+    $g = '{{link}}';
     return [
-        'key' => 'standard', 'version' => '1', 'approved' => 0, 'name' => 'Standart kaş ekimi takibi (taslak)',
+        'key' => 'standard', 'version' => '2', 'approved' => 0, 'name' => 'Standart kaş ekimi bakım takvimi (v2, onay bekliyor)',
         'steps' => [
-            ['key' => 'day0',   'label' => 'İlk 24 saat', 'offset_hours' => 6,       'kind' => 'instruction',   'template' => 'eyebrow_aftercare_checkin_tr'],
-            ['key' => 'day1',   'label' => '1. gün',      'offset_hours' => 24,      'kind' => 'checkin',       'template' => 'eyebrow_aftercare_checkin_tr'],
-            ['key' => 'day3',   'label' => '3. gün',      'offset_hours' => 72,      'kind' => 'checkin',       'template' => 'eyebrow_aftercare_checkin_tr'],
-            ['key' => 'day7',   'label' => '7–10. gün',   'offset_hours' => 168,     'kind' => 'checkin',       'template' => 'eyebrow_aftercare_checkin_tr'],
-            ['key' => 'day14',  'label' => '14. gün',     'offset_hours' => 336,     'kind' => 'photo_request', 'template' => 'eyebrow_followup_photo_request_tr'],
-            ['key' => 'month1', 'label' => '1. ay',       'offset_hours' => 720,     'kind' => 'checkin',       'template' => 'eyebrow_aftercare_checkin_tr'],
-            ['key' => 'month3', 'label' => '3. ay',       'offset_hours' => 2160,    'kind' => 'photo_request', 'template' => 'eyebrow_followup_photo_request_tr'],
-            ['key' => 'month6', 'label' => '6. ay',       'offset_hours' => 4320,    'kind' => 'photo_request', 'template' => 'eyebrow_followup_photo_request_tr'],
-            ['key' => 'month12','label' => '12. ay',      'offset_hours' => 8640,    'kind' => 'photo_request', 'template' => 'eyebrow_followup_photo_request_tr'],
+            ['key' => 'day0',    'label' => 'İlk 48 saat',          'offset_hours' => 6,    'kind' => 'instruction',   'template' => 'eyebrow_aftercare_day0_tr',
+             'text' => "Merhaba {{name}}, ilk 48 saat için hatırlatma:\n• Kaş bölgesine dokunmayın, yıkamayın, hiçbir şey sürmeyin.\n• İlk 3–4 gece başınız yüksekte (yaklaşık 45°) ve sırtüstü uyuyun; yüzüstü yatmayın.\n• Şişlik için soğuk kompresi alın ve şakaklara uygulayın, kaşların üzerine değil.\n• Verilen spreyi tarif edilen sıklıkta kullanın.\n• Alkol, sigara, aspirin/ibuprofen türü ağrı kesiciler ve ağır efor yok.\n• Donör bölgede hafif sızıntı olursa temiz bir bezle 15–20 dakika baskı uygulayın.\nTakvimin tamamı: $g"],
+            ['key' => 'day1',    'label' => '1. gün',               'offset_hours' => 24,   'kind' => 'instruction',   'template' => 'eyebrow_aftercare_day1_tr',
+             'text' => "Merhaba {{name}}, işlemin 1. günü. Hafif şişlik ve kızarıklık normaldir; şişlik göz kapaklarına inebilir. Soğuk kompres ve sprey ile devam edin, kaşlara dokunmayın. Yarın nasıl olduğunuzu soracağız. Artan ağrı, yayılan kızarıklık, akıntı veya ateş olursa beklemeden yazın; bize ulaşamıyorsanız en yakın sağlık kuruluşuna başvurun. Takvim: $g"],
+            ['key' => 'day2',    'label' => '2. gün',               'offset_hours' => 48,   'kind' => 'checkin',       'template' => 'eyebrow_aftercare_checkin_tr'],
+            ['key' => 'day3',    'label' => '3. gün · ilk yıkama',  'offset_hours' => 72,   'kind' => 'instruction',   'template' => 'eyebrow_aftercare_day3_tr',
+             'text' => "Merhaba {{name}}, bugün 3. gün: ilk yıkama günü. İlk yıkamayı klinikte birlikte yapıyoruz ya da size gösterildiği gibi, avuçla ve basınç uygulamadan yapın; kâğıt havluyla kurulayın, ovalamayın. Kabuklar 7–10. gün arasında kendiliğinden kalkar; koparmayın. Makyaj, kaş kalemi ve serum kaş bölgesine henüz sürülmez. Takvim: $g"],
+            ['key' => 'day7',    'label' => '7. gün · kabuklar',    'offset_hours' => 168,  'kind' => 'instruction',   'template' => 'eyebrow_aftercare_day7_tr',
+             'text' => "Merhaba {{name}}, 7. gün. Kabuklar bu hafta kendiliğinden dökülür; ovalamayın. Hafif yürüyüş serbest; terleten spor, sauna, hamam, havuz ve deniz 14. güne kadar yok. Güneşte 10 dakikadan uzun kalacaksanız şapka kullanın, gözlüğün kaşa değmemesine dikkat edin. Donör bölgede dikiş varsa 10–14. gün arasında klinikte alınır; kendiniz almayın. Takvim: $g"],
+            ['key' => 'day10',   'label' => '10. gün · dikiş/kontrol kararı', 'offset_hours' => 240, 'kind' => 'staff_task', 'template' => '',
+             'text' => 'Donör bölgede şerit (FUT) yöntemi kullanıldıysa 10–14. gün için dikiş alma randevusu planlayın; FUE ise kontrol gerekip gerekmediğine karar verin.'],
+            ['key' => 'day14',   'label' => '14. gün · kontrol fotoğrafı', 'offset_hours' => 336, 'kind' => 'photo_request', 'template' => 'eyebrow_followup_photo_request_tr'],
+            ['key' => 'day21',   'label' => '3. hafta · dökülme',   'offset_hours' => 504,  'kind' => 'instruction',   'template' => 'eyebrow_aftercare_day21_tr',
+             'text' => "Merhaba {{name}}, 3. hafta. Ekilen kılların dökülmesi bu dönemde beklenir ve 6. haftaya kadar sürebilir; kök kaybolmaz, dinlenme evresine girer. Kaş makyajı ve kaş boyası 4. haftadan sonra serbest; ağda, iplik ve cımbız kaş bölgesine 6 aydan önce uygulanmaz. Ağır ağırlık ve temas sporları 3. haftadan sonra başlar. Takvim: $g"],
+            ['key' => 'month1',  'label' => '1. ay · fotoğraf',     'offset_hours' => 720,  'kind' => 'photo_request', 'template' => 'eyebrow_followup_photo_request_tr'],
+            ['key' => 'month3',  'label' => '3. ay · yeni çıkışlar','offset_hours' => 2160, 'kind' => 'instruction',   'template' => 'eyebrow_aftercare_month3_tr',
+             'text' => "Merhaba {{name}}, 3. ay. Yeni kıllar ince, açık renkli ve düzensiz çıkmaya başlar; bu normaldir. Ekilen kıllar saç kökü olduğu için daha hızlı ve uzun büyür: 2–4 haftada bir küçük bir makasla kaş hattına göre kısaltın. Peeling, cilt bakımı ve solaryum kaş bölgesinden uzak; dışarıda SPF 30 ve üzeri kullanın. Takvim: $g"],
+            ['key' => 'month3p', 'label' => '3. ay · fotoğraf',     'offset_hours' => 2184, 'kind' => 'photo_request', 'template' => 'eyebrow_followup_photo_request_tr'],
+            ['key' => 'month6t', 'label' => '6. ay · kontrol randevusu', 'offset_hours' => 4296, 'kind' => 'staff_task', 'template' => '',
+             'text' => '6. ay kontrolü: hastayı arayın, mümkünse klinikte kontrol ve ilk şekillendirme kesimi için randevu verin.'],
+            ['key' => 'month6',  'label' => '6. ay · fotoğraf',     'offset_hours' => 4320, 'kind' => 'photo_request', 'template' => 'eyebrow_followup_photo_request_tr'],
+            ['key' => 'month12t','label' => '12. ay · son kontrol randevusu', 'offset_hours' => 8616, 'kind' => 'staff_task', 'template' => '',
+             'text' => '12. ay son kontrolü: hastayı arayın, kontrol randevusu verin; ek seans gerekip gerekmediği bu kontrolde değerlendirilir.'],
+            ['key' => 'month12', 'label' => '12. ay · son fotoğraf', 'offset_hours' => 8640, 'kind' => 'photo_request', 'template' => 'eyebrow_followup_photo_request_tr'],
         ],
     ];
+}
+
+/** The patient-facing bakım takvimi page for this journey's language (option override per brand). */
+function se_journey_aftercare_guide_url($j)
+{
+    $custom = trim((string) get_option('se_journey_aftercare_guide_url_' . (int) $j->brand_id));
+    if ($custom !== '' && preg_match('#^https://#i', $custom)) {
+        return $custom;
+    }
+    $lang = strtolower(substr((string) ($j->language ?? 'tr'), 0, 2));
+    if (!in_array($lang, ['tr', 'en', 'fa', 'ar'], true)) { $lang = 'tr'; }
+
+    return 'https://azinasgari.com/' . $lang . '/recovery';
 }
 
 /** Protocols for a brand (validated); the default is always present. */
@@ -186,7 +215,7 @@ function se_journey_run_aftercare($now = null, $limit = 100)
 
         switch ((string) $e['kind']) {
             case 'staff_task':
-                se_journey_task($j, 'aftercare_step', 'Aftercare step "' . $e['label'] . '" due', 'normal', $e['due_at'], $e['step_key']);
+                se_journey_task($j, 'aftercare_step', 'Aftercare step "' . $e['label'] . '" due' . ($step && trim((string) $step['text']) !== '' ? ' — ' . $step['text'] : ''), 'normal', $e['due_at'], $e['step_key']);
                 $update['state'] = 'answered';
                 break;
             case 'instruction':
@@ -195,8 +224,13 @@ function se_journey_run_aftercare($now = null, $limit = 100)
                     $update['state'] = 'skipped';
                     break;
                 }
-                $r = se_journey_send($j, ['purpose' => 'aftercare_' . $e['step_key'], 'kind' => 'text', 'body' => (string) $step['text'], 'schedulable' => true,
-                                          'template' => (string) ($e['template_ref'] ?: 'eyebrow_aftercare_checkin_tr'), 'template_vars' => [$name, (string) $day], 'dedup_salt' => 'ac' . (int) $e['id']]);
+                $guide = se_journey_aftercare_guide_url($j);
+                $body  = str_replace(['{{name}}', '{{link}}'], [$name, $guide], (string) $step['text']);
+                $tplRef = (string) ($e['template_ref'] ?: 'eyebrow_aftercare_checkin_tr');
+                // Stage templates carry (name, guide link); the generic check-in carries (name, day).
+                $vars = strpos($tplRef, 'eyebrow_aftercare_checkin') === 0 ? [$name, (string) $day] : [$name, $guide];
+                $r = se_journey_send($j, ['purpose' => 'aftercare_' . $e['step_key'], 'kind' => 'text', 'body' => $body, 'schedulable' => true,
+                                          'template' => $tplRef, 'template_vars' => $vars, 'dedup_salt' => 'ac' . (int) $e['id']]);
                 if (!$r['ok']) { $update['state'] = 'blocked'; }
                 break;
             case 'photo_request':

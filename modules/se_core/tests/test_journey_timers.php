@@ -131,3 +131,24 @@ se_ok(!in_array('7:timer_aftercare', $kinds($db), true), 'and no "start the plan
 se_eq(1, count(array_filter($db->rows('tblse_journey_events'), function ($e) { return $e['kind'] === 'auto_started'; })), 'logged as auto-started');
 se_eq(0, se_journey_run_timers($now)['aftercare'], 'not started twice');
 se_eq(0, count(array_filter($db->rows('tblse_wa_outbound'), function ($o) { return $o['status'] === 'sent'; })), 'starting the plan sends nothing immediately — the first step is scheduled for +24 h through the queue');
+
+/* ======================================================================== */
+se_group('Aftercare protocol v2 (DEC-005): stage templates exist, guide link per language, approval gate');
+$std = se_journey_aftercare_default_protocol();
+se_eq(['2', 0], [$std['version'], (int) $std['approved']], 'v2 ships UNAPPROVED');
+$defs = se_journey_template_definitions();
+foreach ($std['steps'] as $s) {
+    if ($s['kind'] === 'instruction' || $s['kind'] === 'photo_request') { se_ok(isset($defs[$s['template']]), $s['key'] . ': template ' . $s['template'] . ' is a registered definition'); }
+    if ($s['kind'] === 'instruction') { se_ok(strpos($s['text'], '{{link}}') !== false && strpos($s['text'], '{{name}}') !== false, $s['key'] . ': in-window text carries name and link'); }
+    if ($s['kind'] === 'staff_task') { se_ok(trim($s['text']) !== '' && $s['template'] === '', $s['key'] . ': staff task has an instruction and no patient template'); }
+}
+se_eq(['day0', 'day1', 'day2', 'day3', 'day7', 'day10', 'day14', 'day21', 'month1', 'month3', 'month3p', 'month6t', 'month6', 'month12t', 'month12'], array_column($std['steps'], 'key'), '15 steps: 24-48 h, first wash, crusts, suture/control decision, 14-day photo, shedding, 1/3/6/12-month photos + control tasks');
+foreach ($defs as $name => $d) { if (strpos($name, 'eyebrow_aftercare_') === 0) { se_ok(!preg_match('/\{\{\d\}\}\s*$/', $d['body']), $name . ': body does not end with a variable (Meta rule)'); } }
+$GLOBALS['se_test']['options'] = [];
+se_eq('https://azinasgari.com/tr/recovery', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'tr']), 'Turkish guide link');
+se_eq('https://azinasgari.com/fa/recovery', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'fa']), 'Persian guide link');
+se_eq('https://azinasgari.com/tr/recovery', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'xx']), 'unknown language falls back to Turkish');
+$GLOBALS['se_test']['options']['se_journey_aftercare_guide_url_1'] = 'https://example.com/bakim';
+se_eq('https://example.com/bakim', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'tr']), 'brand override wins');
+$GLOBALS['se_test']['options']['se_journey_aftercare_guide_url_1'] = 'http://insecure.example';
+se_eq('https://azinasgari.com/tr/recovery', se_journey_aftercare_guide_url((object) ['brand_id' => 1, 'language' => 'tr']), 'a non-https override is ignored');

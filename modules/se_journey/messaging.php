@@ -821,6 +821,40 @@ function se_journey_template_definitions()
             'body' => 'Merhaba {{1}}, takip için kaşlarınızın güncel fotoğraflarını rica ediyoruz (tam karşıdan, sol ve sağ yakın plan; makyajsız, aydınlık ortam). Güvenli yükleme bağlantısı: {{2}}. Fotoğraflar yalnızca takip amacıyla işlenir.',
             'samples' => ['Ayşe', 'https://crm.example.com/se_journey/intake/abc/photos'],
         ],
+        /* Aftercare protocol v2 (DEC-005, 2026-09-05): one stage-specific
+         * instruction per period. {{1}} first name, {{2}} the bakım takvimi
+         * page. Sent outside the 24 h window as approved UTILITY templates;
+         * inside the window the protocol step's fuller `text` goes instead. */
+        'eyebrow_aftercare_day0_tr' => [
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, ilk 48 saat için hatırlatma: kaş bölgesine dokunmayın ve yıkamayın, ilk 3-4 gece başınız yüksekte sırtüstü uyuyun, soğuk kompresi alın ve şakaklara uygulayın (kaşlara değil), spreyi tarif edilen sıklıkta kullanın. Alkol, sigara, aspirin/ibuprofen ve ağır efor yok. Takvimin tamamı: {{2}} — Azin Asgari, Kaş Ekimi Uzmanı.',
+            'samples' => ['Ayşe', 'https://azinasgari.com/tr/recovery'],
+        ],
+        'eyebrow_aftercare_day1_tr' => [
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, işlemin 1. günü. Hafif şişlik ve kızarıklık normaldir; şişlik göz kapaklarına inebilir. Soğuk kompres ve sprey ile devam edin, kaşlara dokunmayın. Yarın nasıl olduğunuzu soracağız; artan ağrı, yayılan kızarıklık, akıntı veya ateş olursa beklemeden yazın. Takvim: {{2}} — Azin Asgari, Kaş Ekimi Uzmanı.',
+            'samples' => ['Ayşe', 'https://azinasgari.com/tr/recovery'],
+        ],
+        'eyebrow_aftercare_day3_tr' => [
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, bugün 3. gün: ilk yıkama günü. İlk yıkamayı klinikte birlikte yapıyoruz veya size gösterildiği gibi avuçla, basınç uygulamadan yapın. Kabuklar 7-10. günde kendiliğinden kalkar; koparmayın. Makyaj, kaş kalemi ve serum henüz yok. Takvim: {{2}} — Azin Asgari, Kaş Ekimi Uzmanı.',
+            'samples' => ['Ayşe', 'https://azinasgari.com/tr/recovery'],
+        ],
+        'eyebrow_aftercare_day7_tr' => [
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, 7. gün. Kabuklar bu hafta dökülür; ovalamayın. Hafif yürüyüş serbest, terleten spor, sauna, hamam ve havuz 14. güne kadar yok. Güneşte 10 dakikadan uzun kalacaksanız şapka kullanın. Donör bölgede dikiş varsa 10-14. gün arasında klinikte alınır. Takvim: {{2}} — Azin Asgari, Kaş Ekimi Uzmanı.',
+            'samples' => ['Ayşe', 'https://azinasgari.com/tr/recovery'],
+        ],
+        'eyebrow_aftercare_day21_tr' => [
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, 3. hafta. Ekilen kılların dökülmesi bu dönemde beklenir ve 6. haftaya kadar sürebilir; kök kaybolmaz, dinlenme evresine girer. Kaş makyajı ve boya 4. haftadan sonra serbest; ağda, iplik ve cımbız 6 aydan önce yok. Ağır spor 3. haftadan sonra başlar. Takvim: {{2}} — Azin Asgari, Kaş Ekimi Uzmanı.',
+            'samples' => ['Ayşe', 'https://azinasgari.com/tr/recovery'],
+        ],
+        'eyebrow_aftercare_month3_tr' => [
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, 3. ay. Yeni kıllar ince ve açık renkli çıkmaya başlar. Ekilen kıllar saç kökü olduğu için hızlı uzar: 2-4 haftada bir küçük makasla kaş hattına göre kısaltın. Peeling ve solaryum kaş bölgesinden uzak, dışarıda SPF 30+ kullanın. 6. ayda kontrol için haber vereceğiz. Takvim: {{2}} — Azin Asgari, Kaş Ekimi Uzmanı.',
+            'samples' => ['Ayşe', 'https://azinasgari.com/tr/recovery'],
+        ],
     ];
 }
 

@@ -591,3 +591,6 @@ $lang['se_journey_settings_timers']   = 'Staff reminders (same thresholds as the
 $lang['se_journey_settings_timers_hint'] = 'When off, no tasks or pushes are produced; the Today queue is unaffected.';
 $lang['se_journey_flag_auto_ads']      = 'Auto-start the journey for Meta Lead Ads submissions';
 $lang['se_journey_flag_auto_ads_hint'] = 'A patient arriving from an ad form is greeted with the start template when a phone number exists. When off, staff start it from Bugün.';
+$lang['se_journey_protocol_approved']      = 'Standard aftercare calendar (v2) approved — aftercare messages go out automatically after a completed procedure';
+$lang['se_journey_protocol_approved_note'] = 'Until approved no aftercare instruction is sent to a patient; every step opens a staff task instead. Approval means the specialist has read and accepted the texts.';
+$lang['se_journey_aftercare_guide_url']    = 'Aftercare calendar page (linked from the messages; empty = azinasgari.com/{lang}/recovery)';

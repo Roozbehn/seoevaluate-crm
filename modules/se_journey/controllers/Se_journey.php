@@ -584,6 +584,8 @@ class Se_journey extends AdminController
             'consent_bypass' => se_journey_consent_bypass_active($brand) ? 1 : 0,
             'consent_bypass_reason' => (string) get_option('se_journey_consent_bypass_reason_' . $brand),
             'protocols_json' => json_encode(array_values(se_journey_aftercare_protocols($brand)), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
+            'standard_protocol_approved' => (int) !empty(se_journey_aftercare_protocols($brand)['standard']['approved']),
+            'aftercare_guide_url' => (string) get_option('se_journey_aftercare_guide_url_' . $brand),
             'copy_json' => (string) get_option('se_journey_copy_' . $brand),
         ];
         $data['copy_defaults'] = se_journey_copy_defaults()['tr'];
@@ -641,10 +643,22 @@ class Se_journey extends AdminController
             update_option('se_journey_preop_info_url_' . $brand, preg_match('#^https://#i', $url) ? mb_substr($url, 0, 500) : '');
             update_option('se_journey_consultation_info_approved_' . $brand, (int) $this->input->post('consultation_info_approved') === 1 ? 1 : 0);
             update_option('se_journey_ask_infectious_' . $brand, (int) $this->input->post('ask_infectious') === 1 ? 1 : 0);
+            $guide = trim((string) $this->input->post('aftercare_guide_url'));
+            update_option('se_journey_aftercare_guide_url_' . $brand, preg_match('#^https://#i', $guide) ? mb_substr($guide, 0, 500) : '');
             $protocols = json_decode((string) $this->input->post('protocols_json'), true);
             if (is_array($protocols)) {
+                // The approval checkbox is the clinic's sign-off on the standard bakım takvimi (DEC-005):
+                // it sets `approved` on the standard protocol; the JSON editor keeps everything else.
+                $approve = (int) $this->input->post('standard_protocol_approved') === 1;
+                $hasStandard = false;
+                foreach ($protocols as &$pp) {
+                    if (is_array($pp) && ($pp['key'] ?? '') === 'standard') { $pp['approved'] = $approve ? 1 : 0; $hasStandard = true; }
+                }
+                unset($pp);
+                if (!$hasStandard) { $std = se_journey_aftercare_default_protocol(); $std['approved'] = $approve ? 1 : 0; $protocols[] = $std; }
                 $r = se_journey_aftercare_save_protocols($brand, $protocols, $staff);
                 if (!$r['ok']) { set_alert('warning', _l('se_journey_protocol_invalid') . ': ' . $r['reason']); redirect(admin_url('se_journey/se_journey/settings')); }
+                se_journey_audit($brand, 0, $approve ? 'aftercare_protocol_approved' : 'aftercare_protocol_unapproved', 'protocol', 'standard', 'staff:' . (int) $staff);
             }
             se_journey_audit($brand, 0, 'settings_saved', null, null, 'clinical');
         } elseif ($section === 'copy') {

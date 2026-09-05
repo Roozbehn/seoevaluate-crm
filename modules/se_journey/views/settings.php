@@ -107,6 +107,9 @@
         <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_consultation_info_approved" name="consultation_info_approved" value="1" <?php echo $v['consultation_info_approved'] ? 'checked' : ''; ?> /><label for="cb_consultation_info_approved"><?php echo html_escape(_l('se_journey_consultation_info_approved')); ?></label></div>
         <p class="text-muted"><small><?php echo html_escape(_l('se_journey_consultation_info_note')); ?></small></p>
         <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_ask_infectious" name="ask_infectious" value="1" <?php echo $v['ask_infectious'] ? 'checked' : ''; ?> /><label for="cb_ask_infectious"><?php echo html_escape(_l('se_journey_ask_infectious')); ?></label></div>
+        <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_standard_protocol_approved" name="standard_protocol_approved" value="1" <?php echo $v['standard_protocol_approved'] ? 'checked' : ''; ?> /><label for="cb_standard_protocol_approved"><?php echo html_escape(_l('se_journey_protocol_approved')); ?></label></div>
+        <p class="text-muted"><small><?php echo html_escape(_l('se_journey_protocol_approved_note')); ?></small></p>
+        <div class="form-group"><label><?php echo html_escape(_l('se_journey_aftercare_guide_url')); ?></label><input class="form-control" name="aftercare_guide_url" value="<?php echo html_escape($v['aftercare_guide_url']); ?>" placeholder="https://azinasgari.com/tr/recovery" /></div>
         <div class="form-group"><label><?php echo html_escape(_l('se_journey_protocols')); ?></label>
           <textarea class="form-control" name="protocols_json" rows="10" style="font-family:monospace;font-size:11px"><?php echo html_escape($v['protocols_json']); ?></textarea>
           <small class="text-muted"><?php echo html_escape(_l('se_journey_protocols_hint')); ?></small></div>
