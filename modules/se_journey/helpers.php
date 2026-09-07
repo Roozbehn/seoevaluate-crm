@@ -1735,6 +1735,18 @@ function se_journey_on_wa_inbound(array $ctx)
         return se_journey_handle_urgent($j, $ctx);
     }
 
+    /* 4.5 Information menu. The "Bilgi Al" button and the list rows behind it
+     *     answer in EVERY state and never move the journey on: a patient
+     *     reading about recovery mid-intake is still mid-intake. It sits ahead
+     *     of the phase routing so a tap is never mistaken for an aftercare
+     *     answer, and behind the pause check's condition so a thread a staff
+     *     member has taken over still reaches them (step 7), not the bot. */
+    if (se_journey_automation_active($j)
+        && ($button === 'jr_info' || strpos($button, 'jr_info_') === 0
+            || ($body !== '' && se_journey_matches_keyword($body, se_journey_info_keywords())))) {
+        return se_journey_handle_info($j, $ctx);
+    }
+
     /* 5. Media: photographs are routed by phase, and only with health consent. */
     if (in_array((string) $ctx['type'], ['image'], true) && !empty($ctx['media_ref']) && function_exists('se_journey_on_wa_media')) {
         return se_journey_on_wa_media($j, $ctx);
@@ -1793,6 +1805,39 @@ function se_journey_handle_handoff($j, array $ctx)
     }
 
     return ['handled' => true, 'reason' => 'handoff', 'journey_id' => (int) $j->id];
+}
+
+/**
+ * Information menu: the list of published pages, or the page a row asked for.
+ * Read-only for the journey — no transition, no task, no state change — so a
+ * patient can read about the procedure at any point without losing their
+ * place. The reply carries the three options again, so the next tap continues
+ * the evaluation.
+ */
+function se_journey_handle_info($j, array $ctx)
+{
+    $corr   = (string) ($ctx['wamid'] ?? '');
+    $button = (string) ($ctx['interactive_id'] ?? '');
+    $key    = strpos($button, 'jr_info_') === 0 ? substr($button, 8) : '';
+
+    if ($key !== '' && function_exists('se_journey_send_info_link')
+        && in_array($key, se_journey_info_pages(), true)) {
+        se_journey_send_info_link($j, $key, $corr);
+
+        return ['handled' => true, 'reason' => 'info_link:' . $key, 'journey_id' => (int) $j->id];
+    }
+
+    if (function_exists('se_journey_send_info_menu')) {
+        se_journey_send_info_menu($j, $corr);
+    }
+
+    return ['handled' => true, 'reason' => 'info_menu', 'journey_id' => (int) $j->id];
+}
+
+/** Typed requests for the information menu (the button id is matched separately). */
+function se_journey_info_keywords()
+{
+    return ['bilgi', 'bilgi al', 'bilgi almak istiyorum', 'bilgi istiyorum', 'sayfalar'];
 }
 
 /** Urgent aftercare concern: stop routine automation, alert, approved instruction only. */

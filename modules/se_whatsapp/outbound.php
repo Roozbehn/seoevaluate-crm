@@ -247,9 +247,10 @@ function se_wa_queue_message($conversation_id, array $message, $staff_id = 0)
         $signature = hash('sha256', $body);
         $template  = null;
     } elseif ($kind === 'interactive') {
-        /* Reply-button message. Same window rule as free-form text: it is a
-         * session message, not a template. Limits are Meta's published ones
-         * (body 1024, footer 60, 1–3 buttons, title 20, id 256) and are
+        /* Reply-button, list or Flow message. Same window rule as free-form
+         * text: it is a session message, not a template. Limits are Meta's
+         * published ones (body 1024, footer 60, 1–3 buttons, title 20, id 256;
+         * list: button 20, <=10 rows, row title 24, description 72) and are
          * enforced here so a bad definition fails at queue time, visibly. */
         if ($policy['mode'] !== 'freeform') {
             return ['ok' => false, 'id' => 0, 'reason' => 'window_closed'];
@@ -489,6 +490,32 @@ function se_wa_interactive_payload($body, array $p)
             $params['flow_action_payload'] = $f['flow_action_payload'];
         }
         $interactive = ['type' => 'flow', 'body' => ['text' => $body], 'action' => ['name' => 'flow', 'parameters' => $params]];
+    } elseif (!empty($p['list']) && is_array($p['list'])) {
+        // Interactive list: one CTA that opens a menu of rows. A session
+        // message cannot carry URL buttons at all (Meta allows them only on
+        // templates), so a menu of pages is a list whose rows come back as
+        // list_reply ids and are answered with the link. Meta's caps (button
+        // 20, section title 24, row title 24, description 72, ten rows in
+        // total) are enforced at queue time by se_wa_shape_interactive().
+        $interactive = [
+            'type'   => 'list',
+            'body'   => ['text' => $body],
+            'action' => [
+                'button'   => (string) $p['list']['button'],
+                'sections' => array_map(function ($s) {
+                    $section = [];
+                    if ((string) ($s['title'] ?? '') !== '') { $section['title'] = (string) $s['title']; }
+                    $section['rows'] = array_map(function ($r) {
+                        $row = ['id' => (string) $r['id'], 'title' => (string) $r['title']];
+                        if ((string) ($r['description'] ?? '') !== '') { $row['description'] = (string) $r['description']; }
+
+                        return $row;
+                    }, array_values((array) $s['rows']));
+
+                    return $section;
+                }, array_values((array) $p['list']['sections'])),
+            ],
+        ];
     } else {
         $interactive = [
             'type'   => 'button',
@@ -540,6 +567,63 @@ function se_wa_shape_interactive(array $message)
             $payload['flow']['flow_action_payload'] = $f['flow_action_payload'];
         }
         $footer = trim((string) ($message['footer'] ?? ''));
+        if ($footer !== '') {
+            if (mb_strlen($footer) > 60) {
+                return ['ok' => false, 'reason' => 'interactive_footer_too_long', 'body' => '', 'payload' => []];
+            }
+            $payload['footer'] = $footer;
+        }
+
+        return ['ok' => true, 'reason' => '', 'body' => $body, 'payload' => $payload];
+    }
+
+    /* A list message (interactive type "list"): one CTA that opens a menu of
+     * up to ten rows. Meta's limits: button text <= 20, section title <= 24,
+     * row id <= 200, row title <= 24, row description <= 72, ten rows across
+     * all sections, and a title is required once there is more than one
+     * section. Row ids come back as interactive.list_reply.id. */
+    if ((string) ($message['interactive_type'] ?? '') === 'list') {
+        $l   = (array) ($message['list'] ?? []);
+        $cta = trim((string) ($l['button'] ?? ''));
+        if ($cta === '' || mb_strlen($cta) > 20) {
+            return ['ok' => false, 'reason' => 'list_button_invalid', 'body' => '', 'payload' => []];
+        }
+        $sections = [];
+        $rowCount = 0;
+        $seen     = [];
+        $raw      = array_values((array) ($l['sections'] ?? []));
+        foreach ($raw as $s) {
+            $title = trim((string) ($s['title'] ?? ''));
+            if (mb_strlen($title) > 24 || (count($raw) > 1 && $title === '')) {
+                return ['ok' => false, 'reason' => 'list_section_invalid', 'body' => '', 'payload' => []];
+            }
+            $rows = [];
+            foreach ((array) ($s['rows'] ?? []) as $r) {
+                $id    = trim((string) ($r['id'] ?? ''));
+                $rt    = trim((string) ($r['title'] ?? ''));
+                $rd    = trim((string) ($r['description'] ?? ''));
+                if ($id === '' || mb_strlen($id) > 200 || $rt === '' || mb_strlen($rt) > 24 || mb_strlen($rd) > 72) {
+                    return ['ok' => false, 'reason' => 'list_row_invalid', 'body' => '', 'payload' => []];
+                }
+                if (isset($seen[$id])) {
+                    return ['ok' => false, 'reason' => 'list_row_duplicate', 'body' => '', 'payload' => []];
+                }
+                $seen[$id] = true;
+                $row = ['id' => $id, 'title' => $rt];
+                if ($rd !== '') { $row['description'] = $rd; }
+                $rows[] = $row;
+                $rowCount++;
+            }
+            if (!$rows) {
+                return ['ok' => false, 'reason' => 'list_section_empty', 'body' => '', 'payload' => []];
+            }
+            $sections[] = ['title' => $title, 'rows' => $rows];
+        }
+        if ($rowCount < 1 || $rowCount > 10) {
+            return ['ok' => false, 'reason' => 'list_row_count', 'body' => '', 'payload' => []];
+        }
+        $payload = ['list' => ['button' => $cta, 'sections' => $sections]];
+        $footer  = trim((string) ($message['footer'] ?? ''));
         if ($footer !== '') {
             if (mb_strlen($footer) > 60) {
                 return ['ok' => false, 'reason' => 'interactive_footer_too_long', 'body' => '', 'payload' => []];

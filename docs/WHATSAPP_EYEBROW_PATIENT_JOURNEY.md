@@ -222,7 +222,8 @@ versioned option `se_journey_copy_<brand>` (Settings → copy). Every send recor
 
 | Step | Copy key | Notes |
 |---|---|---|
-| Welcome | `welcome` (+ buttons `btn_start`, `btn_handoff`, `btn_stop`) | Interactive reply buttons when the body ≤ 1024 chars (it is), text fallback when `se_journey_interactive_<brand>=0`. Identifies itself as automated. |
+| Welcome | `welcome` (+ buttons `btn_start`, `btn_info`, `btn_handoff`) | Interactive reply buttons when the body ≤ 1024 chars (572 since copy v4), text fallback when `se_journey_interactive_<brand>=0`. Identifies itself as automated. Opt-out (`btn_stop`, "İPTAL") is stated in the copy and works as a keyword — Meta allows only three buttons and the third opens the information menu. |
+| Information menu | `info_menu_body/_button/_section/_footer`, `info_<page>_title/_desc` | The "Bilgi Al" button opens a WhatsApp **list** of the seven published pages; a row tap is answered with `info_link` (title + URL) plus the three buttons again. Text fallback lists the seven links (`info_menu_text`). |
 | Privacy + link | `privacy_and_link` | Sent on "Değerlendirme Başlat"; link TTL stated |
 | Consent gate closed | `consent_gate_unavailable` | Sent when no approved health-data text exists; automation → `awaiting_approval` |
 | Photos request | `photos_request` | Exact wording from the brief + secure upload link |
@@ -238,7 +239,23 @@ versioned option `se_journey_copy_<brand>` (Settings → copy). Every send recor
 Keywords (normalised, Turkish-folded): opt-out `iptal, dur, stop, …`; handoff `danışman,
 temsilci, insan, ara, …` + button `jr_handoff`; start `değerlendirme(ye) başla(t), başla, devam,
 evet`; urgent (aftercare phases) `şiddetli ağrı, kanama, nefes, şişlik/görüş, ateş, iltihap,
-alerji, 112, …`. Extra keywords via options `se_journey_{optout,handoff,urgent}_keywords`.
+alerji, 112, …`. Extra keywords via options `se_journey_{optout,handoff,urgent}_keywords`. Information
+menu: `bilgi, bilgi al, sayfalar` + button `jr_info` and the row ids `jr_info_<page>`.
+
+**Why the pages are a list and not URL buttons (copy v4, 2026-09-07).** A WhatsApp *session*
+message cannot carry URL buttons at all — Meta allows `CTA_URL` on approved templates only — and a
+session message may carry at most three reply buttons. The seven published pages
+(`/tr/{procedure,candidates,results,preparation,recovery,aftercare,questions}`) are therefore an
+interactive **list** (`interactive.type = "list"`, ≤ 10 rows, button ≤ 20, row title ≤ 24,
+description ≤ 72, section title ≤ 24 — all enforced at queue time in
+`se_wa_shape_interactive()`), whose rows come back as `interactive.list_reply.id` and are answered
+with that page's link. Routing sits at step 4.5 of `se_journey_on_wa_inbound()`: ahead of the phase
+routing, so a tap is never read as an aftercare answer; guarded by `se_journey_automation_active()`,
+so a thread staff have taken over still reaches them instead of the bot. Reading a page writes no
+transition and never moves the journey on. Links are built from
+`se_journey_site_base_url(<brand>)` (option `se_journey_site_base_url_<brand>`, default
+`https://azinasgari.com`) + the journey language, so the CRM never restates page content. Suite:
+`modules/se_core/tests/test_journey_info.php`.
 
 Staff takeover: any reply from the WhatsApp composer pauses automation on that thread
 (`paused_staff`, audited); "Resume" is a deliberate, audited staff action. Handoff pauses as

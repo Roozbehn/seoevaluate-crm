@@ -217,6 +217,7 @@ function se_journey_event_label($kind, array $ev = [])
                                  'quote_accepted_ack' => 'se_ev_booking_sent', 'consultation_confirmation' => 'se_ev_consult_confirmation', 'consultation_reminder' => 'se_ev_consult_reminder',
                                  'consultation_information' => 'se_ev_consult_information', 'preop_information' => 'se_ev_preop_information', 'procedure_confirmation' => 'se_ev_procedure_confirmation',
                                  'handoff_ack' => 'se_ev_handoff', 'urgent_ack' => 'se_ev_urgent', 'optout_confirm' => 'se_ev_optout', 'options_repeat' => 'se_ev_options_repeat',
+                                 'info_menu' => 'se_ev_info_menu', 'info_link' => 'se_ev_info_link',
                                  'aftercare_checkin' => 'se_ev_aftercare_msg', 'followup_photo_request' => 'se_ev_followup_photo', 'aftercare_thanks' => 'se_ev_aftercare_thanks', '*' => 'se_ev_out_generic'],
         'consent_recorded'   => ['*' => 'se_ev_consent_granted'],
         'intake_saved'       => ['*' => 'se_ev_intake_saved'],

@@ -24,7 +24,8 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * (scripts/tests) is the second line of defence.
  */
 
-define('SE_JOURNEY_COPY_VERSION', 3);   // v3: consultation_information — procedure/prep/recovery links sent after the quote (2026-09-03)
+define('SE_JOURNEY_COPY_VERSION', 4);   // v4: shorter welcome + "Bilgi Al" list menu of the seven azinasgari.com pages (2026-09-07)
+                                        // v3: consultation_information — procedure/prep/recovery links sent after the quote (2026-09-03)
 define('SE_JOURNEY_DEFAULT_QUIET', '21:00-09:00');
 define('SE_JOURNEY_DEFAULT_DAILY_CAP', 3);
 define('SE_JOURNEY_REMINDER_HOURS', '24,72');
@@ -38,10 +39,36 @@ function se_journey_copy_defaults()
     return [
         'tr' => [
             'welcome' =>
-                "Merhaba {{name}} 🌸 Ben Azin Asgari Kaş Ekimi ekibinin otomatik danışmanlık asistanıyım. Kaş ekimi planlaması kişiye özel olduğu için önce kısa bir ön değerlendirme yapıyoruz. Yaklaşık 3–5 dakika süren güvenli formu doldurduktan ve kaş fotoğraflarınızı ilettikten sonra ekibimiz durumunuzu inceleyerek ücret, uygun süreç ve sonraki adımlar hakkında sizinle iletişime geçecektir.\n\nSağlık bilgileriniz özel nitelikli kişisel veridir. Formdan önce aydınlatma metnini okuyup tercihlerinizi belirtmeniz istenecektir. Bu ön değerlendirme tıbbi tanı veya kesin uygunluk kararı değildir.\n\nDevam etmek için “Değerlendirme Başlat”, bir ekip üyesiyle görüşmek için “Danışmana Bağlan”, ileti almak istemiyorsanız “İPTAL” yazabilirsiniz.",
+                "Merhaba {{name}} 🌸 Ben Azin Asgari Kaş Ekimi ekibinin otomatik danışmanlık asistanıyım.\n\nPlanlama kişiye özel olduğu için önce 3–5 dakikalık kısa bir ön değerlendirme yapıyoruz: güvenli formu doldurup kaş fotoğraflarınızı gönderiyorsunuz, ekibimiz inceleyip ücret ve süreç için size dönüyor.\n\nSağlık bilgileriniz özel nitelikli kişisel veridir; aydınlatma metnini ve tercihlerinizi formun ilk adımında görürsünüz. Bu ön değerlendirme tıbbi tanı ya da kesin uygunluk kararı değildir.\n\nÖnce süreci okumak isterseniz “Bilgi Al”, ileti almak istemiyorsanız “İPTAL” yazabilirsiniz.",
             'welcome_buttons_prompt' => 'Nasıl devam etmek istersiniz?',
             'options_repeat' =>
-                "Devam etmek için “Değerlendirme Başlat”, bir ekip üyesiyle görüşmek için “Danışmana Bağlan”, ileti almak istemiyorsanız “İPTAL” yazabilirsiniz.",
+                "Değerlendirmeye başlamak için “Değerlendirme Başlat”, süreç sayfaları için “Bilgi Al”, bir ekip üyesiyle görüşmek için “Danışmana Bağlan”, ileti almak istemiyorsanız “İPTAL” yazabilirsiniz.",
+            /* Information menu: the seven published azinasgari.com pages, offered
+             * as a WhatsApp list. The CRM never restates their content — a
+             * wording change is made once, on the site. */
+            'info_menu_body' =>
+                "Hangi konuda bilgi almak istersiniz? Aşağıdaki listeden seçtiğiniz sayfanın bağlantısını hemen gönderiyorum.",
+            'info_menu_button'  => 'Konu Seçin',
+            'info_menu_section' => 'Bilgi Sayfaları',
+            'info_menu_footer'  => 'Hazır olduğunuzda değerlendirmeye başlayabilirsiniz.',
+            'info_menu_text' =>
+                "Kaş ekimi süreciyle ilgili sayfalarımız:",
+            'info_link' =>
+                "{{title}}\n{{link}}\n\nBaşka bir konu için “Bilgi Al”, hazır olduğunuzda “Değerlendirme Başlat” yazabilirsiniz.",
+            'info_procedure_title'   => 'İşlem Günü Nasıl Geçer',
+            'info_procedure_desc'    => 'Kaş ekimi günü adım adım nasıl ilerliyor',
+            'info_candidates_title'  => 'Kimler Uygun?',
+            'info_candidates_desc'   => 'Kaş ekimi için genel uygunluk çerçevesi',
+            'info_results_title'     => 'Öncesi ve Sonrası',
+            'info_results_desc'      => 'Gerçek hasta fotoğrafları ve zaman çizelgesi',
+            'info_preparation_title' => 'İşlem Öncesi Hazırlık',
+            'info_preparation_desc'  => 'Randevu öncesinde dikkat edilmesi gerekenler',
+            'info_recovery_title'    => 'İyileşme Süreci',
+            'info_recovery_desc'     => 'İlk günler, kabuklanma ve beklenen seyir',
+            'info_aftercare_title'   => 'Bakım Takvimi',
+            'info_aftercare_desc'    => 'İşlem sonrası günlük bakım adımları',
+            'info_questions_title'   => 'Sık Sorulan Sorular',
+            'info_questions_desc'    => 'Merak edilen konulara kısa ve net yanıtlar',
             'privacy_and_link' =>
                 "Teşekkürler. Sağlık bilgileriniz özel nitelikli kişisel veridir; aydınlatma metnini ve tercihlerinizi güvenli formun ilk adımında göreceksiniz.\n\nGüvenli form bağlantınız: {{link}}\n\nBu bağlantı yalnızca size özeldir ve {{ttl}} saat geçerlidir. Form yaklaşık 3–5 dakika sürer; yarım bırakırsanız kaldığınız yerden devam edebilirsiniz.",
             'consent_gate_unavailable' =>
@@ -108,7 +135,8 @@ function se_journey_copy_defaults()
                 "Merhaba {{name}}, fotoğraflarınız için son hatırlatmamız: {{link}}. Devam etmek istemezseniz İPTAL yazmanız yeterlidir.",
             'btn_start'   => 'Değerlendirme Başlat',   // Meta reply-button titles are capped at 20 chars; the brief's 21-char label is accepted when typed
             'btn_handoff' => 'Danışmana Bağlan',
-            'btn_stop'    => 'İPTAL',
+            'btn_info'    => 'Bilgi Al',
+            'btn_stop'    => 'İPTAL',   // kept as a keyword: opt-out is stated in the copy, not spent on a button slot
             'btn_quote_accept' => 'Teklifi Kabul Et',
             'btn_quote_revise' => 'Fiyat Revizyonu',
             'photo_kind_frontal' => 'tam karşıdan (iki kaş)',
@@ -372,6 +400,9 @@ function se_journey_send($j, array $spec)
             if ((string) ($spec['interactive_type'] ?? '') === 'flow') {
                 $msg['interactive_type'] = 'flow';        // a WhatsApp Flow CTA (see flows.php)
                 $msg['flow'] = (array) ($spec['flow'] ?? []);
+            } elseif ((string) ($spec['interactive_type'] ?? '') === 'list') {
+                $msg['interactive_type'] = 'list';        // a menu of rows (the information pages)
+                $msg['list'] = (array) ($spec['list'] ?? []);
             } else {
                 $msg['buttons'] = (array) ($spec['buttons'] ?? []);
             }
@@ -445,13 +476,124 @@ function se_journey_send_copy($j, $key, array $vars = [], array $opts = [])
  * Step senders
  * ======================================================================== */
 
+/**
+ * The three reply buttons every patient-facing prompt carries. Meta allows
+ * exactly three on a session message, so the opt-out keeps its place in the
+ * copy ("İPTAL") rather than a button, and the third slot opens the
+ * information menu — the pages a patient reads before deciding.
+ */
 function se_journey_buttons($brand_id, $lang = 'tr')
 {
     return [
         ['id' => 'jr_start',   'title' => se_journey_copy($brand_id, 'btn_start', [], $lang)],
+        ['id' => 'jr_info',    'title' => se_journey_copy($brand_id, 'btn_info', [], $lang)],
         ['id' => 'jr_handoff', 'title' => se_journey_copy($brand_id, 'btn_handoff', [], $lang)],
-        ['id' => 'jr_stop',    'title' => se_journey_copy($brand_id, 'btn_stop', [], $lang)],
     ];
+}
+
+/* ---------------------------------------------------------------------------
+ * Information menu.
+ *
+ * A WhatsApp SESSION message cannot carry URL buttons — Meta allows those on
+ * templates only — so the published pages are offered as an interactive list
+ * whose rows come back as list_reply ids, and each id is answered with its
+ * link. The CRM never restates what the pages say: the wording lives on
+ * azinasgari.com, where it passed the content and clinical-claims gates.
+ * ------------------------------------------------------------------------ */
+
+/** The pages offered in the menu, in the order a patient needs them. */
+function se_journey_info_pages()
+{
+    return ['procedure', 'candidates', 'results', 'preparation', 'recovery', 'aftercare', 'questions'];
+}
+
+/** Site root for patient-facing links (option override for a staging host). */
+function se_journey_site_base_url($brand_id)
+{
+    $u = trim((string) get_option('se_journey_site_base_url_' . (int) $brand_id));
+
+    return rtrim($u !== '' ? $u : 'https://azinasgari.com', '/');
+}
+
+function se_journey_info_url($brand_id, $key, $lang = 'tr')
+{
+    if (!in_array($key, se_journey_info_pages(), true)) {
+        return '';
+    }
+    $lang = in_array($lang, ['tr', 'en', 'fa', 'ar'], true) ? $lang : 'tr';
+
+    return se_journey_site_base_url($brand_id) . '/' . $lang . '/' . $key;
+}
+
+/** Menu rows: id + title (<=24) + description (<=72), all brand-overridable copy. */
+function se_journey_info_rows($brand_id, $lang = 'tr')
+{
+    $rows = [];
+    foreach (se_journey_info_pages() as $key) {
+        $rows[] = [
+            'id'          => 'jr_info_' . $key,
+            'title'       => mb_substr(se_journey_copy($brand_id, 'info_' . $key . '_title', [], $lang), 0, 24),
+            'description' => mb_substr(se_journey_copy($brand_id, 'info_' . $key . '_desc', [], $lang), 0, 72),
+        ];
+    }
+
+    return $rows;
+}
+
+/**
+ * "Bilgi Al": the list of pages. With interactive messages switched off for
+ * the brand the same seven links go as one plain-text message, so the patient
+ * is never left without an answer.
+ */
+function se_journey_send_info_menu($j, $correlation = '')
+{
+    $brand = (int) $j->brand_id;
+    $lang  = (string) $j->language;
+    $salt  = 'info_menu' . ($correlation !== '' ? ':' . mb_substr($correlation, -16) : '');
+
+    if (!se_journey_interactive_enabled($brand)) {
+        $lines = [];
+        foreach (se_journey_info_pages() as $key) {
+            $lines[] = '• ' . se_journey_copy($brand, 'info_' . $key . '_title', [], $lang) . ': ' . se_journey_info_url($brand, $key, $lang);
+        }
+
+        return se_journey_send($j, ['purpose' => 'info_menu', 'kind' => 'text', 'correlation' => $correlation, 'dedup_salt' => $salt,
+            'body' => se_journey_copy($brand, 'info_menu_text', [], $lang) . "\n\n" . implode("\n", $lines)]);
+    }
+
+    return se_journey_send($j, ['purpose' => 'info_menu', 'kind' => 'interactive', 'interactive_type' => 'list',
+        'body'   => se_journey_copy($brand, 'info_menu_body', [], $lang),
+        'footer' => se_journey_copy($brand, 'info_menu_footer', [], $lang),
+        'list'   => [
+            'button'   => se_journey_copy($brand, 'info_menu_button', [], $lang),
+            'sections' => [['title' => se_journey_copy($brand, 'info_menu_section', [], $lang), 'rows' => se_journey_info_rows($brand, $lang)]],
+        ],
+        'correlation' => $correlation, 'dedup_salt' => $salt]);
+}
+
+/** One chosen page: its title, its link, and the three options again. */
+function se_journey_send_info_link($j, $key, $correlation = '')
+{
+    if (!in_array($key, se_journey_info_pages(), true)) {
+        return ['ok' => false, 'mode' => 'blocked', 'reason' => 'unknown_info_page', 'outbound_id' => 0];
+    }
+    $brand = (int) $j->brand_id;
+    $lang  = (string) $j->language;
+    $body  = se_journey_copy($brand, 'info_link', [
+        'title' => se_journey_copy($brand, 'info_' . $key . '_title', [], $lang),
+        'link'  => se_journey_info_url($brand, $key, $lang),
+    ], $lang);
+    $spec = ['purpose' => 'info_link', 'body' => $body, 'correlation' => $correlation,
+             'dedup_salt' => 'info:' . $key . ($correlation !== '' ? ':' . mb_substr($correlation, -16) : '')];
+
+    if (se_journey_interactive_enabled($brand) && mb_strlen($body) <= 1024) {
+        $spec['kind']    = 'interactive';
+        $spec['buttons'] = se_journey_buttons($brand, $lang);
+    } else {
+        $spec['kind'] = 'text';
+    }
+
+    return se_journey_send($j, $spec);
 }
 
 /** Interactive messages can be switched off (text fallback) per brand. */
