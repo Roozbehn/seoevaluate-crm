@@ -617,9 +617,21 @@ function se_journey_send_welcome($j, $correlation = '')
     $body  = se_journey_copy($brand, 'welcome', ['name' => $name], $lang);
 
     // Outside the 24-hour window (an enquiry from days ago, an Instagram
-    // hand-off, staff pressing Start later) only the approved start template
-    // can go; it asks for a reply, which reopens the window for the buttons.
-    $tpl = ['template' => 'eyebrow_journey_start_tr', 'template_vars' => [se_journey_template_name($j)]];
+    // hand-off, staff pressing Start later) only an approved template can go.
+    // The v2 template carries the same three options as quick-reply buttons —
+    // the only way a message outside the window can be tapped rather than
+    // typed — so it is used whenever Meta has approved it; the plain template
+    // (which asks for a typed reply) remains the fallback. Either way the
+    // reply reopens the window and the in-window flow continues.
+    $withButtons = se_journey_template_ready($brand, 'eyebrow_journey_start_v2_tr');
+    $tpl = ['template' => $withButtons['ready'] ? 'eyebrow_journey_start_v2_tr' : 'eyebrow_journey_start_tr',
+            'template_vars' => [se_journey_template_name($j)]];
+    if ($withButtons['ready']) {
+        // Payloads, so a tap comes back as the same ids the in-window buttons
+        // use; without them Meta returns the button LABEL, which the keyword
+        // matcher also understands.
+        $tpl['template_quick_replies'] = array_column(se_journey_buttons($brand, $lang), 'id');
+    }
 
     if (!se_journey_interactive_enabled($brand)) {
         $r = se_journey_send($j, ['purpose' => 'welcome', 'kind' => 'text', 'body' => $body, 'correlation' => $correlation] + $tpl);
@@ -862,6 +874,24 @@ function se_journey_template_definitions()
             'category' => 'UTILITY', 'language' => 'tr',
             'body' => 'Merhaba {{1}}, kaş ekimi hakkında bilgi ve fiyat talebiniz için teşekkür ederiz. Kişiye özel ön değerlendirmeye başlamak için bu mesaja "Değerlendirme Başlat" yazmanız yeterli; doğrudan danışmanımızla görüşmek isterseniz "Danışmana Bağlan" yazabilirsiniz. İletişim almak istemiyorsanız İPTAL yazabilirsiniz.',
             'samples' => ['Ayşe'],
+        ],
+        'eyebrow_journey_start_v2_tr' => [
+            // The same door-opener WITH the three options as quick-reply
+            // buttons. A template is the only WhatsApp message that may carry
+            // buttons outside the 24-hour window, and the approved
+            // eyebrow_journey_start_tr has none — an out-of-window start (or a
+            // staff member sending it from the composer) therefore arrives as
+            // plain text and the person has to type. Preferred over the plain
+            // template once Meta approves it; a tap reopens the window and the
+            // in-window flow (list menu, privacy, Flow) continues.
+            'category' => 'UTILITY', 'language' => 'tr',
+            'body' => 'Merhaba {{1}}, kaş ekimi hakkında bilgi ve fiyat talebiniz için teşekkür ederiz. Kişiye özel ön değerlendirme yaklaşık 3–5 dakika sürer; aşağıdaki seçeneklerden biriyle devam edebilirsiniz. Süreçle ilgili sayfalarımızı okumak isterseniz "Bilgi Al" seçeneğini kullanabilirsiniz. İletişim almak istemiyorsanız İPTAL yazabilirsiniz.',
+            'samples' => ['Ayşe'],
+            'buttons' => [
+                ['type' => 'QUICK_REPLY', 'text' => 'Değerlendirme Başlat', 'payload' => 'jr_start'],
+                ['type' => 'QUICK_REPLY', 'text' => 'Bilgi Al', 'payload' => 'jr_info'],
+                ['type' => 'QUICK_REPLY', 'text' => 'Danışmana Bağlan', 'payload' => 'jr_handoff'],
+            ],
         ],
         'eyebrow_intake_resume_tr' => [
             'category' => 'UTILITY', 'language' => 'tr',

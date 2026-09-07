@@ -201,9 +201,13 @@ Instagram/ad message and for ad referrals; for an organic "details / price" ques
 created in `new_whatsapp_enquiry`, staff get the task *"start evaluation?"* and press **Start** (or
 switch on *auto-start organic* in Settings). If Start is pressed after the window has closed (the
 enquiry was days ago, or the person was handed off from Instagram and has not written on WhatsApp
-yet), the welcome falls back to the approved template **`eyebrow_journey_start_tr`**, which asks the
-person to reply "Değerlendirme Başlat" — that reply reopens the window and the button/privacy/link
-flow continues in-window. Until that template is APPROVED, an out-of-window Start is blocked with a
+yet), the welcome falls back to an approved template: **`eyebrow_journey_start_v2_tr`** when Meta
+has approved it — the same three options as QUICK_REPLY buttons (`jr_start`, `jr_info`,
+`jr_handoff`), the only way a message outside the window can be tapped rather than typed at — and
+otherwise the original **`eyebrow_journey_start_tr`**, which asks the person to reply
+"Değerlendirme Başlat". Either way the reply reopens the window and the button/menu/privacy/link
+flow continues in-window. A template sent by hand from the composer is the same message, so it
+shows buttons only once v2 is approved. Until that template is APPROVED, an out-of-window Start is blocked with a
 visible task, never silently dropped.
 
 Three staff entry points exist: the journey page (**Start**), the WhatsApp thread page (sidebar
