@@ -24,7 +24,8 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * (scripts/tests) is the second line of defence.
  */
 
-define('SE_JOURNEY_COPY_VERSION', 4);   // v4: shorter welcome + "Bilgi Al" list menu of the seven azinasgari.com pages (2026-09-07)
+define('SE_JOURNEY_COPY_VERSION', 5);   // v5: price policy — stated in the welcome and answered automatically when a patient asks (2026-09-08)
+                                        // v4: shorter welcome + "Bilgi Al" list menu of the seven azinasgari.com pages (2026-09-07)
                                         // v3: consultation_information — procedure/prep/recovery links sent after the quote (2026-09-03)
 define('SE_JOURNEY_DEFAULT_QUIET', '21:00-09:00');
 define('SE_JOURNEY_DEFAULT_DAILY_CAP', 3);
@@ -39,10 +40,20 @@ function se_journey_copy_defaults()
     return [
         'tr' => [
             'welcome' =>
-                "Merhaba {{name}} 🌸 Ben Azin Asgari Kaş Ekimi ekibinin otomatik danışmanlık asistanıyım.\n\nPlanlama kişiye özel olduğu için önce 3–5 dakikalık kısa bir ön değerlendirme yapıyoruz: güvenli formu doldurup kaş fotoğraflarınızı gönderiyorsunuz, ekibimiz inceleyip ücret ve süreç için size dönüyor.\n\nSağlık bilgileriniz özel nitelikli kişisel veridir; aydınlatma metnini ve tercihlerinizi formun ilk adımında görürsünüz. Bu ön değerlendirme tıbbi tanı ya da kesin uygunluk kararı değildir.\n\nÖnce süreci okumak isterseniz “Bilgi Al”, ileti almak istemiyorsanız “İPTAL” yazabilirsiniz.",
+                "Merhaba {{name}} 🌸 Ben Azin Asgari Kaş Ekimi ekibinin otomatik danışmanlık asistanıyım.\n\nPlanlama kişiye özel olduğu için önce 3–5 dakikalık bir ön değerlendirme yapıyoruz: güvenli formu doldurup kaş fotoğraflarınızı gönderiyorsunuz.\n\nFiyat kişiye özeldir; tanıtım kurallarına uyum gereği açık kanallarda paylaşmıyoruz. Ön değerlendirme tamamlanıp uygunluğunuz teyit edildikten sonra size özel ücreti bu sohbette iletiyoruz.\n\nSağlık bilgileriniz özel nitelikli kişisel veridir; aydınlatma metnini formun ilk adımında görürsünüz. Bu ön değerlendirme tıbbi tanı ya da kesin uygunluk kararı değildir.\n\nSüreci okumak isterseniz “Bilgi Al”, ileti almak istemiyorsanız “İPTAL” yazabilirsiniz.",
             'welcome_buttons_prompt' => 'Nasıl devam etmek istersiniz?',
             'options_repeat' =>
                 "Değerlendirmeye başlamak için “Değerlendirme Başlat”, süreç sayfaları için “Bilgi Al”, bir ekip üyesiyle görüşmek için “Danışmana Bağlan”, ileti almak istemiyorsanız “İPTAL” yazabilirsiniz.",
+            /* Price. The clinic quotes one person at a time, after the review:
+             * nothing here states, ranges or hints at a figure, and the CI
+             * content gate keeps it that way. Two variants, because the honest
+             * answer depends on where the person is — before they have applied
+             * it ends in the invitation to start, and once their file is with
+             * the team it ends in what they are waiting for. */
+            'price_policy' =>
+                "Fiyat kişiye özeldir: kaş yapınız, ihtiyaç duyulan planlama ve seans süresi kişiden kişiye değiştiği için tek bir liste fiyatımız bulunmuyor.\n\nSağlık hizmetlerinde tanıtım kurallarına uyum gereği fiyat bilgisini sosyal medya hesaplarımızda veya açık kanallarda paylaşmıyoruz. Ücretinizi, ön değerlendirmeniz tamamlandıktan ve ekibimiz uygunluğunuzu teyit ettikten sonra size özel olarak bu sohbette iletiyoruz.\n\nÖn değerlendirme yaklaşık 3–5 dakika sürer: güvenli formu doldurup kaş fotoğraflarınızı gönderiyorsunuz. Başlamak için “Değerlendirme Başlat” seçeneğini kullanabilirsiniz.",
+            'price_policy_in_review' =>
+                "Fiyat kişiye özeldir ve tanıtım kurallarına uyum gereği açık kanallarda paylaşılmıyor.\n\nÖn değerlendirmeniz şu anda ekibimizde. İnceleme tamamlanıp uygunluğunuz teyit edildiğinde, size özel ücret ve süreç bilgisi bu sohbette iletilecek.\n\nBeklerken süreçle ilgili sayfalarımızı okumak isterseniz “Bilgi Al”, bir ekip üyemizle görüşmek isterseniz “Danışmana Bağlan” yazabilirsiniz.",
             /* Information menu: the seven published azinasgari.com pages, offered
              * as a WhatsApp list. The CRM never restates their content — a
              * wording change is made once, on the site. */
@@ -491,6 +502,19 @@ function se_journey_buttons($brand_id, $lang = 'tr')
     ];
 }
 
+/**
+ * The two options that still make sense once the person has applied and is
+ * waiting for the review: "Değerlendirme Başlat" would be an invitation to do
+ * again what they have already done.
+ */
+function se_journey_buttons_wait($brand_id, $lang = 'tr')
+{
+    return [
+        ['id' => 'jr_info',    'title' => se_journey_copy($brand_id, 'btn_info', [], $lang)],
+        ['id' => 'jr_handoff', 'title' => se_journey_copy($brand_id, 'btn_handoff', [], $lang)],
+    ];
+}
+
 /* ---------------------------------------------------------------------------
  * Information menu.
  *
@@ -589,6 +613,59 @@ function se_journey_send_info_link($j, $key, $correlation = '')
     if (se_journey_interactive_enabled($brand) && mb_strlen($body) <= 1024) {
         $spec['kind']    = 'interactive';
         $spec['buttons'] = se_journey_buttons($brand, $lang);
+    } else {
+        $spec['kind'] = 'text';
+    }
+
+    return se_journey_send($j, $spec);
+}
+
+/* ---------------------------------------------------------------------------
+ * Price.
+ *
+ * "Ne kadar?" is the commonest first question on WhatsApp, and the answer is a
+ * policy rather than a figure: the clinic prices one person at a time, after
+ * the review, and does not publish a price on open channels. Saying so at
+ * once is better for the patient than silence until a staff member is free —
+ * so the journey answers it itself. The answer states no number, no range and
+ * no suitability, and it never moves the journey on.
+ * ------------------------------------------------------------------------ */
+
+/** The states in which the journey may answer a price question by itself. */
+function se_journey_price_answerable_states()
+{
+    return ['welcome_sent', 'privacy_notice_sent', 'consent_pending', 'consent_declined',
+            'intake_link_sent', 'intake_started', 'intake_incomplete', 'intake_submitted',
+            'photos_requested', 'photos_incomplete', 'photo_retake_requested',
+            'ready_for_review', 'under_review', 'more_information_required'];
+}
+
+/** Once the file is with the team the honest answer is "we are reviewing it". */
+function se_journey_price_in_review($state)
+{
+    return in_array((string) $state, ['intake_submitted', 'ready_for_review', 'under_review', 'more_information_required'], true);
+}
+
+/**
+ * Answer a price question. Read-only for the journey: no transition, no task,
+ * no state change — exactly like the information menu.
+ */
+function se_journey_send_price_policy($j, $correlation = '')
+{
+    $brand    = (int) $j->brand_id;
+    $lang     = (string) $j->language;
+    $inReview = se_journey_price_in_review($j->state);
+    $body     = se_journey_copy($brand, $inReview ? 'price_policy_in_review' : 'price_policy', [], $lang);
+
+    // Once per journey per day: asked three times in an hour, the same
+    // paragraph must not go three times. The queue's idempotency key is
+    // (thread, kind, content, salt), so the date is what re-opens it.
+    $spec = ['purpose' => 'price_policy', 'body' => $body, 'correlation' => $correlation,
+             'dedup_salt' => 'price:' . ($inReview ? 'review' : 'open') . ':' . date('Y-m-d')];
+
+    if (se_journey_interactive_enabled($brand) && mb_strlen($body) <= 1024) {
+        $spec['kind']    = 'interactive';
+        $spec['buttons'] = $inReview ? se_journey_buttons_wait($brand, $lang) : se_journey_buttons($brand, $lang);
     } else {
         $spec['kind'] = 'text';
     }

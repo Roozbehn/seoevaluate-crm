@@ -914,6 +914,76 @@ function se_journey_quote_revise_keywords()
             'daha uygun fiyat', 'fiyat yuksek', 'pahali', 'price revision', 'revise price', 'discount'];
 }
 
+/**
+ * Price questions.
+ *
+ * Two lists, because Turkish "ne kadar" asks both "how much does it cost" and
+ * "how long does it take": the unambiguous money words match on their own,
+ * while "ne kadar" only counts when no duration or quantity word shares the
+ * message — "iyilesme ne kadar surer" is not a price question and must not be
+ * answered with the price policy.
+ */
+function se_journey_price_keywords()
+{
+    $extra = se_journey_config('price_keywords', '');
+
+    return array_values(array_unique(array_merge(
+        ['fiyat', 'fiyati', 'fiyatlar', 'fiyatlari', 'fiyatlandirma', 'fiyat listesi', 'fiyat bilgisi',
+         'ucret', 'ucreti', 'ucretler', 'ucretlendirme', 'maliyet', 'maliyeti', 'bedel', 'bedeli',
+         'kac para', 'kac paraya', 'kaca', 'kac tl', 'kac lira', 'kac euro', 'kac dolar',
+         'price', 'pricing', 'cost', 'how much'],
+        array_filter(array_map('se_journey_normalize_text', preg_split('/[,;\n]+/', (string) $extra)))
+    )));
+}
+
+/**
+ * Word STEMS that make "ne kadar" a duration or quantity question rather than
+ * a price one. Stems, not whole words, because Turkish agglutinates: one
+ * question is "ne kadar sürer", the next "ne kadar zamanda", "kaç günde",
+ * "ne kadar kalıcı" — a whole-word list has to guess every suffix and misses
+ * the one that arrives tomorrow. Erring wide is the safe direction: a stem
+ * that fires by accident only means the bot stays quiet and a person answers.
+ */
+function se_journey_price_ambiguous_exclusions()
+{
+    return ['sur', 'gun', 'saat', 'hafta', 'ay', 'yil', 'zaman', 'iyiles', 'greft', 'adet',
+            'seans', 'kalic', 'kali', 'bekle', 'sonuc', 'kac tane', 'sikli'];
+}
+
+/** Does any word in the message start with one of those stems? */
+function se_journey_price_has_duration_word($body)
+{
+    $n = se_journey_normalize_text($body);
+    if ($n === '') {
+        return false;
+    }
+    foreach (se_journey_price_ambiguous_exclusions() as $stem) {
+        if (preg_match('/(^|\s)' . preg_quote($stem, '/') . '/u', $n)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Does this message ask what it costs? Word-boundary matching on the
+ * normalised text, so "fiyat" matches "fiyat ne kadar" but not "fiyatlandirma"
+ * unless that form is listed too.
+ */
+function se_journey_asks_price($body)
+{
+    if (trim((string) $body) === '') {
+        return false;
+    }
+    if (se_journey_contains_keyword($body, se_journey_price_keywords())) {
+        return true;
+    }
+
+    return se_journey_contains_keyword($body, ['ne kadar', 'ne kadara'])
+        && !se_journey_price_has_duration_word($body);
+}
+
 /** Urgent symptom keywords — a trigger for ESCALATION, never a diagnosis. */
 function se_journey_urgent_keywords()
 {
@@ -1747,6 +1817,22 @@ function se_journey_on_wa_inbound(array $ctx)
         return se_journey_handle_info($j, $ctx);
     }
 
+    /* 4.6 Price. The commonest question there is, and the one the clinic
+     *     cannot answer in the open: it is answered with the policy, once a
+     *     day, and only BEFORE a quote exists. Three guards keep it out of
+     *     the way of everything else: it never sees a brand-new journey (the
+     *     Instagram pre-filled message contains "fiyat", and that person must
+     *     get the welcome, which now carries the policy itself), it runs only
+     *     in the pre-quote states, and it stands down while a quote is out so
+     *     "fiyat yüksek" still reaches se_journey_quote_respond() as a
+     *     revision request. Read-only: no transition, no task. */
+    if (!$created && se_journey_automation_active($j)
+        && in_array((string) $j->state, se_journey_price_answerable_states(), true)
+        && se_journey_asks_price($body)
+        && !se_journey_price_quote_open($j)) {
+        return se_journey_handle_price($j, $ctx);
+    }
+
     /* 5. Media: photographs are routed by phase, and only with health consent. */
     if (in_array((string) $ctx['type'], ['image'], true) && !empty($ctx['media_ref']) && function_exists('se_journey_on_wa_media')) {
         return se_journey_on_wa_media($j, $ctx);
@@ -1832,6 +1918,36 @@ function se_journey_handle_info($j, array $ctx)
     }
 
     return ['handled' => true, 'reason' => 'info_menu', 'journey_id' => (int) $j->id];
+}
+
+/**
+ * Price: the policy, never a figure. Like the information menu this answers in
+ * place — no transition, no task, no state change — so a patient who asks what
+ * it costs mid-intake is still mid-intake.
+ */
+function se_journey_handle_price($j, array $ctx)
+{
+    $corr = (string) ($ctx['wamid'] ?? '');
+    if (function_exists('se_journey_send_price_policy')) {
+        se_journey_send_price_policy($j, $corr);
+    }
+
+    return ['handled' => true, 'reason' => 'price_policy', 'journey_id' => (int) $j->id];
+}
+
+/**
+ * Is a quote already out and unanswered? Then "fiyat" is an answer to it, not
+ * a first question, and belongs to the quote routing in se_journey_route_step()
+ * — including when the state was left behind (the pre-2026-09-03 quotes).
+ */
+function se_journey_price_quote_open($j)
+{
+    if (!function_exists('se_journey_quote_sent_row')) {
+        return false;
+    }
+    $open = se_journey_quote_sent_row($j);
+
+    return $open && (string) ($open->patient_response ?? '') === '';
 }
 
 /** Typed requests for the information menu (the button id is matched separately). */

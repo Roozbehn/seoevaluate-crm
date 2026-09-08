@@ -549,6 +549,7 @@ $lang['se_ev_urgent']               = 'Acil belirti bildirimi — otomatik mesaj
 $lang['se_ev_options_repeat']       = 'Seçenekler yeniden gönderildi';
 $lang['se_ev_info_menu']            = 'Bilgi menüsü gönderildi';
 $lang['se_ev_info_link']            = 'Bilgi sayfası bağlantısı gönderildi';
+$lang['se_ev_price_policy']         = 'Fiyat sorusu — fiyat politikası yanıtı gönderildi';
 $lang['se_ev_wa_failed']            = 'Mesaj iletilemedi';
 $lang['se_ev_staff_reply']          = 'Personel yanıtladı';
 $lang['se_ev_paused']               = 'Otomatik mesajlar duraklatıldı';

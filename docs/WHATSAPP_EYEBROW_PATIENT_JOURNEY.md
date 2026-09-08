@@ -226,8 +226,9 @@ versioned option `se_journey_copy_<brand>` (Settings → copy). Every send recor
 
 | Step | Copy key | Notes |
 |---|---|---|
-| Welcome | `welcome` (+ buttons `btn_start`, `btn_info`, `btn_handoff`) | Interactive reply buttons when the body ≤ 1024 chars (572 since copy v4), text fallback when `se_journey_interactive_<brand>=0`. Identifies itself as automated. Opt-out (`btn_stop`, "İPTAL") is stated in the copy and works as a keyword — Meta allows only three buttons and the third opens the information menu. |
+| Welcome | `welcome` (+ buttons `btn_start`, `btn_info`, `btn_handoff`) | Interactive reply buttons when the body ≤ 1024 chars (682 since copy v5, which added the price policy), text fallback when `se_journey_interactive_<brand>=0`. Identifies itself as automated. Opt-out (`btn_stop`, "İPTAL") is stated in the copy and works as a keyword — Meta allows only three buttons and the third opens the information menu. |
 | Information menu | `info_menu_body/_button/_section/_footer`, `info_<page>_title/_desc` | The "Bilgi Al" button opens a WhatsApp **list** of the seven published pages; a row tap is answered with `info_link` (title + URL) plus the three buttons again. Text fallback lists the seven links (`info_menu_text`). |
+| Price | `price_policy`, `price_policy_in_review` | Answered automatically when the patient asks (see below). Two variants: before submission it ends in "Değerlendirme Başlat", once the file is with the team it ends in what they are waiting for and offers only `Bilgi Al` / `Danışmana Bağlan`. Neither states a figure, a range or a verdict on suitability. |
 | Privacy + link | `privacy_and_link` | Sent on "Değerlendirme Başlat"; link TTL stated |
 | Consent gate closed | `consent_gate_unavailable` | Sent when no approved health-data text exists; automation → `awaiting_approval` |
 | Photos request | `photos_request` | Exact wording from the brief + secure upload link |
@@ -244,7 +245,37 @@ Keywords (normalised, Turkish-folded): opt-out `iptal, dur, stop, …`; handoff 
 temsilci, insan, ara, …` + button `jr_handoff`; start `değerlendirme(ye) başla(t), başla, devam,
 evet`; urgent (aftercare phases) `şiddetli ağrı, kanama, nefes, şişlik/görüş, ateş, iltihap,
 alerji, 112, …`. Extra keywords via options `se_journey_{optout,handoff,urgent}_keywords`. Information
-menu: `bilgi, bilgi al, sayfalar` + button `jr_info` and the row ids `jr_info_<page>`.
+menu: `bilgi, bilgi al, sayfalar` + button `jr_info` and the row ids `jr_info_<page>`. Price: `fiyat(ı/lar/ları),
+ücret(i/ler), maliyet(i), bedel(i), kaç para, kaça, kaç TL/lira/euro/dolar, price, cost, how much`, plus a
+bare `ne kadar` — extra terms via the option `se_journey_price_keywords`.
+
+**Why the price question is answered by the journey (copy v5, 2026-09-08).** "Ne kadar?" is the
+commonest first message, and the answer is a policy rather than a figure: the clinic prices one
+person at a time, after the review, and does not put a price on open channels. Leaving it to the
+next free staff member means silence for the patient; leaving it to the copy alone means the person
+who skipped the welcome never gets it. `se_journey_asks_price()` therefore routes it (step 4.6 of
+`se_journey_on_wa_inbound()`) to `se_journey_send_price_policy()`. Four guards keep it out of
+everything else's way, and each has a test in `test_journey_price.php`:
+
+1. **Never the first message.** The Instagram pre-filled text contains the word *fiyat*; a new
+   journey must get the welcome (which now carries the policy itself), so the step is skipped when
+   the journey was created by this very message.
+2. **Pre-quote states only** (`se_journey_price_answerable_states()`), and it stands down entirely
+   while a sent quote is awaiting its answer (`se_journey_price_quote_open()`), so "fiyat yüksek"
+   is still read by `se_journey_quote_respond()` as a revision request — including when the state
+   was left behind by a pre-2026-09-03 quote.
+3. **"Ne kadar" is a duration question as often as a price one.** The unambiguous money words match
+   on their own; a bare "ne kadar" is answered only when no word in the message starts with a
+   duration/quantity stem (`sur, gun, saat, hafta, ay, yil, zaman, iyiles, greft, adet, seans,
+   kalic, kali, bekle, sonuc, …`). Stems rather than whole words, because Turkish agglutinates —
+   "ne kadar zamanda" would defeat a list of exact forms. Erring wide only means the bot stays
+   quiet and a person answers.
+4. **Once per journey per day**, whatever the wording (dedup salt `price:<variant>:<date>`), and
+   read-only throughout: no transition, no task, no state change. A thread a staff member has taken
+   over is not answered at all (the `se_journey_automation_active()` condition, as for `Bilgi Al`).
+
+The wording says the price is personal and is not shared on social media or other open channels; it
+does not cite a specific regulation and states no legal conclusion.
 
 **Why the pages are a list and not URL buttons (copy v4, 2026-09-07).** A WhatsApp *session*
 message cannot carry URL buttons at all — Meta allows `CTA_URL` on approved templates only — and a
