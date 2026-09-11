@@ -28,7 +28,7 @@ ini_set('display_errors', 'stderr');
 error_reporting(E_ALL);
 date_default_timezone_set('UTC');
 
-define('SE_HTTP_HOST', 'crm.roozbeh.com.tr');
+define('SE_HTTP_HOST', 'crm.azinasgari.com');
 define('SE_HTTP_ORIGIN', '57.129.84.98');
 define('SE_HTTP_BASE', 'https://' . SE_HTTP_HOST);
 

@@ -11,9 +11,9 @@ already signed in with:
 ```bash
 cd ~/Developer/seoevaluate-crm
 npm i -D playwright                       # once
-npx playwright codegen --save-storage=scripts/ui-regression/state.json https://crm.roozbeh.com.tr/admin
+npx playwright codegen --save-storage=scripts/ui-regression/state.json https://crm.azinasgari.com/admin
 #   → sign in in the window that opens, then close it; state.json holds the session cookie.
-SE_BASE_URL=https://crm.roozbeh.com.tr SE_STORAGE_STATE=scripts/ui-regression/state.json node scripts/ui-regression/responsive.mjs
+SE_BASE_URL=https://crm.azinasgari.com SE_STORAGE_STATE=scripts/ui-regression/state.json node scripts/ui-regression/responsive.mjs
 ```
 
 `state.json` and `out/` are git-ignored (session cookie; screenshots may show

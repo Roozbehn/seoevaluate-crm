@@ -566,7 +566,7 @@ $config['rewrite_short_tags'] = false;
 | Comma-separated:  '10.0.1.200,192.168.5.0/24'
 | Array:        array('10.0.1.200', '192.168.5.0/24')
 */
-// Cloudflare sits in front of crm.roozbeh.com.tr (AZCRM-SEC-005 / CRM-M062): trust
+// Cloudflare sits in front of crm.azinasgari.com (AZCRM-SEC-005 / CRM-M062): trust
 // X-Forwarded-For / CF-Connecting-IP only from Cloudflare's published ranges so
 // rate limits, audit rows and "real IP" checks see the visitor, not the edge.
 // Ranges: https://www.cloudflare.com/ips/ (reviewed 2026-09). Empty string = trust nobody.

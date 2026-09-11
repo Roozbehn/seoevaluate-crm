@@ -57,7 +57,7 @@
           <div class="col-sm-4"><div class="form-group"><label><?php echo html_escape(_l('se_journey_urgent_staff')); ?></label><input class="form-control" name="urgent_staff_ids" value="<?php echo html_escape($v['urgent_staff_ids']); ?>" placeholder="1, 900021" /></div></div>
           <div class="col-sm-4"><div class="form-group"><label><?php echo html_escape(_l('se_journey_amount_policy')); ?></label><select name="quote_amount_policy" class="form-control"><?php foreach (['hidden', 'range', 'exact'] as $p) { ?><option value="<?php echo $p; ?>"<?php echo $v['quote_amount_policy'] === $p ? ' selected' : ''; ?>><?php echo html_escape(_l('se_journey_amount_policy_' . $p)); ?></option><?php } ?></select></div></div>
         </div>
-        <div class="form-group"><label><?php echo html_escape(_l('se_journey_public_base_url')); ?></label><input class="form-control" name="public_base_url" value="<?php echo html_escape($v['public_base_url']); ?>" placeholder="https://crm.roozbeh.com.tr" /></div>
+        <div class="form-group"><label><?php echo html_escape(_l('se_journey_public_base_url')); ?></label><input class="form-control" name="public_base_url" value="<?php echo html_escape($v['public_base_url']); ?>" placeholder="https://crm.azinasgari.com" /></div>
         <div class="checkbox checkbox-primary"><input type="checkbox" id="cb_technical_fields" name="technical_fields" value="1" <?php echo $v['technical_fields'] ? 'checked' : ''; ?> /><label for="cb_technical_fields"><?php echo html_escape(_l('se_journey_flag_technical')); ?></label></div>
         <div class="row">
           <div class="col-sm-6"><div class="form-group"><label><?php echo html_escape(_l('se_journey_media_storage')); ?></label>

@@ -17,7 +17,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * event is HELD (not lost, not failed). A registered fetcher (tests) or a live
  * token drives the same downstream mapping path.
  *
- * Public route (once enabled): https://crm.roozbeh.com.tr/se_core/leadgen
+ * Public route (once enabled): https://crm.azinasgari.com/se_core/leadgen
  * Do NOT create the second Meta app or persistent credentials without approval.
  */
 

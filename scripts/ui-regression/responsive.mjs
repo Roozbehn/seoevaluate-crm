@@ -5,7 +5,7 @@
  * Runs against the LIVE admin with an existing login: export a Playwright
  * storage state once (see README.md) — this script never types credentials.
  *
- *   SE_BASE_URL=https://crm.roozbeh.com.tr SE_STORAGE_STATE=./state.json node scripts/ui-regression/responsive.mjs
+ *   SE_BASE_URL=https://crm.azinasgari.com SE_STORAGE_STATE=./state.json node scripts/ui-regression/responsive.mjs
  *
  * Widths: 390 · 768 · 1024 · 1440 · 1920. Pages: Bugün, Hastalar, Mesajlar
  * (list + a thread), Randevular, appointment form, a patient page. Assertions
